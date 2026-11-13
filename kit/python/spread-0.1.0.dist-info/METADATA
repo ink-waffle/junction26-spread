@@ -1,0 +1,5 @@
+Metadata-Version: 2.3
+Name: spread
+Version: 0.1.0
+Summary: Client and starter desk for Spread, Bahn's dispatch challenge
+Requires-Python: >=3.9

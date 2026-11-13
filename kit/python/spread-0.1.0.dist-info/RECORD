@@ -1,0 +1,11 @@
+spread/__init__.py,sha256=p7Y8JKjBbz4zcJiKzrzTiwndIKkYf4dGnM4e3Zf2dVc,216
+spread/client.py,sha256=A1YrNCK4-Rfc2v5cafOPMEcUcxbbg7wU-r_Roi47hz0,13944
+spread/py.typed,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
+spread/reveal_csv.py,sha256=PIsfSsYlxMY0w8DMmvjmWNGau31DdcwDV6uf2KRAC40,4343
+spread/starter.py,sha256=pSlGlOTeEHNjWRWb7QDJS9rn674MrVxCBEAw4PTgo9E,23739
+spread/stream.py,sha256=YPPmWCH22-uZHQBCqrivN8PVOboUY986zvMwt1Wy91w,4388
+spread/types.py,sha256=rM-eGBtnqSLs9QYSvdRkVv-J9Bh9OnoloA1l-H6Wl-4,11996
+spread-0.1.0.dist-info/WHEEL,sha256=M6du7VZflc4UPsGphmOXHANdgk8zessdJG0DBUuoA-U,78
+spread-0.1.0.dist-info/entry_points.txt,sha256=FO6uIOegp8WsJAFap10IiB8_M0ornqHOMqsCuuzfw00,99
+spread-0.1.0.dist-info/METADATA,sha256=N1nAe2dyk9fgA_YHN7aSNOyqSJNaFr4Mafqf0-3KvFk,144
+spread-0.1.0.dist-info/RECORD,,

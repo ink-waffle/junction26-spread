@@ -1,0 +1,10 @@
+{
+  "name": "spread-kit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Client and starter desk for Spread, Bahn's dispatch challenge. No dependencies: runs on Bun, or Node 22.18 or later.",
+  "scripts": {
+    "starter": "bun starter.ts"
+  }
+}

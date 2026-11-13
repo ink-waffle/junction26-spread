@@ -1,0 +1,4 @@
+[console_scripts]
+spread-reveal-csv = spread.reveal_csv:main
+spread-starter = spread.starter:main
+
