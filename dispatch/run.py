@@ -206,6 +206,7 @@ def main() -> None:
     parser.add_argument("--policy", default="{}", help='JSON overrides of the default policy, for example {"fleet": {"on_time": 0.96}}')
     args = parser.parse_args()
     if args.final:
+        Policy.of(json.loads(args.policy))  # a misspelt policy stops the desk here, not inside the loop that starts it again for ever
         lock = open("journal-desk.lock", "a")  # two desks on one world would both quote and both post
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
