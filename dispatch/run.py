@@ -170,7 +170,7 @@ def live(client: Client, overrides: dict, world_id: Optional[str] = None) -> Sco
                 traceback.print_exc()
             if isinstance(error, SpreadError) and error.status in (403, 404):  # this world is not ours to play any more: ask again which one is
                 world = None
-            wait = 0.5 if time.monotonic() - failed_at > 10 else min(5.0, wait * 2)  # a desk that lived ten seconds had recovered
+            wait = 0.0 if time.monotonic() - failed_at > 10 else min(5.0, wait * 2 or 0.5)  # a desk that lived ten seconds had recovered: try at once
             print(f"{error}. A new desk rejoins in {wait:.1f} s.", file=sys.stderr, flush=True)
             time.sleep(wait)
             failed_at = time.monotonic()
