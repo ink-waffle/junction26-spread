@@ -33,7 +33,7 @@ def tree(thing: Any, seen: set[int], name: str = "") -> Any:
     """Any object as plain data, so that two desks can be compared without knowing what their parts hold."""
     if isinstance(thing, (str, int, float, bool, type(None))):
         return thing
-    if isinstance(thing, (set, frozenset)) or name == "alarms":
+    if isinstance(thing, (set, frozenset)):
         return sorted((tree(item, seen) for item in thing), key=repr)
     if isinstance(thing, (list, tuple)):
         return [tree(item, seen) for item in thing]
