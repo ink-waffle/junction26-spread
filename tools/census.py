@@ -5,8 +5,8 @@
 The seed is played without a quote. At a midnight the world is forked, and the copy wins the day's first cars at a low price, posts each at one
 cent and, from 11:00, offers every driver one of them at one cent, twice, the same driver at the same minute on every day (a driver asked ten
 minutes later than yesterday reads differently). Read means declined; unread means expired. Friday's copy runs on through Saturday, Sunday and
-the last Monday. What it found: the drivers who read on every other working day read today too, 97 to 99 in 100, on each of the five days: the
-flu, which keeps 30% of the drivers who meant to work at home, leaves no mark on who reads an offer."""
+the last Monday. What it found on 20 seeds: the drivers who read on every other working day read today too, 97 to 100 in 100, except on one
+working day in 7 of the weeks, when 15 to 35% of them are silent, in every town: the flu day. In the other weeks it is not a working day."""
 from __future__ import annotations
 
 import json
