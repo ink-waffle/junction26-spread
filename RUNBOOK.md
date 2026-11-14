@@ -31,10 +31,10 @@ set -a; . ./.env; set +a                    # SPREAD_URL, SPREAD_KEY
 
 ## Cloud run
 
-The team's machine in Helsinki, `root@95.133.254.35`: 10 ms to the server (the laptop on a phone hotspot: 40 to 70 ms, and on Saturday morning it lost its route for six hours and then stalled for five minutes under a rehearsal). The final runs there; the laptop is the fallback. On that machine use only `/data/spread` and the tmux session `spread`; touch nothing else, install nothing, never reboot.
+The team's machine in Helsinki (`$SPREAD_VM`, user@address, kept in `.env` and not in this repository): 10 ms to the server (the laptop on a phone hotspot: 40 to 70 ms, and on Saturday morning it lost its route for six hours and then stalled for five minutes under a rehearsal). The final runs there; the laptop is the fallback. On that machine use only `/data/spread` and the tmux session `spread`; touch nothing else, install nothing, never reboot.
 
 ```sh
-vm() { ssh -i ~/.ssh/verda_junction -o BatchMode=yes root@95.133.254.35 "$@"; }
+vm() { ssh -i ~/.ssh/verda_junction -o BatchMode=yes "$SPREAD_VM" "$@"; }
 
 # deploy: a named commit, never "whatever main is now"
 vm 'cd /data/spread/repo && git fetch -q origin && git checkout -q <commit> && git log --oneline -1'
