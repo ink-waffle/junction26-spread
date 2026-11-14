@@ -18,7 +18,9 @@ python -m tools.ablations skeptic-base skeptic-nolook ...                   # th
 | Against `main`, same weeks, paired per week | margin a week (se) | on time, points (se) | worst play (main's) | unranked |
 |---|---|---|---|---|
 | **the head (target 97.5%)**: halal-65..96, two samples a side | **+€679 (206)** | **+0.52 (0.11)** | 94.8% (92.8%) | 0 of 64 |
-| **the head**: halal-97..128, played once as the confirmation | **+€395 (264)** | **+0.21 (0.16)** | 93.2% (94.5%) | 0 of 32 |
+| **the head**: halal-97..128, played once as the confirmation (stride 14) | **+€395 (264)** | **+0.21 (0.16)** | 93.2% (94.5%) | 0 of 32 |
+| **the head**: halal-97..128 without strides, as the final is played (`main` €15,829 → €16,266) | **+€437** | **+0.2** (96.2% → 96.4%) | 94.1% (94.3%) | 0 of 32 |
+| **the head**: the 8 hold weeks, four samples a side (7 of 8 weeks up; the known hard week halal-09 94.6% → 94.5%) | **+€694 (142)** | **+0.03 (0.16)** | 93.5% (93.2%) | 0 of 32 |
 | dce27f9 (the same system at 97%): halal-65..96, four samples a side | +€959 (166) | −0.27 (0.09) | 92.7% (92.8%) | 0 of 128 |
 | dce27f9: halal-97..128, once | +€678 (267) | −0.28 (0.20) | 92.2% (94.5%) | 0 of 32 |
 | dce27f9: the 8 hold weeks, four samples a side | +€805 (421) | −0.79 (0.27) | 93.2% (93.2%) | 0 of 32 |
@@ -189,7 +191,8 @@ Baseline `skeptic-base`: 32 weeks, 128 samples: margin EUR 15,259 a week, on tim
 | WITH the learned intercept starting at +0.88 (its limits as they are) (`start88`) | 32×1 | +445 (236) | -0.38 (0.13) | +2.9 (0.6) | +33 | 94.1% | 0 | 0 |
 | **Candidates (section 5)** | | | | | | | | |
 | A: without `known`, the dealer part and the pickup-today part (`candA`) | 32×1 | -109 (267) | +0.24 (0.14) | -0.9 (0.6) | +0 | 94.8% | 0 | 0 |
-| **B: A, without the learned intercept, with the model's level moved by +0.88** (the clean code of this branch plays the same weeks to the cent) (`candAcalnw`) | 32×4 | +959 (166) | -0.27 (0.09) | +2.6 (0.4) | +40 | 92.7% | 1 | 0 |
+| **B: A, without the learned intercept, with the model's level moved by +0.88** (dce27f9 plays the same weeks to the cent) (`candAcalnw`) | 32×4 | +959 (166) | -0.27 (0.09) | +2.6 (0.4) | +40 | 92.7% | 1 | 0 |
+| **B at a target of 97.5%: the head of the branch** (af4fd92 plays the same weeks to the cent) (`B975`) | 32×2 | +679 (206) | +0.52 (0.11) | -1.6 (0.5) | +18 | 94.8% | 0 | 0 |
 <!-- /ABLATIONS -->
 
 **How to read it** (numbers of the first sample; the table above is regenerated as samples come in, and since 20:26 a week takes ten times as long to play as before 20:00, so most rows will stay at one sample).
