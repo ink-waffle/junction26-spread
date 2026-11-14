@@ -3,6 +3,7 @@
     python -m tools.notes_eval                              # the labelled worlds outside hold (runs/notes-label)
     python -m tools.notes_eval --tag notes-label-hold       # the hold worlds: only to confirm a finished reader
     python -m tools.notes_eval --misread 30 --fact ready    # list misread notes
+    python -m tools.notes_eval --typos                      # stress test: one more typo in every note
 
 A fact is claimed when the reader changes what the request states, and true when the world did. Precision = right claims / claims,
 recall = right claims / true changes. A car is right when all eight facts are."""
@@ -13,6 +14,8 @@ import glob
 import gzip
 import json
 import os
+import random
+import re
 from collections import Counter
 
 from dispatch import notes
@@ -78,13 +81,28 @@ def show(key: str, value) -> str:
     return clock(value) if isinstance(value, int) else f"{value[0] / 60:g}-{value[1] / 60:g}"
 
 
+def one_more_typo(text: str, rng: random.Random) -> str:
+    """The note with one more typo of the kind the dealers make: inside a word of six letters or more, a letter dropped, doubled or swapped."""
+    words = list(re.finditer(r"[^\W\d_]{6,}", text))
+    if not words:
+        return text
+    match = rng.choice(words)
+    w, i = match[0], rng.randrange(1, len(match[0]) - 1)
+    return text[:match.start()] + rng.choice([w[:i] + w[i + 1:], w[:i] + w[i] + w[i:], w[:i] + w[i + 1] + w[i] + w[i + 2:]]) + text[match.end():]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--tag", default="notes-label", help="runs to score, separated by commas")
     parser.add_argument("--misread", type=int, default=0, help="list this many misread notes")
     parser.add_argument("--fact", help="list only misreads of this fact")
+    parser.add_argument("--typos", action="store_true", help="stress test: add one more typo to every note first")
     args = parser.parse_args()
     rows = cars(args.tag.split(","))
+    for row in rows if args.typos else []:
+        note = row["request"]["note"]
+        if note and not row["leg"]:
+            row["request"] = {**row["request"], "note": {**note, "text": one_more_typo(note["text"], random.Random(row["seed"] + row["request"]["id"]))}}
     true, claims, right, wrong = Counter(), Counter(), Counter(), []
     cars_right = notes_right = with_note = 0
     for row in rows:

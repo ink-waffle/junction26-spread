@@ -114,8 +114,7 @@ class Fleet:
             first: StopRef = {"orderId": order["id"], "leg": leg, "kind": "pickup", "withPlates": facts.plates, "withCharging": charging}
             second: StopRef = {"orderId": order["id"], "leg": leg, "kind": "delivery"}
             snow = [(start, end) for start, end, places in books.snow if places & set(ends)]
-            slow = 45 if notes.SNOW_ROOM and any(end > books.now and start < order["deadline"] for start, end in snow) else notes.SLOW_DRIVE
-            windows = notes.windows(order["legs"][leg], facts, order["deadline"], self.atlas.drive(*ends) + CHARGING * charging, books.now, snow, slow)
+            windows = notes.windows(order["legs"][leg], facts, order["deadline"], self.atlas.drive(*ends) + CHARGING * charging, books.now, snow)
             for stop, window in zip((first, second), windows):
                 if window and not state.refusals:  # the world refused our windows once: post without them
                     stop["window"] = window

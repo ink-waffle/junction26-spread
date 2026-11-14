@@ -33,9 +33,10 @@ class NoteFacts:
 
 
 # The vocabulary: cue -> words, after lowercasing and dropping accents. "valmi-" is a stem, "klar" a whole word.
+# A typo is forgiven in an entry of six letters or more, so a common long form stands next to its short stem.
 CUES = {
     "ready": "valmi- valmis valmiina valmistuu klar klart ready",
-    "collect": "nout- noud- noudettav- noutaa hake- haet- haettav- haku hakemaan collect- pickup- pick- hamt- hamtas hamtar hamtning luovut- luovutus lamnas",
+    "collect": "nout- noud- noudettav- noutaa hake- haet- haettav- haku hakemaan collect- pickup- pick- hamt- hamtas hamtar hamtning luovut- luovutus luovutuks- lamnas",
     "pay": "maksu- maksun maksa- maksaa makse- maksettu rahoitu- payment pays paid financ- betal- betalning finans-",
     "open": "auki avoinna aukiolo- open opening oppet oppettid- paikalla taalla ketaan nobody ingen vastaanot- vastaanott- receiv- receiving mottag- mottagaren mottagning",
     "closed": "kiinni sulke- sulkee sulje- suljet- close closes closed closing stang- stanger",
@@ -287,38 +288,25 @@ def chances(request: PriceRequest, option: DeliveryOption, facts: NoteFacts, dri
     return [] if arrive is None else collect_spans(leg["pickup"], facts, request["respondBy"], min(arrive - drive, leg["pickup"]["window"]["to"] + moved))
 
 
-import os  # experiment switches, to be removed
-EVERY_PICKUP = "A" in os.environ.get("NOTES_VARIANT", "")  # every gig's pickup window ends at the last minute that is still on time
-EVERY_DELIVERY = "B" in os.environ.get("NOTES_VARIANT", "")  # every gig's delivery window leaves room for a slow drive
-SNOW_ROOM = "S" in os.environ.get("NOTES_VARIANT", "")  # more room when snow is forecast at either end
-
-
-def windows(leg: Leg, facts: NoteFacts, deadline: int, drive: int, now: int, snow: Iterable[Span] = (), slow: int = SLOW_DRIVE) -> tuple[Optional[TimeWindow], Optional[TimeWindow]]:
+def windows(leg: Leg, facts: NoteFacts, deadline: int, drive: int, now: int, snow: Iterable[Span] = ()) -> tuple[Optional[TimeWindow], Optional[TimeWindow]]:
     """The windows that a gig's pickup and delivery need so that the driver meets the car ready, both sites really open and
-    the note's deadline. None where the order's own window already says it. A stop has one window and real hours repeat daily,
-    so a pickup with shorter real hours gets one day's chance; when it passes unbooked, the gig expires and the next post takes the next."""
+    the note's deadline; None where the order's own window already says so. A stop has one window and real hours repeat daily,
+    so a pickup with shorter real hours gets one day's chance: when it passes unbooked the gig expires, and the next post takes the next."""
     pickup, delivery = leg["pickup"], leg["delivery"]
     arrive, first, second, spans = arrive_by(delivery, facts, deadline), None, None, []
-    earlier = arrive is not None and not delivery["privateAddress"] and (EVERY_DELIVERY or arrive < arrive_by(delivery, NoteFacts(), deadline))
-    for spare in () if arrive is None else (drive * slow // 100, 0) if earlier else (0,):
+    earlier = arrive is not None and not delivery["privateAddress"] and arrive < arrive_by(delivery, NoteFacts(), deadline)
+    for spare in () if arrive is None else (drive * SLOW_DRIVE // 100, 0) if earlier else (0,):
         last = min(arrive - spare - drive, pickup["window"]["to"])  # the last minute to collect the car and be on time
         spans = collect_spans(pickup, facts, now, last, snow)
         if spans and earlier:  # the note ends the delivery before the order's window does: our window says so, with room for a slow drive if there is any
             second = {"from": delivery["window"]["from"], "to": arrive - spare}
         if spans:
             break
-    late = not spans
-    if late:  # the car can only arrive late: collect it at the first real chance, deliver without a window
+    if not spans:  # the car can only arrive late: collect it at the first real chance, deliver without a window
         last = END
         spans = collect_spans(pickup, facts, now, last, snow)
-    if spans and not pickup["privateAddress"]:
-        stated = lambda start: open_spans(pickup["hours"], start, last)  # when a driver would come by the stated hours alone
-        if spans == stated(spans[0][0]):  # every stated hour from the first chance on is a chance: one window holds them all
-            if EVERY_PICKUP and not late:
-                first = {"from": spans[0][0], "to": spans[-1][1]}
-            elif spans != stated(max(now, pickup["window"]["from"])):
-                first = {"from": spans[0][0], "to": max(last, pickup["window"]["to"])}
-        else:
-            a, b = next((span for span in spans if span[1] - span[0] >= MIN_SPAN), max(spans, key=lambda span: span[1] - span[0]))
-            first = {"from": a, "to": b}
+    if spans and not pickup["privateAddress"] and spans != open_spans(pickup["hours"], max(now, pickup["window"]["from"]), last):  # fewer chances than the stated hours show
+        if spans != open_spans(pickup["hours"], spans[0][0], last):  # and gaps that no driver can see: one chance of a useful length
+            spans = [next((span for span in spans if span[1] - span[0] >= MIN_SPAN), max(spans, key=lambda span: span[1] - span[0]))]
+        first = {"from": spans[0][0], "to": spans[-1][1]}
     return first, second

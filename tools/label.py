@@ -1,8 +1,10 @@
-"""Labels notes: plays a world that wins almost every request and moves no car, and saves the reveal's truth of each won car.
+"""Labels notes: plays a world that wins every request and moves no car, and saves the reveal's truth of each won car.
 
-    python -m tools.label --seeds wide            # runs/label/<seed>.json.gz, in the harness's format
+    python -m tools.label --tag notes-label --seeds wide      # runs/notes-label/<seed>.json.gz, in the harness's format
+    python -m tools.label --tag notes-val1 --seeds nv-01,nv-02
 
-It quotes every option at a fraction of the list price and posts no gig, so a week costs ~1,050 requests and one practice slot."""
+It quotes every option at half the list price and posts no gig, so a week costs ~1,050 requests and one practice slot for
+half a minute. Score a reader on the result with tools/notes_eval.py."""
 from __future__ import annotations
 
 import argparse
@@ -49,10 +51,10 @@ def label(tag: str, seed: str, level: int, price: float) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--tag", default="label")
+    parser.add_argument("--tag", default="notes-label")
     parser.add_argument("--seeds", default="wide", help="a named set (tune, hold, wide, quick) or seeds separated by commas")
     parser.add_argument("--level", type=int, default=8)
-    parser.add_argument("--price", type=float, default=1.0, help="quote, as a multiple of the list price")
+    parser.add_argument("--price", type=float, default=0.5, help="quote, as a multiple of the list price: 0.5 won every request of 80 worlds")
     parser.add_argument("--workers", type=int, default=3)
     args = parser.parse_args()
     seeds = SEEDS.get(args.seeds) or args.seeds.split(",")
