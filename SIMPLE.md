@@ -12,7 +12,30 @@ python -m tools.replicates simple-main-s14,simple-main-s13 simple-D-s14,simple-D
 
 ## 0. Verdict
 
-*(written last; see the end of `runs/progress.md` for the line that starts with `simple DONE`)*
+**Recommend D, commit 892fdaf on `research/simple`: `main` minus 64 fitted numbers, nothing added.** The 60-number place table of the prior, `known`/`KNOWN` of the on-time model, and the dealer and pickup-today parts of the level are deleted; 65 numbers remain of 129.
+
+| On halal-97..128 (never played before), strides 14 and 13, 64 samples a side | frozen main | D | difference (paired se) |
+|---|---|---|---|
+| margin a week | €15,798 | €15,755 | −43 (189) |
+| on time, mean | 96.28% | 96.42% | +0.14 point (0.09) |
+| on time, worst sample | 93.9% | 94.5% | |
+| ranked | 64 of 64 | 64 of 64 | |
+| orders Monday / Wednesday | 72 / 89 (0.81) | 76 / 90 (0.85) | |
+
+- **Proven for D:** the table above; restart test on halal-02 with 12 restarts: the same week to the cent (€20,906.24 with and without restarts; 11 of 12 rebuilt desks identical, the twelfth differs in one unsent quote by €1, 34,600 → 34,500: a quote still in the outbox is priced again at the restart, after the events of its batch; not looked into further, the week's money is the same); `dispatch/` parses as Python 3.9; the judged tree is the committed tree (`diff -r`).
+- **Not proven for D:** a no-stride play of the 32 weeks (strides 14 and 13 only); a rehearsal of the live loop on this commit. D changes no code path of the live loop (`desk.py`, `run.py`, `books.py` are `main`'s).
+- **It is a choice between equals.** D does not earn more than `main`; it is the same result with half the numbers, and a jury reads less. If the orchestrator prefers not to touch a system that ran three rounds, `main` as frozen loses nothing measurable.
+
+**Do not take the two changes that look like free money on our own weeks:**
+
+- **Deleting the learner** (`Fleet.learned`; +€509, se 221, here; +€778 on halal-65..96): it costs 0.33 point of on-time in weeks like ours, and in a world one logit harder than the model it is the difference between −1.0 and −2.8 points of on-time, with a week at 90.5% (section 4). It is the part that answers the fear behind this task.
+- **Centring the model's level** (+0.88): no gain at equal on-time (−€195, se 184, with the target at 97.5% and the learner unclamped; 64 samples), and with the clamp kept the worst week of a world two logits harder falls from 92.6% to 91.3%.
+
+**What the question's premises turned out to be:**
+
+- *"Mega overfitting."* Not in the level: the frozen system earns €14.4k, €15.2k and €15.8k a week on three sets of 32 weeks it never saw (160 plays, all ranked, worst 92.8%). Half of its numbers can be deleted without a measurable loss, which is what D does.
+- *"The week starts slowly."* True as −15 to −20% on Monday (not a half), and mostly not ours: Monday's dealers have no trust in us yet and pay 12% less (section 1). A Monday as fast as a Wednesday can be had in three ways (count the order's worth in trust; centre the model's level; the same with the learner): each buys 10–20 orders on Monday and none buys margin at equal on-time (sections 2 and 4).
+- *"Next time they move something we end up at the bottom."* Measured by making the model wrong about the world: with the learner, a model one logit too easy costs 1.0 point of on-time; the frozen main with its own level moved two logits loses 1.1 points and every week stays ranked. The 20:00 test final ended 18th of 75 (€15,752 by the night log; on the saved board at world minute 10,800 €13,666 against €13,968–15,892 for ranks 2–12): one week's spread (sd of a week €4,000), not a fall.
 
 ## 1. Where Monday's orders go (saved runs, no new plays)
 
@@ -77,7 +100,8 @@ What stays, and why (one sentence each):
 | frozen main | 32×2 | €15,798 | | 96.28% | | 93.9% | 0 | 64/64 | 430 | 72 / 89 (0.81) | 72 93 89 99 81 |
 | **D** = main − 64 numbers (892fdaf) | 32×2 | €15,755 | **−43 (189)** | 96.42% | **+0.14 (0.09)** | 94.5% | 0 | 64/64 | 431 | 76 / 90 (0.85) | 76 88 90 99 83 |
 | E = D + the level centred (+0.88), no learner | 32×2 | €16,307 | +509 (221) | 95.95% | −0.33 (0.11) | 92.4% | 2 | 64/64 | 473 | 94 / 95 (1.00) | 94 101 95 103 86 |
-| G = D + the level centred, learner kept, target 97.5% | 32×1 | €15,734 | +3 (262) | 96.32% | +0.06 (0.16) | 94.2% | 0 | 32/32 | 452 | 83 / 95 (0.87) | 83 97 95 101 81 |
+| H = D + the level centred, learner kept without its ±1 clamp, target 97.5% | 32×2 | €15,603 | −195 (184) | 96.42% | +0.13 (0.10) | 94.2% | 0 | 64/64 | 449 | 83 / 94 (0.88) | 83 97 94 100 81 |
+| G = H with the clamp (stride 14 only) | 32×1 | | identical to H to the cent in 32 of 32 weeks: the clamp never binds once the level is centred | | | | | | | | |
 
 **Tune + wide weeks** (exploration; stride 14, one sample unless said; against `orch-base`):
 
@@ -89,10 +113,17 @@ What stays, and why (one sentence each):
 | E with the target at 97.5% | +244 (268) | +0.23 (0.21) | 94.1% | 89 / 90 (0.99) |
 | **E, the model one logit too easy** | −40 (312) | **−2.80 (0.31)** | **90.5%** (9 of 24 weeks under 93.5%) | 124 / 108 |
 | **B, the model one logit too easy** | +379 (318) | **−0.97 (0.28)** | 93.0% (3 of 24) | 118 / 102 |
-EASY2
+| frozen main, its model two logits too easy | +152 (299) | −1.12 (0.25) | 92.6% (2 of 24) | 119 / 100 |
+| G, its model two logits too easy | −837 (366) | **−1.91 (0.27)** | **91.3%** (6 of 24) | 136 / 100 |
+| G without the learner's ±1 clamp, two logits too easy | −1,046 (407) | −0.92 (0.25) | 93.3% (1 of 24) | 136 / 93 |
+| D, its model two logits too easy | −157 (311) | −1.09 (0.28) | 91.6% (2 of 24) | 120 / 100 |
+| H = G without the clamp, in our weeks | +200 (283) | +0.28 (0.19) | 92.9% | 87 / 89 (0.97) |
+
+"One logit too easy" stands for a world whose drivers are one logit harder than the model believes (the odds of a late car 2.7 times the model's): the weight `one` is moved, everything else plays as it is. For E, B and G the starting point is the calibrated level; for main its own fitted level, which sits 0.88 under it.
 
 What the tables say:
 
 1. **D is as good as main on weeks nobody had seen, with half the numbers.** Margin −€43 (se 189), on time +0.14 point (se 0.09), worst sample 93.9% → 94.5%, 64 of 64 ranked, Monday 72 → 76 orders. This is the candidate.
-2. **A week can start at full speed, and it is a move along the target's own trade, not a gain.** With the model's level where unseen weeks put it (E), Monday wins as many orders as Wednesday (94 / 95) and the week 43 more; the margin is +€509 and on time −0.33 point, two samples under 93.5% where main has none. The team's own exchange rate (97% → 96.5%: +€473 for −0.5 point) makes that about +€200 at equal on-time. With the target raised to 97.5% to give the on-time back (G, the learner kept) the result is main's: +€3 (se 262), +0.06 point, Monday 83. The fitted pessimism of the model's level was a safety margin under another name, as the night log found once before ("A better-calibrated on-time model").
+2. **A week can start at full speed, and it is a move along the target's own trade, not a gain.** With the model's level where unseen weeks put it (E), Monday wins as many orders as Wednesday (94 / 95) and the week 43 more; the margin is +€509 and on time −0.33 point, two samples under 93.5% where main has none. The team's own exchange rate (97% → 96.5%: +€473 for −0.5 point) makes that about +€200 at equal on-time. With the target raised to 97.5% to give the on-time back and the learner kept (H) the result is main's and D's: −€195 (se 184), +0.13 point, Monday 83 against 72, eighteen more orders a week that earn nothing. The fitted pessimism of the model's level was a safety margin under another name, as the night log found once before ("A better-calibrated on-time model").
 3. **The learner is not a free deletion: it is the insurance against a week unlike ours.** In weeks like ours it earns nothing measurable (B against E). When the model is one logit too easy for the world it meets, the system without the learner loses 2.8 points of on-time (one week at 90.5%, nine of 24 under 93.5%); with the learner 1.0 point (worst 93.0%). A deletion that looks free on our weeks (+€778 on halal-65..96, +€509 here) removes the only part of the driver side that answers to a changed world within the day. **Keep `Fleet.learned`.**
+4. **The fitted pessimism is a reserve, and centring the level spends it.** In a world two logits harder than the calibrated level, the frozen main loses 1.1 points of on-time and stays ranked in every week (worst 92.6%): its level starts 0.88 under the truth and its learner may move one logit more. With the level centred and the same learner (G) the same world costs 1.9 points and the worst week is 91.3%. Without the clamp the centred system holds (worst 93.3%, on time −0.9 point, but €1,046 a week poorer where main is level): if the level is ever centred, the clamp must go with it, and that is H. D in the same world: −1.1 points, worst week 91.6%, two of 24 under 93.5% as main. H is not recommended: it is a larger change than D for the same result in our weeks and no better one in the hard world.
