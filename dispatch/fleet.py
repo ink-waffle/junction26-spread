@@ -26,7 +26,6 @@ REFUND = 0.54  # what a late order pays back on average, as a share of its list 
 DOUBT = 4.0  # how firmly we hold, before a week's own outcomes speak, that its world is the model's: the prior's weight, in outcomes
 GRIP = 4  # how steeply the price of a late order rises once we expect more of them than we allow ourselves
 CALM = 20  # orders: a week's first orders say little about its share of late ones
-SAT = 6 * HOUR  # in the app without a taker: one gig in three is still open then, and those end late four times as often as the rest
 LAST_DAY = DAY  # before its last pickup: a gig still open then ends in a deadline warning two times in three (AUDIT.md)
 KNOWN = 100  # bookings after which the drivers know that our fees stay as posted
 
@@ -39,6 +38,7 @@ class FleetPolicy:
     on_time: float = 0.96  # the share of orders we want on time: the delivery minimum with room for a bad week (unseen weeks end up to 5 points under it)
     late_price: float = 300.0  # euros that a late order costs us beyond its refund while we are within that share
     crowding: float = 1.0  # research: how much of the harm to the waiting cars we charge
+    early_look: float = 0.0  # hours in the app after which a gig without a taker gets its fee chosen again, one step up at least; 0: only on its last day
     explore: Optional[tuple[float, ...]] = None  # research: draw each order's fee multiple from these
     seed: str = ""
 
@@ -233,7 +233,7 @@ class Fleet:
 
     def fee_multiple(self, state: OrderState, legs: list[int], typical: float) -> float:
         """One fee while a gig waits, and few changes of it, so drivers do not learn to wait. It is chosen when the order needs a driver, and again only when it loses one,
-        when its deadline warning comes, when the gig has sat six hours in the app, and when it has waited into the last day before its last pickup: then at least one step up."""
+        when its deadline warning comes, and when the gig has sat long (some hours in the app if we look early, the last day before its last pickup): then at least one step up."""
         policy, books, gig = self.policy, self.books, self.open_gig(state, legs[0])
         posted = gig.schedule[-1]["feeCents"] / typical if gig else 0.0
         if state.late:
@@ -262,8 +262,8 @@ class Fleet:
         self.forecast[state.id] = self.logit(car, multiple, self.queue(but=state))
 
     def looked(self, state: OrderState, gig: GigState) -> bool:
-        """True when the gig's fee was chosen after everything that asks for a new choice: a lost driver, the deadline warning, six hours in the app, the last day before its last pickup."""
-        marks = (state.alarm_at, gig.posted_at + SAT, state.order["lastPickupAt"] - LAST_DAY)
+        """True when the gig's fee was chosen after everything that asks for a new choice: a lost driver, the deadline warning, its hours in the app if we look early, the last day before its last pickup."""
+        marks = (state.alarm_at, gig.posted_at + int(self.policy.early_look * HOUR) if self.policy.early_look else 0, state.order["lastPickupAt"] - LAST_DAY)
         return gig.schedule[-1]["at"] >= max(mark for mark in marks if mark <= max(self.books.now, state.alarm_at))
 
     def due(self) -> set[str]:
