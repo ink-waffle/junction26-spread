@@ -5,7 +5,7 @@ For Sunday morning. Work from the main checkout. `<POLICY>` is the policy that p
 ```sh
 cd /Users/ink_waffle/OverengineeringLife/Junction2026/spread
 export SPREAD_SHARED=$PWD; set -a; . ./.env; set +a; PY=.venv/bin/python
-vm() { ssh -i ~/.ssh/verda_junction -o BatchMode=yes root@95.133.254.35 "$@"; }
+vm() { ssh -i ~/.ssh/verda_junction -o BatchMode=yes "$SPREAD_VM" "$@"; }
 ```
 
 Two helpers that only read saved files (paste them once):

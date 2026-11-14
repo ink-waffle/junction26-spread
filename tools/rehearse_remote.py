@@ -25,7 +25,7 @@ from tools.watch import signs
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--ssh", default="ssh -i ~/.ssh/verda_junction -o BatchMode=yes -o ConnectTimeout=10 root@95.133.254.35")
+    parser.add_argument("--ssh", default=f"ssh -i ~/.ssh/verda_junction -o BatchMode=yes -o ConnectTimeout=10 {os.environ.get('SPREAD_VM', '')}")
     parser.add_argument("--home", default="/data/spread/rehearsal", help="the rehearsal's clone on the other machine")
     parser.add_argument("--env", default="/data/spread/repo/.env", help="the file with SPREAD_URL and SPREAD_KEY there")
     parser.add_argument("--commit", required=True, help="what to rehearse: the clone fetches and checks it out")
