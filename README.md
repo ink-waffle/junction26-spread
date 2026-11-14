@@ -15,7 +15,7 @@ Result, level 8: `[FINAL: € … margin, … % on time, place … of …]`. In 
 | Module | Job | Why it exists |
 |---|---|---|
 | `books.py` | Everything the desk knows, as a fold over the world's events. It decides nothing. | A restart is then a replay of the log. |
-| `market.py` | `quote(request)`: a price for each option. `learn(...)`: one Kalman step per yes or no. | The competitor's price is never shown. A dealer's yes and no are the only signal. |
+| `market.py` | `quote(request)`: a price for each option. `learn(...)`: one Kalman step per yes or no, which also weighs on which day the price war is and on which day and where the outage. | The competitor's price is never shown. A dealer's yes and no are the only signal. |
 | `fleet.py` | `cost(request, option)`: what the car costs us. `plan(order, legs)`: the gig, its stops, its one fee. | A car booked before its deadline warning is on time 96% of the time, otherwise 25%. So a car's cost is its fee plus its risk. |
 | `pairs.py` | Puts two cars in one gig when the second starts where the first ends. Keeps no state. | The typical fee of a trade-in is half of two single typical fees: the trip home is half a driver's cost. |
 | `notes.py` | `read(note)`: the facts of a dealer's note. Then when the car can really be collected, and the stop windows a gig needs. | The world acts on a note whether we read it or not. |
