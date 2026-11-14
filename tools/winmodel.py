@@ -80,7 +80,8 @@ def fit(t: pd.DataFrame) -> dict:
     part = lambda group: pd.Series({value: e for (g, value), e in effect.items() if g == group})
     days = part("run-day")
     worlds = days.groupby(days.index.str.rsplit("|", n=1).str[0])
-    spread = {"world": worlds.mean().std(), "day": (days - worlds.transform("mean")).std(), "dealer": part("dealer").std()}
+    calm = 1.4826 * (days - worlds.transform("median")).abs().median()  # a day without an event: the market weighs the war and the outage apart, so the middle of the days, not their sd
+    spread = {"world": worlds.mean().std(), "day": calm, "dealer": part("dealer").std()}
     return {"SLOPE": round(float(slope), 2), "SPEED": round(float(-effect[("skip", "")]), 4), "TRUST": round(float(effect[("trust", "")]), 4),
             "LEVEL": round(float(worlds.mean().mean()), 3),
             "SPREAD": {**baked.SPREAD, **{name: round(float(sd), 3) for name, sd in spread.items()}},
