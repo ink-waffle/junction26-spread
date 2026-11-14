@@ -345,7 +345,7 @@ The 20:00 test final won 49 / 99 / 73 / 109 / 94 orders Monday to Friday. Its sl
 - Three weights are still open: `waited`, `short`, `trade_in`. On untouched weeks the model without `waited` earned +€601 a week (se 187) and lost 0.29 point of on-time; we win almost none of the cars the other two describe. Not played without them on the frozen system.
 - The pickup-side signs earn €1,702 a week on untouched weeks. Two of them, where the drivers live, are real but twice too large there (0.75 and 0.71 baked, 0.31 and 0.34 measured). They stay as fitted.
 - The flu sign costs margin on untouched weeks (+€432 a week without it, se 205) and buys 0.21 point of on-time and the floor: without it one week ends at 90.9%. It stays for the floor.
-- The numbers set by hand that remain (the €300, the fourth power, `CALM`, the two-car fees, `SURE`, `RETRY`, `MIN_SPAN`) have no measurement of their own.
+- The numbers set by hand that remain (the fourth power and its cap, `CALM`, the two-car fees, `SURE`, `RETRY`, `MIN_SPAN`) have no measurement of their own. The barrier they shape keeps the floor: a flat €300 a late order ends one week at 90.3%.
 
 **Figure.** One bar: 75,390 direct offers, with a sliver of 85 marked "yes". Next to it the two lists "would break it" and "do not know" as plain text.
 
