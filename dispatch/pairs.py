@@ -6,7 +6,7 @@ from typing import Optional
 
 from spread.types import Action
 
-from .atlas import HOUR, Atlas, open_spans
+from .atlas import DAY, HOUR, Atlas, open_spans
 from .books import Books, GigState, OrderState
 from .fleet import NEAR_KM, Fleet
 from .timetable import CHARGING
@@ -18,8 +18,11 @@ WARNING = 3 * HOUR  # the deadline warning comes this long before the last possi
 @dataclass
 class PairsPolicy:
     hold: int = 30  # minutes a new car stays out of the app to wait for a second car; 0: every car goes alone
+    ahead: int = 30  # the same for a car that is ready on a later day
     fee: float = 0.7  # the fee of a gig of two new cars, as a multiple of the two typical fees together
     board: float = 0.85  # the same when one of the two already sits in the app without a driver: a car nobody took needs more; 0: only new cars pair
+    cars: int = 2  # the most cars in one gig
+    rate: int = 0  # cents a planned hour of driving that a gig of several cars pays instead of the multiples; 0: the multiples
     drive: int = 5 * HOUR  # the most road minutes a two-car gig may plan (the rules allow 12 h; long ones find no driver)
     patience: int = 60  # minutes from its posting that a two-car gig may be without a driver before its cars go alone
     lead: int = 3 * HOUR  # a pair must still fit a driver who reaches the first pickup this much later
@@ -40,26 +43,38 @@ class Pairs:
         sitting = self.sitting() if waiting else {}
         cars = {**waiting, **{order_id: books.orders[order_id] for order_id in sitting}}
         pairs = [(p.id not in sitting and q.id not in sitting, idle, p.id, q.id) for p in cars.values() for q in cars.values()
-                 if p is not q and (p.id in waiting or q.id in waiting) for idle in [self.idle(p, q)] if idle is not None]
+                 if p is not q and (p.id in waiting or q.id in waiting) for idle in [self.idle([p, q])] if idle is not None]
         for fresh, _, p_id, q_id in sorted(pairs):  # a car that sits first, then the pair whose driver waits least
             if p_id in cars and q_id in cars:
-                p, q = cars.pop(p_id), cars.pop(q_id)
-                for order_id in (p_id, q_id):
-                    if order_id in sitting:  # its own gig makes room for the pair
-                        actions.append({"type": "withdraw", "gigId": sitting[order_id].id})
-                        books.gig_gone(sitting[order_id].id)
-                actions.append(self.gig(p, q, self.policy.fee if fresh else self.policy.board))
+                chain = [cars.pop(p_id), cars.pop(q_id)]
+                while len(chain) < self.policy.cars:  # one more car at either end, the one the driver waits least for
+                    longer = [(idle, r.id, row) for r in cars.values() for row in (chain + [r], [r] + chain) for idle in [self.idle(row)] if idle is not None]
+                    if not longer:
+                        break
+                    chain = min(longer, key=lambda option: option[:2])[2]
+                    cars = {order_id: state for order_id, state in cars.items() if state not in chain}
+                for state in chain:
+                    if state.id in sitting:  # its own gig makes room for the shared one
+                        fresh = False
+                        actions.append({"type": "withdraw", "gigId": sitting[state.id].id})
+                        books.gig_gone(sitting[state.id].id)
+                actions.append(self.gig(chain, self.policy.fee if fresh else self.policy.board))
         return actions
 
     def holds(self, state: OrderState) -> bool:
         """True while a new one-car order stays out of the app: a second car for its driver may still be won."""
         policy, now = self.policy, self.books.now
-        return (now < state.won_at + policy.hold and not state.tried and not state.urgent and not state.late and not state.refusals
+        return (now < self.until(state) and not state.tried and not state.urgent and not state.late and not state.refusals
                 and len(state.order["legs"]) == 1 and state.order["lastPickupAt"] - WARNING - now >= policy.lead)
+
+    def until(self, state: OrderState) -> int:
+        """The minute a new car's wait for a second car ends."""
+        today = state.order["legs"][0]["pickup"]["window"]["from"] // DAY <= state.won_at // DAY
+        return state.won_at + (self.policy.hold if today else self.policy.ahead)
 
     def alarm(self) -> int:
         """The next minute to act at when no event comes first: a hold, or a two-car gig's patience, runs out."""
-        times = [state.won_at + self.policy.hold for state in self.waiting()] + [gig.posted_at + self.policy.patience for gig in self.shared()]
+        times = [self.until(state) for state in self.waiting()] + [gig.posted_at + self.policy.patience for gig in self.shared()]
         return min(times, default=10 ** 9)
 
     def waiting(self) -> list[OrderState]:
@@ -91,23 +106,25 @@ class Pairs:
                 books.gig_gone(gig.id)  # its cars are dirty now: the desk posts each alone
         return actions
 
-    def gig(self, p: OrderState, q: OrderState, multiple: float) -> Action:
-        """One gig that takes q's car right after p's, for drivers who may take both, at this multiple of the two typical fees together."""
-        first, second = self.fleet.audience(p, [0]), self.fleet.audience(q, [0])
-        typical = p.request["referenceFeeCents"] + q.request["referenceFeeCents"]
-        return {"type": "post", "stops": self.fleet.stops(p, [0]) + self.fleet.stops(q, [0]),
-                "audience": {key: first[key] or second[key] for key in first},
-                "schedule": [{"at": self.books.now, "feeCents": max(1, int(typical * multiple + 0.5))}]}
+    def gig(self, chain: list[OrderState], multiple: float) -> Action:
+        """One gig that takes these cars one after the other, for drivers who may take them all, at this multiple of their typical fees together."""
+        audiences = [self.fleet.audience(state, [0]) for state in chain]
+        typical = sum(state.request["referenceFeeCents"] for state in chain)
+        places = [state.order["legs"][0][end]["placeId"] for state in chain for end in ("pickup", "delivery")]
+        fee = self.policy.rate * sum(self.atlas.drive(a, b) for a, b in zip(places, places[1:])) / HOUR or typical * multiple
+        return {"type": "post", "stops": [stop for state in chain for stop in self.fleet.stops(state, [0])],
+                "audience": {key: any(audience[key] for audience in audiences) for key in audiences[0]},
+                "schedule": [{"at": self.books.now, "feeCents": max(1, int(fee + 0.5))}]}
 
-    def idle(self, p: OrderState, q: OrderState) -> Optional[int]:
-        """Minutes a driver waits at stops when they take q's car right after p's; None when the two do not make a gig."""
+    def idle(self, chain: list[OrderState]) -> Optional[int]:
+        """Minutes a driver waits at stops when they take these cars one after the other; None when they do not make a gig."""
         policy, now = self.policy, self.books.now
-        legs = [p.order["legs"][0], q.order["legs"][0]]
-        places = [leg[end]["placeId"] for leg in legs for end in ("pickup", "delivery")]
-        if places[2] not in self.near[places[1]] or sum(self.atlas.drive(a, b) for a, b in zip(places, places[1:])) > policy.drive:
+        places = [state.order["legs"][0][end]["placeId"] for state in chain for end in ("pickup", "delivery")]
+        if (any(places[i + 1] not in self.near[places[i]] for i in range(1, len(places) - 1, 2))
+                or sum(self.atlas.drive(a, b) for a, b in zip(places, places[1:])) > policy.drive):
             return None
-        t, here, idle = max(now + policy.lead, legs[0]["pickup"]["window"]["from"]), None, 0
-        for state in (p, q):
+        t, here, idle = max(now + policy.lead, chain[0].order["legs"][0]["pickup"]["window"]["from"]), None, 0
+        for state in chain:
             pickup, delivery = self.fleet.stops(state, [0])
             for stop, extra in ((pickup, PLATES * pickup["withPlates"]), (delivery, CHARGING * pickup["withCharging"])):
                 site = state.order["legs"][0][stop["kind"]]
