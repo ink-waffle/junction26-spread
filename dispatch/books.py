@@ -68,6 +68,7 @@ class Books:
 
     def __init__(self, roster: list[DriverProfile]):
         self.now = 0
+        self.seq = -1  # the last event folded
         self.requests: dict[str, PriceRequest] = {}
         self.quotes: dict[str, dict[str, int]] = {}
         self.outcomes: dict[str, Optional[str]] = {}  # request id -> the option won, None when lost
@@ -100,11 +101,15 @@ class Books:
                 del state.gig_of[leg]
                 self.dirty.add(order_id)
 
-    def observe(self, event: DeskEvent) -> None:
-        self.now = max(self.now, event["at"])
+    def observe(self, event: DeskEvent) -> bool:
+        """Folds one event in. False for a repeat: a stream that reconnects, or a server that restarted, can send one twice."""
+        if event["seq"] <= self.seq:
+            return False
+        self.seq, self.now = event["seq"], max(self.now, event["at"])
         handler = getattr(self, f"_{event['kind']}", None)
         if handler:
             handler(event)
+        return True
 
     def _price_request(self, e) -> None:
         self.requests[e["request"]["id"]] = e["request"]

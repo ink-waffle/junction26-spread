@@ -1,38 +1,160 @@
-"""Plays a world with the desk: a practice world step by step, or the final from the live stream."""
+"""Plays a world with the desk: a practice world turn by turn, or the final from the live stream. Only the transport differs."""
 from __future__ import annotations
 
 import argparse
 import json
 import sys
 import time
-from typing import Callable, Optional
+import traceback
+from typing import Callable, Iterator, Optional
 
-from spread.client import Client, SpreadError, Unreachable, World
-from spread.types import DeskEventKind, Score
+from spread.client import ACTIONS_PER_CALL, Client, SpreadError, Unreachable, World
+from spread.types import Action, ActionResult, DeskEvent, DeskEventKind, Score
 
-from .atlas import DAY, Atlas
+from .atlas import DAY, HOUR, Atlas, clock
 from .desk import Desk, Policy
 
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 # The events that can need an action. Everything else arrives with the next of these.
-WAKE_ON: list[DeskEventKind] = ["price_request", "order_won", "order_changed", "order_cancelled", "visit_failed", "gig_expired", "deadline_close"]
+WAKE_ON: list[DeskEventKind] = ["price_request", "order_won", "order_changed", "order_cancelled", "visit_failed", "gig_expired", "deadline_close",
+                                "gig_dropped", "no_show", "offer_answered"]
+GAP = 0.02  # seconds of silence that end a burst of events
+QUIET = 1.0  # seconds without an event before the live loop reads the clock
+SILENCE = 15  # world minutes the clock may move without an event before the live loop reads the log: a stream can die without a word
 
 
-def play_practice(world: World, desk: Desk, on_day: Optional[Callable[[int, Score], None]] = None) -> None:
-    """One request a step: the advance carries the outbox, then moves the clock to the next event that can need an action."""
+def play_practice(world: World, desk: Desk, on_day: Optional[Callable[[int, Score], None]] = None, until: int = 10 ** 9) -> None:
+    """One request a turn: the advance carries the outbox, then moves the clock to the next event that can need an action, or to the next alarm.
+    With `until`, returns after the first turn that ends at that minute or later, the outbox unsent."""
     snapshot = world.snapshot()
     desk.books.now, ends_at = snapshot["now"], snapshot["endsAt"]
-    while desk.books.now < ends_at:
-        day = desk.books.now // DAY
-        actions, desk.outbox = desk.outbox, []
-        step = world.advance(until=WAKE_ON, max=min(ends_at, (day + 1) * DAY), actions=actions)
+    while desk.books.now < min(until, ends_at):
+        day, actions = desk.books.now // DAY, desk.take()
+        alarm = max(desk.alarms[0][0], desk.books.now + 1) if desk.alarms else ends_at
+        step = world.advance(until=WAKE_ON, max=min(ends_at, (day + 1) * DAY, alarm), actions=actions)
         desk.sent(actions, step["results"])
-        for event in step["events"]:
-            desk.handle(event)
-        desk.books.now = step["now"]
-        desk.reconcile()
+        desk.step(step["events"], step["now"])
         if on_day and desk.books.now // DAY > day:
             on_day(day, world.score())
+
+
+def play_live(world: World, desk: Desk, now: Callable[[], int], on_day: Optional[Callable[[int, Score], None]] = None) -> None:
+    """A world whose clock runs by itself: a new desk rejoins, then answers every burst of events with one batch of actions."""
+    history = world.events()
+    snapshot = world.snapshot()
+    ends_at = snapshot["endsAt"]
+    desk.rejoin(snapshot, history)
+    books = desk.books
+    print(f"{clock(books.now)}  joined after {len(history)} events: {len(books.orders)} orders, {len(desk.outbox)} actions to send", flush=True)
+    send(world, desk)
+    stream, heard, slowest = world.stream(after=books.seq, idle=GAP), books.now, 0.0
+    while books.now < ends_at:
+        hour = books.now // HOUR
+        burst = waiting(stream)
+        started = time.monotonic()
+        if burst:
+            minute = heard = burst[-1]["at"]
+        else:
+            minute = now()
+            if minute - heard >= SILENCE:  # the clock moved and the stream said nothing: read the log, and open a new stream if it had news
+                heard, burst = minute, world.events(after=books.seq)
+                if burst:
+                    stream.close()
+                    stream = world.stream(after=burst[-1]["seq"], idle=GAP)
+        turn(desk, burst, minute)
+        send(world, desk)
+        slowest = max(slowest, time.monotonic() - started)
+        if books.now // HOUR > hour:
+            waiting_cars = sum(1 for state in books.orders.values() if state.unposted() or any(books.gigs[g].status == "open" for g in state.gig_of.values()))
+            print(f"{clock(books.now)}  margin €{books.margin() / 100:>10,.2f}  {len(books.orders):>4} orders  {waiting_cars:>3} without a driver  "
+                  f"{len(books.quotes):>4} quotes  slowest turn {slowest * 1000:.0f} ms", flush=True)
+            slowest = 0.0
+            if on_day and books.now // DAY > hour // 24:
+                on_day(hour // 24, world.score())
+
+
+def waiting(stream: Iterator[Optional[DeskEvent]]) -> list[DeskEvent]:
+    """Every event that is already waiting on the stream, so one batch answers them all; [] after a quiet second."""
+    burst, since = [], time.monotonic()
+    for event in stream:  # None after GAP seconds without an event
+        if event is not None:
+            burst.append(event)
+        elif burst or time.monotonic() - since >= QUIET:
+            break
+    return burst
+
+
+def turn(desk: Desk, burst: list[DeskEvent], minute: int) -> None:
+    """A turn of the final. An event that the desk cannot read is logged and passed over: the turn starts again after it."""
+    for _ in range(len(burst) + 1):
+        try:
+            return desk.step(burst, minute)
+        except Exception:
+            traceback.print_exc()
+
+
+def send(world: World, desk: Desk) -> None:
+    """Sends the outbox, quotes first, and gives the desk the world's answers. A refused post can need one more round."""
+    for _ in range(3):
+        actions = desk.take()
+        if not actions:
+            return
+        desk.sent(actions, act(world, actions))
+        turn(desk, [], desk.books.now)
+
+
+def act(world: World, actions: list[Action]) -> list[ActionResult]:
+    """Batches of 50. A batch that the server cannot read goes again one action at a time, so a bad action costs only itself."""
+    results: list[ActionResult] = []
+    for i in range(0, len(actions), ACTIONS_PER_CALL):
+        batch = actions[i:i + ACTIONS_PER_CALL]
+        try:
+            results += world.act(batch)
+        except Unreachable:
+            raise
+        except SpreadError as error:
+            results += [{"ok": False, "reason": str(error)}] if len(batch) == 1 else [result for action in batch for result in act(world, [action])]
+    return results
+
+
+def next_final(client: Client) -> World:
+    """Our copy of the final that is set or runs now. Waits while none is set, and while the last one has ended."""
+    said = False
+    while True:
+        try:
+            world = client.world(client.final()["worldId"])
+            snapshot = world.snapshot()
+            if snapshot["now"] < snapshot["endsAt"]:
+                return world
+        except SpreadError as error:
+            if isinstance(error, Unreachable) or error.status != 404:
+                raise
+        if not said:
+            print("No final is set. Waiting for it.", flush=True)
+            said = True
+        time.sleep(10)
+
+
+def live(client: Client, overrides: dict, world_id: Optional[str] = None) -> Score:
+    """Plays the final, or a world whose clock someone else moves, to its end. Every failure leads to the same place: a new desk that rejoins."""
+    atlas, world, wait, failed_at = None, None, 0.5, 0.0
+    while True:
+        try:
+            atlas = atlas or Atlas(client.map())
+            world = world or (client.world(world_id) if world_id else next_final(client))
+            now = (lambda: world.snapshot()["now"]) if world_id else (lambda: client.final()["now"])
+            desk = Desk(atlas, world.roster(), Policy.of(overrides, seed=world.id), journal=f"journal-{world.id}.jsonl", verbose=True)
+            desk.careful = True
+            print(f"World {world.id}. Ctrl-C stops the desk, not the world: start it again and it rejoins.", flush=True)
+            play_live(world, desk, now, lambda day, score: report(WEEKDAYS[day % 7], score))
+            return world.score()
+        except Exception as error:  # the server restarts, the network drops, or we have a bug: the world keeps going, so do we
+            if not isinstance(error, Unreachable):
+                traceback.print_exc()
+            wait = 0.5 if time.monotonic() - failed_at > 60 else min(5.0, wait * 2)
+            failed_at = time.monotonic()
+            print(f"{error}. A new desk rejoins in {wait:.1f} s.", file=sys.stderr, flush=True)
+            time.sleep(wait)
 
 
 def report(label: str, score: Score) -> None:
@@ -45,19 +167,27 @@ def main() -> None:
     parser.add_argument("--level", type=int, choices=range(1, 9), default=8)
     parser.add_argument("--seed")
     parser.add_argument("--board", action="store_true", help="play the next ranking run at the level")
+    parser.add_argument("--final", action="store_true", help="play our copy of the final from the live stream; start it again at any time and it rejoins")
+    parser.add_argument("--world", help="with --final: play this world instead of the final (a rehearsal: someone else advances a practice world)")
     parser.add_argument("--policy", default="{}", help='JSON overrides, for example {"market": {"price": 1.4}}')
     args = parser.parse_args()
     client = Client()
-    world = client.create(level=args.level, seed=args.seed, board=args.board)
-    print(f"World {world.id}, level {args.level}.", flush=True)
-    desk = Desk(Atlas(client.map()), world.roster(), Policy.of(json.loads(args.policy), seed=args.seed or ""), verbose=True)
-    try:
-        play_practice(world, desk, lambda day, score: report(WEEKDAYS[day % 7], score))
-    except BaseException:
-        if not args.board:
-            world.delete()
-        raise
-    score = world.score()
+    if args.final:
+        try:
+            score = live(client, json.loads(args.policy), args.world)
+        except KeyboardInterrupt:
+            sys.exit("Stopped. The world keeps running without the desk; start it again with --final.")
+    else:
+        world = client.create(level=args.level, seed=args.seed, board=args.board)
+        print(f"World {world.id}, level {args.level}.", flush=True)
+        desk = Desk(Atlas(client.map()), world.roster(), Policy.of(json.loads(args.policy), seed=args.seed or ""), verbose=True)
+        try:
+            play_practice(world, desk, lambda day, score: report(WEEKDAYS[day % 7], score))
+        except BaseException:
+            if not args.board:
+                world.delete()
+            raise
+        score = world.score()
     report("End", score)
     print("Ranked." if score["ranked"] else "Not ranked.")
 
