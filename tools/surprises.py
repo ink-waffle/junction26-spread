@@ -147,7 +147,7 @@ def replay(t: pd.DataFrame, week: dict, make) -> pd.DataFrame:
         if asks:
             books.requests[request_id] = request
             books.quotes[request_id] = market.quote(request)
-            levels[request_id] = market.level(request, request["options"][0])[0] + sum(chance * shift for chance, shift in market.mix(request))
+            levels[request_id] = sum(chance * (market.level(request, request["options"][0], war)[0] + shift) for chance, shift, war in market.mix(request))
             continue
         prices, options, surplus = books.quotes[request_id], request["options"], {}
         cents = options[0]["listPriceCents"] * math.exp(known.theta[request_id])
@@ -163,7 +163,9 @@ def replay(t: pd.DataFrame, week: dict, make) -> pd.DataFrame:
         rows.append({"id": request_id, "day": request["arrivedAt"] // DAY, "minute": request["arrivedAt"], "from": request["legs"][0]["pickup"]["placeId"], "theta": known.theta[request_id],
                      "level": levels[request_id], "priced": max(prices.values()) < first["listPriceCents"] * 3.9, "won": won, "margin": (prices[won] - cost) / 100 if won else 0.0})
         market.learn(request_id, won)
-    return pd.DataFrame(rows)
+    played = pd.DataFrame(rows)
+    played.attrs["market"] = market  # what it believed at the week's end
+    return played
 
 
 def follows(ours: pd.DataFrame, told: pd.DataFrame, reached: pd.Series) -> tuple[int, float, float, float]:
