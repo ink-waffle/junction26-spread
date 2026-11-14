@@ -1,16 +1,18 @@
 """The desk: folds each event into the books, then issues the actions that make the world match the plan."""
 from __future__ import annotations
 
+import heapq
 import json
 import os
 import sys
+import traceback
 from dataclasses import dataclass, field
 from typing import Optional
 
 from spread.types import Action, ActionResult, DeskEvent, DeskSnapshot, DriverProfile, PriceRequest
 
 from .atlas import Atlas, clock
-from .books import LIVE, Books
+from .books import Books
 from .fleet import Fleet, FleetPolicy
 from .market import Market, MarketPolicy
 
@@ -36,25 +38,50 @@ class Desk:
         self.market = Market(policy.market, self.books, self.fleet)
         self.outbox: list[Action] = []
         self.pending: set[tuple[str, int]] = set()  # legs whose post is in the outbox or on its way
+        self.alarms: list[tuple[int, str]] = []  # (minute, order): look at the order again then, also when no event comes
         self.journal, self.verbose = journal, verbose
+        self.careful = False  # the final sets it: an event that the desk cannot read is logged and passed over, not fatal
+
+    def step(self, events: list[DeskEvent], now: int) -> None:
+        """One turn, the same in practice and in the final: fold the events, move the clock, plan. The actions wait in the outbox."""
+        for event in events:
+            self.handle(event)
+        self.books.now = max(self.books.now, now)
+        while self.alarms and self.alarms[0][0] <= self.books.now:
+            self.books.dirty.add(heapq.heappop(self.alarms)[1])
+        self.reconcile()
+
+    def wake(self, at: int, order_id: str) -> None:
+        """Asks for a turn at minute `at` that looks at the order again, whatever happens until then."""
+        heapq.heappush(self.alarms, (at, order_id))
+
+    def take(self) -> list[Action]:
+        """Empties the outbox, quotes first: a dealer waits 15 minutes for a price, and no longer."""
+        actions, self.outbox = sorted(self.outbox, key=lambda action: action["type"] != "quote"), []
+        return actions
 
     def handle(self, event: DeskEvent) -> None:
         """Folds one event into the books and answers what only this event can trigger."""
-        self.books.observe(event)
-        if event["kind"] == "price_request":
+        if self.fold(event) and event["kind"] == "price_request":
             self.quote(event["request"])
-        elif event["kind"] == "order_won":
-            self.market.learn(event["order"]["id"], event["order"]["option"])
-        elif event["kind"] == "order_lost":
-            self.market.learn(event["requestId"], None)
+
+    def fold(self, event: DeskEvent) -> bool:
+        """What an event teaches, with no answer to it: a restart replays the world's log through here. False for a repeat."""
+        try:
+            if not self.books.observe(event):
+                return False
+            if event["kind"] == "order_won":
+                self.market.learn(event["order"]["id"], event["order"]["option"])
+            elif event["kind"] == "order_lost":
+                self.market.learn(event["requestId"], None)
+        except Exception:
+            if not self.careful:
+                raise
+            traceback.print_exc()
+        return True
 
     def quote(self, request: PriceRequest) -> None:
-        prices = self.market.quote(request)
-        self.books.quotes[request["id"]] = prices
-        self.outbox.append({"type": "quote", "requestId": request["id"], "prices": prices})
-        if self.journal:
-            with open(self.journal, "a") as file:
-                file.write(json.dumps({"requestId": request["id"], "prices": prices}) + "\n")
+        self.outbox.append({"type": "quote", "requestId": request["id"], "prices": self.market.quote(request)})
 
     def reconcile(self) -> None:
         """Makes each touched order's gigs match the plan: post what is missing, reprice what is off."""
@@ -84,64 +111,96 @@ class Desk:
         books.dirty -= dirty
 
     def sent(self, actions: list[Action], results: list[ActionResult]) -> None:
-        """Reads the world's answer to each action: the id of a new gig, or why it refused."""
+        """Reads the world's answer to each action, and keeps both in the journal: the world's log never repeats them."""
+        books = self.books
+        if self.journal and actions:
+            with open(self.journal, "a") as file:
+                file.write(json.dumps({"seq": books.seq, "now": books.now, "actions": actions, "results": results}) + "\n")
         for action, result in zip(actions, results):
+            if not result["ok"] and self.verbose:
+                about = action.get("requestId") or action.get("gigId") or action["stops"][0]["orderId"]
+                print(f"{clock(books.now)} refused {action['type']} {about}: {result['reason']}", file=sys.stderr, flush=True)
             if action["type"] == "post":
                 legs = [(s["orderId"], s["leg"]) for s in action["stops"] if s["kind"] == "pickup"]
                 self.pending.difference_update(legs)
                 if result["ok"]:
-                    self.books.gig_posted(action, result["id"])
+                    books.gig_posted(action, result["id"])
                     continue
                 for order_id, _ in legs:
-                    state = self.books.orders.get(order_id)
+                    state = books.orders.get(order_id)
                     if state:
                         state.refusals += 1
                         state.late = True  # the usual reason is a window that has ended: post without windows
-                        self.books.dirty.add(order_id)
-            if not result["ok"] and self.verbose:
-                print(f"{clock(self.books.now)} refused {action['type']}: {result['reason']}", file=sys.stderr, flush=True)
+                        books.dirty.add(order_id)
+            elif not result["ok"]:
+                continue
+            elif action["type"] == "quote":  # a price is ours only once the world has it
+                books.quotes[action["requestId"]] = action["prices"]
+            elif action["type"] == "withdraw":
+                books.gig_gone(action["gigId"])
+            elif action["type"] == "reprice" and action["gigId"] in books.gigs:
+                books.gigs[action["gigId"]].schedule = action["schedule"]
 
     def rejoin(self, snapshot: DeskSnapshot, history: list[DeskEvent]) -> None:
-        """Rebuilds the books after a restart: replays the log through the same fold, with our gigs from the snapshot and our quotes from the journal."""
+        """Rebuilds a new desk in the middle of a week: the world's log and our journal, folded in the order they happened.
+        Where the journal is short the snapshot has our gigs, and what the world asked while we were away gets its answer now."""
         books = self.books
-        if self.journal and os.path.exists(self.journal):
-            with open(self.journal) as file:
-                books.quotes = {row["requestId"]: row["prices"] for row in map(json.loads, file)}
-        waiting = {gig["id"]: gig for gig in snapshot["gigs"]}
+        turns = self.journaled()
+        answered = turns[-1]["seq"] if turns else -1  # the last event that we answered and read the world's answer to
+        ours = {result["id"] for turn in turns for action, result in zip(turn["actions"], turn["results"]) if action["type"] == "post" and result["ok"]}
+        unread = {gig["id"]: gig for gig in snapshot["gigs"] if gig["id"] not in ours}  # gigs whose answer the journal never saw
+        changed: dict[str, int] = {}
+        journal, verbose, self.journal, self.verbose = self.journal, self.verbose, None, False
 
-        def register(gig) -> None:
-            del waiting[gig["id"]]
+        def adopt(gig) -> None:
+            del unread[gig["id"]]
             books.gig_posted({"type": "post", "stops": gig["stops"], "audience": gig["audience"], "schedule": gig["schedule"]}, gig["id"], posted_at=gig["postedAt"])
 
+        def recall(turn) -> None:
+            books.now = max(books.now, turn["now"])
+            self.sent(turn["actions"], turn["results"])
+
         for event in history:
-            for gig in [g for g in waiting.values() if g["postedAt"] < event["at"] or g["id"] == event.get("gigId")]:
-                register(gig)
-            books.observe(event)
-            if event["kind"] == "order_won":
-                self.market.learn(event["order"]["id"], event["order"]["option"])
-            elif event["kind"] == "order_lost":
-                self.market.learn(event["requestId"], None)
-        for gig in list(waiting.values()):
-            register(gig)
-        books.now = snapshot["now"]
-        for order in snapshot["orders"]:  # the snapshot is the truth where the replay and the world could differ
-            if order["id"] in books.orders:
-                books.orders[order["id"]].order = order
-        for gig in snapshot["gigs"]:
-            mine = books.gigs[gig["id"]]
-            mine.status, mine.driver, mine.schedule = gig["status"], gig["driverId"], gig["schedule"]
-            for order_id, leg in mine.legs:
-                state = books.orders.get(order_id)
-                if state is None:
-                    continue
-                if gig["status"] in LIVE and state.order["deliveredAt"][leg] is None:
-                    state.gig_of[leg] = gig["id"]
-                elif state.gig_of.get(leg) == gig["id"]:
-                    del state.gig_of[leg]
+            while turns and turns[0]["seq"] < event["seq"]:
+                recall(turns.pop(0))
+            for gig in [g for g in unread.values() if g["postedAt"] < event["at"] or g["id"] == event.get("gigId")]:
+                adopt(gig)
+            if event["kind"] == "order_changed":
+                changed[event["order"]["id"]] = event["seq"]
+            elif event["kind"] == "order_won":  # without a journal, the order still names the price that won
+                books.quotes.setdefault(event["order"]["id"], {event["order"]["option"]: event["order"]["priceCents"]})
+            self.fold(event)
+        for turn in turns:
+            recall(turn)
+        for gig in list(unread.values()):
+            adopt(gig)
+        self.journal, self.verbose = journal, verbose
+        books.now = max(books.now, snapshot["now"])
+        for gig in snapshot["gigs"]:  # an action whose answer we never read: the world's word on our gigs is final
+            books.gigs[gig["id"]].schedule = gig["schedule"]
+            if gig["status"] == "withdrawn" and books.gigs[gig["id"]].status != "withdrawn":
+                books.gig_gone(gig["id"])
+        for gig_id in set(books.gigs) - {gig["id"] for gig in snapshot["gigs"]}:  # a journal of some other week
+            books.gig_gone(gig_id)
+        for order_id, state in books.orders.items():
+            state.changed = changed.get(order_id, -1) > answered  # a change that we answered needs no second answer
         books.dirty = {order_id for order_id, state in books.orders.items() if state.undelivered()}
         self.outbox.clear()
+        self.pending.clear()
         for request in snapshot["openRequests"]:
             if request["id"] not in books.quotes:
                 books.requests[request["id"]] = request
                 self.quote(request)
         self.reconcile()
+
+    def journaled(self) -> list[dict]:
+        """The journal, oldest first: each batch we sent with the world's answers, and the last event folded before it."""
+        turns: list[dict] = []
+        if self.journal and os.path.exists(self.journal):
+            with open(self.journal) as file:
+                for line in file:
+                    try:
+                        turns.append(json.loads(line))
+                    except ValueError:  # the line we were writing when we died
+                        break
+        return turns
