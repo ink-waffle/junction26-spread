@@ -49,6 +49,7 @@ class FleetPolicy:
     doubt: float = DOUBT  # research: the weight of the prior that the world is the model's
     weights: Optional[dict] = None  # research: weights of ON_TIME to replace
     last_fee: float = 0.0  # research: the least fee of a gig that begins its last day without a taker
+    raises: tuple[float, ...] = ()  # research: further fees that only a gig whose fee is chosen again may get
     seed: str = ""
 
 
@@ -190,11 +191,11 @@ class Fleet:
         """The chance that the car arrives on time: the model's, moved by what this week's world has shown."""
         return 1 / (1 + math.exp(-self.logit(car, multiple, queue) - queue.world))
 
-    def fee(self, car: dict[str, float], typical: float, refund: float, late_price: float, queue: Queue, floor: float = 0.0) -> tuple[float, float]:
+    def fee(self, car: dict[str, float], typical: float, refund: float, late_price: float, queue: Queue, floor: float = 0.0, more: tuple[float, ...] = ()) -> tuple[float, float]:
         """The fee multiple that costs least in all: the fee, the expected cost of a late car, and the harm to the cars that wait. With it, the chance of a late car."""
         def total(multiple: float) -> float:
             return multiple * typical + (1 - self.on_time(car, multiple, queue)) * (refund + late_price) + self.harm(multiple, queue, late_price)
-        multiple = min((m for m in self.policy.fees if m >= floor), key=total, default=floor)
+        multiple = min((m for m in self.policy.fees + more if m >= floor), key=total, default=floor)
         return multiple, 1 - self.on_time(car, multiple, queue)
 
     def road(self, leg: Leg) -> int:
@@ -257,11 +258,12 @@ class Fleet:
         if state.urgent:
             return max(posted, policy.urgent_fee)
         queue = self.queue(but=state)
-        floor = posted if not gig or gig.schedule[-1]["at"] < state.alarm_at and not policy.redrop else min((m for m in policy.fees if m > posted), default=posted)  # a gig that waited that long did not pay the drivers who saw it
+        more = policy.raises if gig else ()
+        floor = posted if not gig or gig.schedule[-1]["at"] < state.alarm_at and not policy.redrop else min((m for m in policy.fees + more if m > posted), default=posted)  # a gig that waited that long did not pay the drivers who saw it
         if gig and books.now >= state.order["lastPickupAt"] - LAST_DAY:
             floor = max(floor, policy.last_fee)
         car = self.car(state.request, self.chances(state), books.now, state.won_at)
-        chosen = self.fee(car, typical, REFUND * self.list_price(state), self.late_price(queue), queue, floor)[0]
+        chosen = self.fee(car, typical, REFUND * self.list_price(state), self.late_price(queue), queue, floor, more)[0]
         return random.Random(f"{policy.seed}:{state.id}").choice(policy.explore) if policy.explore and not posted else chosen
 
     def gig_posted(self, action: PostAction) -> None:
