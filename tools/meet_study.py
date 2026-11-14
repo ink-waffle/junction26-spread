@@ -1,6 +1,7 @@
 """The randomised test of "meet the drivers on the day": in weeks played with `{"fleet": {"meet": H, "meet_parity": P}}` the one-car orders won the day
 before the last day their car can be collected, with H hours of that day from 07:00, stay out of the app until that morning when their number has
-parity P; the others are posted when won. Same worlds, same drivers: how the two halves end.
+parity P; the others are posted when won. Same worlds, same drivers: how the two halves end. The knob lived in commit c5ac391 only: the kept half
+ended late 11.1% against 7.0% (30% against 15% in a week's night of the flu), so it is not a policy.
 
     python -m tools.meet_study fleet3-meet6-par        # the test
     python -m tools.meet_study surprise-weighs --room 6 # the same orders in weeks without it (the two halves must agree)
@@ -13,9 +14,9 @@ from collections import defaultdict
 import pandas as pd
 
 from dispatch.atlas import DAY, HOUR
-from dispatch.fleet import MORNING
 from tools.study import runs
 
+MORNING = 7 * HOUR  # no driver reads a notification before it (HANDBOOK.md)
 
 def week(run: dict, room: float, parity: int) -> list[dict]:
     events = run["events"]

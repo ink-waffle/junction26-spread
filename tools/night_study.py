@@ -93,6 +93,10 @@ def main() -> None:
         print(f"  booked days before, held/given back: " + ", ".join(f"{k}: {len(v)}/{int(v.gave_back.sum())}" for k, v in w.groupby("booked days before")) + f"; fee x typical: given back {g.fee.mean():.2f}, kept {w[~w.gave_back].fee.mean():.2f}")
         print(f"  hour booked (given back): {dict(sorted(Counter(g.booked % DAY // HOUR // 3 * 3).items()))}; two-car gigs: held {int((w.cars > 1).sum())}, given back {int((g.cars > 1).sum())}")
     print(f"\n{n} weeks, the nights before Tuesday to Friday: {len(t) / n:.0f} bookings a week held at midnight for a car that must be collected that day, {t.gave_back.mean():.1%} given back in the hour after it")
+    rate = t.groupby(["seed", "night"]).gave_back.agg(["sum", "size"])
+    sick = rate[(rate["sum"] + 0.5) / (rate["size"] + 5) > 0.2]  # a night of the flu: over a fifth given back
+    print(f"SICK, WELL = {sick['sum'].sum() / sick['size'].sum():.2f}, {(rate['sum'].sum() - sick['sum'].sum()) / (rate['size'].sum() - sick['size'].sum()):.2f}  "
+          f"({len(sick)} such nights in {sick.index.get_level_values(0).nunique()} of {n} weeks, on days {sorted(sick.index.get_level_values(1))})")
     for name, by in {"worst night of its week": t["worst night"], "the driver's gigs for that day": t["driver's gigs that day"].clip(upper=4), "driver booked or left for a gig that day": [t["worst night"], t["driver at work that day"]], "driver looked at a gig that day": [t["worst night"], t["driver looked that day"]],
                      "cars from the same yard held for that day": pd.cut(t["same yard that day"], [0, 1, 3, 6, 12, 100]), "a batch we won 5+ cars of": [t["worst night"], t.batch >= 5],
                      "booked days before": t["booked days before"].clip(upper=3), "fee x typical": pd.cut(t.fee, [0, 0.8, 0.9, 1.05, 1.2, 9]), "night": t.night}.items():
