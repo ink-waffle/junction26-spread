@@ -300,7 +300,7 @@ Secret weeks, the same for every team:
 | Ranking round Saturday 12:00 | €82,785 | 1.07 × | 22nd of 58 |
 | Ranking round Saturday 15:00 | €82,278 | 1.28 × | 19th of 63 |
 | Ranking round Saturday 18:00 (ideas 1–14) | €75,405 | 1.29 × | 10th of 67 |
-| Ranking round Saturday 21:00 (ideas 1–14) | €79,391 | 1.20 × | 3rd of 11 ranked at 21:08 `[SUNDAY: closing place, leaderboard]` |
+| Ranking round Saturday 21:00 (ideas 1–14) | €79,391 | 1.20 × | 3rd of 11 ranked at 21:08, closed 28th of 56 |
 | Ranking rounds from Sunday 00:00, the frozen system | `[SUNDAY: runs/board.jsonl]` | `[SUNDAY: leaderboard]` | `[SUNDAY]` |
 | Test final Saturday 14:00, live clock, joined on Thursday | €3,747, 97.6% on time | first team €4,023, 10th €3,292 | 2nd of 55 |
 | Test final Saturday 20:00, live clock, a full week from Monday (the final's shape) | €15,752.50, 424 orders, 97.2% on time | first team €19,592, 10th €16,623 | 18th of 75 |
