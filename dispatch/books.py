@@ -81,16 +81,6 @@ class Books:
         self.snow: list[tuple[int, int, set[str]]] = []  # forecasts: from, to, the places
         self.dirty: set[str] = set()  # orders whose gigs may no longer match the plan
 
-    def observe(self, event: DeskEvent) -> bool:
-        """Folds one event in. False for a repeat: a stream that reconnects, or a server that restarted, can send one twice."""
-        if event["seq"] <= self.seq:
-            return False
-        self.seq, self.now = event["seq"], max(self.now, event["at"])
-        handler = getattr(self, f"_{event['kind']}", None)
-        if handler:
-            handler(event)
-        return True
-
     def gig_posted(self, action: PostAction, gig_id: str, posted_at: Optional[int] = None) -> None:
         """The world took a gig of ours: it carries its legs from now on. No event says so; the desk does, from the world's answer."""
         gig = GigState(gig_id, action["stops"], action["schedule"], self.now if posted_at is None else posted_at)
@@ -112,6 +102,16 @@ class Books:
             if state and state.gig_of.get(leg) == gig_id:
                 del state.gig_of[leg]
                 self.dirty.add(order_id)
+
+    def observe(self, event: DeskEvent) -> bool:
+        """Folds one event in. False for a repeat: a stream that reconnects, or a server that restarted, can send one twice."""
+        if event["seq"] <= self.seq:
+            return False
+        self.seq, self.now = event["seq"], max(self.now, event["at"])
+        handler = getattr(self, f"_{event['kind']}", None)
+        if handler:
+            handler(event)
+        return True
 
     def margin(self) -> int:
         return sum(self.ledger.values())
