@@ -10,7 +10,7 @@ Result, level 8: `[FINAL: € … margin, … % on time, place … of …]`. In 
 
 ## The modules
 
-`dispatch/` is 1,863 lines of Python in ten modules. It uses the standard library and the kit's client, nothing else.
+`dispatch/` is 1,862 lines of Python in ten modules. It uses the standard library and the kit's client, nothing else.
 
 | Module | Job | Why it exists |
 |---|---|---|
