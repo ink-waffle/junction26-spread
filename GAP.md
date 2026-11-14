@@ -5,7 +5,21 @@ Agent "gap", branch `research/gap` from `main` 8ae61c5 (dispatch/ and tools/ unc
 
 ## 0. Verdict
 
-(first verdict due 02:15; see the end of this file for the current state)
+**Nothing found that beats `main` 8ae61c5: play it as frozen.** (Final, Sunday 00:30; no change to `dispatch/`; one tool added, `tools/fee_moments.py`.)
+
+- Thirty-odd single changes were played against main on the same 24 weeks (tune + wide, stride 14, the promising ones also at stride 13): every one is
+  inside the noise (se 120-200 a week) or worse. Nothing reached the bar for a judgement on halal-161..192, so **those weeks are still unplayed**.
+- The system sits at the optimum of its own design on every axis: the on-time target (flat below 97.5%, EUR 1,000 a half point above), the fee floor and
+  the fee level (paying 1.0 x or 1.15 x as a floor buys no on-time at all: 527 orders at 91.7% against 528 at 93.7% with the floor at 0.85 x),
+  the looks, the urgent and late fees, every knob of the pairs.
+- So the tail is already priced right: **do not lower the on-time target for the final.** 96% gives +290 (two samples, se about 150) for 1.9 points and
+  8 of 24 weeks under 93.5%; 95% gives nothing and a week at 89.8%.
+- What the gap is: places 3-14 of the closed 21:00 round all earn EUR 40-42 an order at our volume and a better on-time; we earn 36.7. Our own cost shows
+  where: every euro of fee above 0.85 x (EUR 2,970 a week, 6.9 an order) and the refunds are paid on the 130 orders a week that are not booked at their
+  first posting. The price side is not it (the market says 44.4% yes, dealers say 45.2%), nor is trust (EUR 3,684 a week already; at most 1,700 more).
+- Not tested, the one lead left for a successor: **direct offers to the driver who ends a gig of ours near a waiting car's pickup** (HANDBOOK: such a driver
+  "needs much less" than the typical fee and gets no notification there). The team's own early test of that class had 4.4% of offers taken at random fees;
+  it was never tried at a fee below the gig's own or on the frozen system. It is new machinery (offers, their limits, a restart path): not for tonight.
 
 ## 1. The gap, as far as the leaderboard shows it
 
@@ -47,8 +61,6 @@ Revenue EUR 98.2 an order; fees 63.1 (0.947 x the typical fee 66.6); refunds 1.7
    an order's worth in trust in the quote was tried by `simple` (-479, se 283).
 
 ## 4. Played
-
-(filled as runs finish)
 
 All runs here: 24 weeks (tune halal-01..08 + wide halal-17..32), strides 14 and 13 where two samples are said, against `gap-main` = 8ae61c5 on the same
 weeks and strides (EUR 15,352 a week, 96.8% on time, 440 orders, worst sample 93.5%); `python -m tools.ablations gap-main gap-<name> ...`.
@@ -100,3 +112,11 @@ A lower fee floor does lower what we pay (floor 0.80: 0.908 x typical, on time 9
 Single knobs, stride 14, one sample (se about 200): two-car fee 0.65 x -388, 0.75 x -120; board pairs 0.80 x -47, 0.75 x +167; patience 30 min +19,
 120 min -83; idle 2 h -101; hold 45 min -88; urgent fee 1.3 x -152, 2.0 x -536; late fee 1.0 x +120, 1.6 x -628; look at 4 h -707, 9 h -409;
 fee grid with half steps -282; late price 200 +28 (-0.4 point), 450 -151 (+0.2).
+
+More single changes (stride 14, one sample unless said): new cars not held for a partner (`gap-hold0`) -656; held 15 min +32; fee floor 1.0 x -1,272;
+pairs' reach 50 km +220, 80 km -33; a car of a failed pair may pair again +67 (the last three: knobs added for the test, not kept).
+Two samples a side: board pairs 0.75 x +125 (se 153), 0.70 x -21; late fee 1.0 x +165 (se 123), 0.85 x -575 (se 284); pairs to 6 h +18 (-0.33 point);
+patience 30 min -55.
+
+Does a higher fee level buy on-time? No: floor 1.0 x with the target at 95% / 93%: 499 orders at 93.7% / 527 at 91.7% (EUR 14,289 / 13,950);
+floor 1.15 x with 93%: 452 orders at 92.9% (EUR 12,610). The model's small weight on the fee level is right.
