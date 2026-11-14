@@ -298,41 +298,48 @@ def find(tags: list[str]) -> None:
 
 
 def fleet(tags: list[str]) -> None:
-    """The driver side of the week, for the fleet: the bulk order, and bookings by the day an order was won."""
-    for tag in tags:
-        t = table(tag)
-        t = t[t.day < WORKDAYS]
-        t["quoted"] = t[[c for c in t.columns if c.startswith("m_")]].min(axis=1) < 3.9
-        t["won"] = t.outcome == "won"
-        t["wait"] = (t.first_booked_at - t.won_at) / 60 if "first_booked_at" in t else np.nan
-        sizes = t.groupby(["seed", "batch"]).id.transform("size").where(t.batch.notna(), 1)
-        bulk = t[sizes >= 30]
-        rows = []
-        for (seed, batch), b in bulk.groupby(["seed", "batch"]):
-            rest = t[(t.seed == seed) & ~t.index.isin(b.index) & t.won]
-            w = b[b.won]
-            rows.append({"seed": seed, "when": f"{DAYS[b.day.iloc[0]]} {int(b.hour.iloc[0]):02d}:{int(b.hour.iloc[0] % 1 * 60):02d}", "yard": b.pu.mode()[0], "dealer": b.dealer.mode()[0], "cars": len(b), "quoted": int(b.quoted.sum()),
-                         "won": len(w), "on time": int(w.on_time.sum()), "margin €": round(w.margin.sum() / 100), "€/order": round(w.margin.mean() / 100, 1) if len(w) else np.nan,
-                         "price x list": round((w.price / w.list_won).mean(), 2) if len(w) else np.nan, "fee x typical": round((w.booked_fee / w.typical).mean(), 2) if len(w) else np.nan,
-                         "median h to a driver": round(w.wait.median(), 1) if len(w) else np.nan, "rest of week: on time": round(rest.on_time.mean(), 3), "€/order ": round(rest.margin.mean() / 100, 1)})
-        print(f"\n== {tag}: the bulk order (30 or more requests in one batch from one yard)\n" + pd.DataFrame(rows).to_string(index=False))
-        won = t[t.won]
-        by_day = won.groupby(["seed", "day"]).agg(orders=("id", "size"), on_time=("on_time", "mean"), wait=("wait", "median"), in_hour=("wait", lambda w: (w <= 1).mean()), margin=("margin", lambda m: m.mean() / 100))
-        print(f"\n== {tag}: orders by the day they were won (on time share; median hours to the first booking; share booked within the hour; € per order)")
-        for column in ("orders", "on_time", "wait", "in_hour", "margin"):
-            print(f"  {column}\n" + by_day[column].unstack("day").rename(columns=dict(enumerate(DAYS))).round(2).to_string())
-        rows = []
-        for seed in sorted(won.seed.unique()):  # the flu day, where the count of drivers (tools/census.py) saw one: that day against the week's other four
-            day, missing = flu(seed)
-            if day is not None and day < WORKDAYS:
-                mine = won[won.seed == seed]
-                that, rest, booked = mine[mine.day == day], mine[mine.day != day], mine.first_booked_at // DAY
-                rows.append({"seed": seed, "flu day": NAMES[day], "regular drivers at home": f"{missing:.0%}", "orders won": len(that), "a day of the rest": round(len(rest) / 4),
-                             "bookings an hour (08-20)": round((booked == day).sum() / 12, 1), "rest ": round(((booked < WORKDAYS) & (booked != day)).sum() / 48, 1),
-                             "median h to a driver": round(that.wait.median(), 2), "rest  ": round(rest.wait.median(), 2), "within the hour": round((that.wait <= 1).mean(), 2),
-                             "rest   ": round((rest.wait <= 1).mean(), 2), "late": round(1 - that.on_time.mean(), 3), "rest    ": round(1 - rest.on_time.mean(), 3)})
-        if rows:
-            print(f"\n== {tag}: the flu day, where the count of drivers saw one on a working day\n" + pd.DataFrame(rows).to_string(index=False))
+    """The driver side of the events, for the fleet: orders by the kind of day they were won on, the bulk order, the flu day."""
+    events = {seed: exact(probed(seed)[0]) for seed in seeds_probed()}
+    t = pd.concat([table(tag) for tag in tags])
+    t = t[t.day < WORKDAYS]
+    t["won"], t["wait"] = t.outcome == "won", (t.first_booked_at - t.won_at) / 60
+    t["bulk"] = t.groupby(["seed", "batch"]).id.transform("size").where(t.batch.notna(), 1) >= 30  # a dealer group's 30 to 40 cars from one yard in one go
+
+    def kind(seed: str, day: int, pickup: str) -> str:
+        e = events.get(seed)
+        if not e:
+            return "not measured"
+        if e["outage"] and day == e["outage"]["day"]:
+            return "outage day, in the region" if pickup in e["outage"]["region"] else "outage day, elsewhere"
+        return "war day" if day == e["war"] else "day after the war" if day == e["war"] + 1 else "calm day"
+
+    t["kind"] = [kind(seed, day, pickup) for seed, day, pickup in zip(t.seed, t.day, t.pu)]
+
+    def told(group) -> pd.DataFrame:
+        """Orders, and how they went, for each group of requests."""
+        won, days = t[t.won].groupby(group), t.groupby([*group, "seed"] if isinstance(group, list) else [group, "seed"]).day.nunique().groupby(group).sum()
+        out = pd.DataFrame({"requests": t.groupby(group).size(), "orders": won.size(), "on time": won.on_time.mean(), "median h to a driver": won.wait.median(),
+                            "a driver within the hour": won.wait.apply(lambda w: (w <= 1).mean()), "none for 8 h": won.wait.apply(lambda w: (w > 8).mean()),
+                            "€ an order": won.margin.mean() / 100, "price x list": won.apply(lambda g: (g.price / g.list_won).mean()), "fee x typical": won.apply(lambda g: (g.booked_fee / g.typical).mean())})
+        return out.assign(**{"won share": out.orders / out.requests, "orders a day": out.orders / days}).round(3)
+
+    print(f"== {', '.join(tags)}: {t.seed.nunique()} weeks; orders by the kind of day they were won on\n" + told("kind").to_string())
+    print("\n== the bulk order against the week's other requests\n" + told("bulk").drop(columns="orders a day").to_string())
+    bulk = t[t.bulk & t.won].groupby("seed").agg(won=("id", "size"), on_time=("on_time", "mean"), median_h=("wait", "median"))
+    print(f"   won per week {bulk.won.min()}-{bulk.won.max()} (median {bulk.won.median():.0f}) of {t[t.bulk].groupby('seed').size().median():.0f} cars; on time in the weeks with 20 or more won "
+          f"{t[t.bulk & t.won & t.seed.isin(bulk[bulk.won >= 20].index)].on_time.mean():.1%}, with fewer {t[t.bulk & t.won & t.seed.isin(bulk[bulk.won < 20].index)].on_time.mean():.1%}")
+    rows, won = [], t[t.won]
+    for seed in sorted(won.seed.unique()):  # the flu day, where the count of drivers (tools/census.py) saw one: that day against the week's other four
+        day, missing = flu(seed)
+        if day is not None and day < WORKDAYS:
+            mine = won[won.seed == seed]
+            that, rest, booked = mine[mine.day == day], mine[mine.day != day], mine.first_booked_at // DAY
+            rows.append({"seed": seed, "flu day": NAMES[day], "regular drivers at home": f"{missing:.0%}", "orders won": len(that), "a day of the rest": round(len(rest) / 4),
+                         "bookings an hour (08-20)": round((booked == day).sum() / 12, 1), "rest ": round(((booked < WORKDAYS) & (booked != day)).sum() / 48, 1),
+                         "median h to a driver": round(that.wait.median(), 2), "rest  ": round(rest.wait.median(), 2), "within the hour": round((that.wait <= 1).mean(), 2),
+                         "rest   ": round((rest.wait <= 1).mean(), 2), "late": round(1 - that.on_time.mean(), 3), "rest    ": round(1 - rest.on_time.mean(), 3)})
+    if rows:
+        print("\n== the flu day, where the count of drivers saw one on a working day\n" + pd.DataFrame(rows).to_string(index=False))
 
 
 def seeds_probed() -> list[str]:
