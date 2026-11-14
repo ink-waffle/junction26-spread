@@ -132,6 +132,14 @@ class Desk:
             except OSError as error:  # a journal that cannot be written costs the next restart its memory, not this week its desk
                 print(f"No journal from here on: {error}", file=sys.stderr, flush=True)
                 self.journal = None
+        for action in actions:  # what planning this batch did to the books at once; a replay has planned nothing, so it happens here
+            if action["type"] == "withdraw":
+                books.gig_gone(action["gigId"])
+            elif action["type"] == "reprice" and action["gigId"] in books.gigs:
+                books.gigs[action["gigId"]].schedule = action["schedule"]
+        for action, result in zip(actions, results):
+            if action["type"] == "post" and result["ok"]:
+                self.fleet.gig_posted(action)  # before the books take the batch's gigs: the fleet's memory is of the minute it planned them
         for action, result in zip(actions, results):
             if action["type"] == "post":
                 legs = [(s["orderId"], s["leg"]) for s in action["stops"] if s["kind"] == "pickup"]

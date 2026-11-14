@@ -75,10 +75,10 @@ class Market:
         return [(name, *keys[name]) for name in self.policy.spread]
 
     def belief(self, part: tuple) -> tuple[float, float]:
-        if part not in self.beliefs:
-            mean = self.policy.level if part[0] == "world" else self.places.get(part[0], {}).get(part[1], 0.0)
-            self.beliefs[part] = (mean, self.policy.spread[part[0]] ** 2)
-        return self.beliefs[part]
+        if part in self.beliefs:
+            return self.beliefs[part]
+        mean = self.policy.level if part[0] == "world" else self.places.get(part[0], {}).get(part[1], 0.0)
+        return mean, self.policy.spread[part[0]] ** 2  # a prior is not kept: only what an answer taught is, so a replay of the answers rebuilds it all
 
     def level(self, request: PriceRequest, option: DeliveryOption) -> tuple[float, float]:
         """Mean and variance of the log multiple of the list price at which this dealer buys this option half the time."""
