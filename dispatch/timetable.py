@@ -123,7 +123,7 @@ class Timetable:
         for by in (due, due + 2 * HOUR, next_day, next_business_day(next_day // DAY) * DAY + due % DAY):
             arrive = max((b for a, b in open_spans(leg["delivery"]["hours"], max(now, start) + drive, by)), default=None)
             collect = arrive and max((b for a, b in open_spans(leg["pickup"]["hours"], max(now, start), arrive - drive)), default=None)
-            if collect and collect >= now + 30:
+            if collect and collect >= now + 30:  # a rung still in reach: its last minute to collect is half an hour away or more
                 return collect, arrive
         return None, None
 
