@@ -6,8 +6,11 @@ Read with fresh eyes from `main` 832baf6 (decisions frozen at 52aaf93). Everythi
 ```sh
 python -m tools.skeptic_fit orch-base-s14 -- final-fresh skeptic-base-s14   # the on-time model against 64 weeks it never saw
 python -m tools.skeptic_market final-fresh skeptic-base-s14                 # the dealer side, each part taken out, on the same 64 weeks
-python -m tools.ablations skeptic-base skeptic-nolook ...                   # the table of section 2 (weeks halal-65..96, strides 14 and 13)
+python -m tools.ablations skeptic-base skeptic-nolook ...                   # the table of section 4 (weeks halal-65..96, strides 12 to 15)
+python -m tools.weekdays skeptic-base skeptic-candAcalnw ...                # orders by weekday, the share sold on the fastest option
 ```
+
+The saved weeks are in `runs/skeptic-*` (tags as in the table's last column of names). The tools of the two fitted models read `main`'s code as it was (`tools.skeptic_fit` has the 16 weights of 832baf6 only when run from that tree or from `research/skeptic-switches`; on this branch it reports the 15 that are left).
 
 ## 0. Report for the orchestrator
 
@@ -264,6 +267,7 @@ From 97% to 97.5% B gives up about €280 for 0.5 to 0.8 point of on-time; `main
 **Proofs of the candidate.** Two trees: dce27f9 (B at 97%) and the head of the branch (the same `dispatch/` with one line changed, `FleetPolicy.on_time = 0.975` and its comment: `git diff dce27f9 -- dispatch`).
 
 - **Restart = replay, the head:** `python -m tools.restart_test --seed halal-02 --restarts 8 --baseline skeptic-C975ns-x-s0`: 8 of 8 restarts rebuilt the same desk; €21,126.94, 96.1% on time and 482 orders with restarts and without: the same week to the cent. (`main` plays this week, without strides, at €21,071.78 and 93.4%.) **dce27f9:** 8 of 8, €22,034.37, 95.4%, 547 orders both ways. The fleet now has no memory of its own to rebuild.
+- **The model of the head is calibrated on its own play:** `python -m tools.skeptic_fit -- skeptic-base-s14 skeptic-B975-s14` from this tree: on `main`'s play of halal-65..96 the 15-weight model says 4.5% late where 5.0% are (log-likelihood −0.1730; `main`'s 16 weights as baked −0.1957, with their intercept free −0.1752, a constant −0.1975); on the head's own play of the same weeks it says 4.3% where 4.0% are (−0.1482; a free intercept would move by +0.08 and gain nothing).
 - **The head is the measured thing:** its tree plays the 32 weeks of halal-65..96 at stride 14 to the cent like dce27f9 with the override `{"fleet": {"on_time": 0.975}}` (32 of 32).
 - **Python 3.9:** `ast.parse(source, feature_version=(3, 9))` passes for every file of `dispatch/`, and `dispatch.run` imports under `/usr/bin/python3` 3.9.6 with `PYTHONPATH=kit/python`.
 - **The clean code is the measured thing:** the clean tree and the switch combination of `research/skeptic-switches` (`{"fleet": {"weights": {"known": 0, "one": -3.72}, "world": false}, "market": {"spread": {day, from, lane, to, world}}}`) play the 32 weeks of halal-65..96 at stride 14 to the cent (32 of 32), so every sample of the combination is a sample of the clean code. The same holds for A alone (32 of 32).
