@@ -27,7 +27,7 @@ def clock(minute: int) -> str:
 
 
 def open_spans(hours: Optional[OpeningHours], start: int, end: int) -> list[tuple[int, int]]:
-    """The parts of [start, end] in which a site with these stated hours is open; all of it for a private address."""
+    """The parts of [start, end] in which a site with these hours is open; all of it for a private address. A site that closes at 19:00 is last open at 18:59."""
     if hours is None:
         return [(start, end)] if start <= end else []
     spans = []
@@ -39,7 +39,7 @@ def open_spans(hours: Optional[OpeningHours], start: int, end: int) -> list[tupl
             opens, closes = hours["saturday"]["opens"], hours["saturday"]["closes"]
         else:
             continue
-        a, b = max(start, day * DAY + opens), min(end, day * DAY + closes)
+        a, b = max(start, day * DAY + opens), min(end, day * DAY + closes - 1)
         if a <= b:
             spans.append((a, b))
     return spans

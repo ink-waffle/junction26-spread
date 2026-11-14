@@ -2,15 +2,19 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 from spread.types import Audience, DeliveryOption, FeeStep, PriceRequest, StopRef
 
+from . import notes
 from .atlas import DAY, HOUR, Atlas, open_spans
 from .books import Books, OrderState
+from .notes import NoteFacts
 
 MAX_PLAN_MINUTES = 12 * HOUR  # a gig with several cars may not plan more driving (RULES.md)
+CHARGING = 40  # minutes of a charging stop (RULES.md)
+RETRY = 2 * HOUR  # after a failed visit whose cause no note gave: how far to move the next one
 
 
 @dataclass
@@ -85,29 +89,35 @@ class Fleet:
         licence = state.facts.manual or any(state.failed.get(leg, ("", 0))[0] == "licence" for leg in legs)
         return {"experienced": premium, "manualLicence": licence}
 
+    def facts(self, state: OrderState, leg: int) -> NoteFacts:
+        """What we know of a car: the note's facts (a note speaks of the first car), then what the world has told us since."""
+        facts = replace(state.facts) if leg == 0 else NoteFacts()
+        reason, at = state.failed.get(leg, ("", 0))
+        if leg in state.released:  # the dealer has been paid
+            facts.released_at = state.released[leg]
+        if reason == "not_ready":
+            facts.ready_at = max(facts.ready_at or 0, at + RETRY)
+        elif reason == "closed" and at % DAY < 12 * HOUR:  # closed in the morning: it opens later than we thought
+            facts.pickup_opens = at % DAY + RETRY
+        elif reason == "closed":  # closed in the afternoon: it closes earlier
+            facts.pickup_closes = at % DAY - RETRY
+        facts.plates, facts.manual = facts.plates or reason == "no_plates", facts.manual or reason == "licence"
+        return facts
+
     def stops(self, state: OrderState, legs: list[int]) -> list[StopRef]:
-        """A pickup and a delivery for each leg, with a window of their own only where a note or a failed visit narrows the order's."""
-        order, facts, now, stops = state.order, state.facts, self.books.now, []
+        """A pickup and a delivery for each leg. A stop gets a window of its own only where the note, a failed visit or snow narrow the order's."""
+        order, books, stops = state.order, self.books, []
         for leg in legs:
             car, pickup, delivery = order["legs"][leg]["car"], order["legs"][leg]["pickup"], order["legs"][leg]["delivery"]
-            km = self.atlas.km[(pickup["placeId"], delivery["placeId"])]
-            reason, failed_at = state.failed.get(leg, ("", 0))
-            first: StopRef = {"orderId": order["id"], "leg": leg, "kind": "pickup",
-                              "withPlates": facts.plates or reason == "no_plates",
-                              "withCharging": bool(car["electric"] and car["chargePercent"] is not None and car["chargePercent"] < 30 and km > 200)}
+            ends, facts = (pickup["placeId"], delivery["placeId"]), self.facts(state, leg)
+            charging = bool(car["electric"] and car["chargePercent"] is not None and car["chargePercent"] < 30 and self.atlas.km[ends] > 200)
+            first: StopRef = {"orderId": order["id"], "leg": leg, "kind": "pickup", "withPlates": facts.plates, "withCharging": charging}
             second: StopRef = {"orderId": order["id"], "leg": leg, "kind": "delivery"}
-            if not state.late:
-                base = pickup["window"]
-                start = max(base["from"], facts.ready_at or 0, failed_at + 2 * HOUR if reason in ("not_ready", "closed") else 0)
-                end = base["to"]
-                if facts.pickup_closes is not None and not pickup["privateAddress"]:
-                    end = min(end, start // DAY * DAY + facts.pickup_closes) if start // DAY * DAY + facts.pickup_closes >= start else end
-                if (start > base["from"] or end < base["to"]) and end >= max(start, now) and not pickup["privateAddress"]:
-                    first["window"] = {"from": start, "to": end}
-                due = min(order["deadline"], facts.deadline or order["deadline"])
-                if facts.delivery_closes is not None and not delivery["privateAddress"]:
-                    due = min(due, due // DAY * DAY + facts.delivery_closes)
-                if due < order["deadline"] and due >= now and not delivery["privateAddress"]:
-                    second["window"] = {"from": delivery["window"]["from"], "to": max(due, delivery["window"]["from"])}
+            snow = [(start, end) for start, end, places in books.snow if places & set(ends)]
+            slow = 45 if notes.SNOW_ROOM and any(end > books.now and start < order["deadline"] for start, end in snow) else notes.SLOW_DRIVE
+            windows = notes.windows(order["legs"][leg], facts, order["deadline"], self.atlas.drive(*ends) + CHARGING * charging, books.now, snow, slow)
+            for stop, window in zip((first, second), windows):
+                if window and not state.refusals:  # the world refused our windows once: post without them
+                    stop["window"] = window
             stops += [first, second]
         return stops

@@ -10,11 +10,11 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Optional
+from typing import Iterable, Optional
 
-from spread.types import Note
+from spread.types import DeliveryOption, Leg, Note, OpeningHours, PriceRequest, StopPlace, TimeWindow
 
-from .atlas import DAY, HOUR
+from .atlas import DAY, HOUR, open_spans
 
 
 @dataclass
@@ -34,12 +34,12 @@ class NoteFacts:
 
 # The vocabulary: cue -> words, after lowercasing and dropping accents. "valmi-" is a stem, "klar" a whole word.
 CUES = {
-    "ready": "valmi- valmis valmiina klar klart ready",
-    "collect": "nout- noud- noudettav- noutaa hake- haet- haettav- haku hakemaan collect- pickup- pick- hamt- hamtas hamtning luovut- luovutus lamnas",
+    "ready": "valmi- valmis valmiina valmistuu klar klart ready",
+    "collect": "nout- noud- noudettav- noutaa hake- haet- haettav- haku hakemaan collect- pickup- pick- hamt- hamtas hamtar hamtning luovut- luovutus lamnas",
     "pay": "maksu- maksun maksa- maksaa makse- maksettu rahoitu- payment pays paid financ- betal- betalning finans-",
     "open": "auki avoinna aukiolo- open opening oppet oppettid- paikalla taalla ketaan nobody ingen vastaanot- vastaanott- receiv- receiving mottag- mottagaren mottagning",
     "closed": "kiinni sulke- sulkee sulje- suljet- close closes closed closing stang- stanger",
-    "there": "vastaanot- vastaanott- receiv- receiving mottag- mottagaren mottagning kohde kohtee- perill- toimitu- toimitus destinat- destination deliver- arriv- arrival framme plats",
+    "there": "vastaanot- vastaanott- receiv- receiving mottag- mottagaren mottagning kohde kohtee- perill- toimitu- toimitus toimituso- destinat- destination deliver- arriv- arrive arrival framme leverans leverera- plats",
     "customer": "asiakas customer kunden",
     "seller": "myyja saljare- seller kotona hemma",  # a private seller's booked slot, which the request already states
     "call": "soita- soitto call ring ilmoit-",  # a clause about phoning states nothing
@@ -58,7 +58,7 @@ CUES = {
     "cargo": "takakon- tavarati- trunk bakluck- vantei- lisaksi in i",  # tyres that travel in the car
     "day+0": "tanaan idag today",
     "day+1": "huomen- huomenna tomorr- tomorrow tmrw imorgon morgon",
-    "day+2": "ylihuom- overmorgon iovermorgon",
+    "day+2": "ylihuom- ylihuome- overmorgon iovermorgon",
     "weekday0": "ma maanant- maanantai- mon monday man mandag",
     "weekday1": "ti tiist- tiistai- tue tues tuesday tis tisdag",
     "weekday2": "ke keskiv- keskiviik- wed weds wednes- wednesday ons onsdag",
@@ -79,18 +79,19 @@ WORD = re.compile(r"(?<!\d)(\d{1,2})(?:([.:])?(\d\d))?(?!\d)(?:\s?([ap])\.?m\b)?
 
 
 def typo(written: str, word: str) -> bool:
-    """`written` is `word` with one letter dropped, doubled or swapped with its neighbour."""
+    """`written` is `word` with one letter dropped, doubled or swapped with its neighbour. The first letter stays, and the last is not dropped."""
     i = 0
     while i < min(len(written), len(word)) and written[i] == word[i]:
         i += 1
     swapped = written[i:i + 2] == word[i:i + 2][::-1] and written[i + 2:] == word[i + 2:]
-    return len(written) == len(word) and swapped or written[-1:] == word[-1:] and (written[i:] == word[i + 1:] or written[i + 1:] == word[i:])
+    return i > 0 and (len(written) == len(word) and swapped or written[-1:] == word[-1:] and (written[i:] == word[i + 1:] or written[i + 1:] == word[i:]))
 
 
 @lru_cache(maxsize=None)
 def cues_of(word: str) -> frozenset:
-    """The cues a word carries: it is a vocabulary word or starts with a vocabulary stem. A word that is in no entry may be a typo of one of six letters or more."""
-    exact, close = set(), set()
+    """The cues a word carries: it is a vocabulary word or starts with a vocabulary stem. A word that is in no entry may be a typo
+    of an entry of six letters or more: it takes the cues of the longest such entry."""
+    exact, close = set(), {}
     for cue, entries in CUES.items():
         for entry in entries.split():
             stem = entry.rstrip("-")
@@ -98,8 +99,8 @@ def cues_of(word: str) -> frozenset:
             if parts[0] == stem:
                 exact.add(cue)
             elif len(stem) >= 6 and any(typo(part, stem) for part in parts):
-                close.add(cue)
-    return frozenset(exact or close)
+                close.setdefault(len(stem), set()).add(cue)
+    return frozenset(exact or close and close[max(close)])
 
 
 @lru_cache(maxsize=None)
@@ -192,8 +193,11 @@ def clause_of(ws: list[Word], weekday: int) -> Clause:
             j = i + 1
             while "clock" in at(j).cues or at(j).text in ("a", "en"):
                 j += 1
-            if j in found:  # "not 3pm", "not tomorrow": the note denies it
-                del found[j]
+            if j in found:  # "not 3pm", "not tomorrow", "not tomorrow 3pm": the note denies it
+                denied = found.pop(j)[0]
+                j = next(k for k in range(j + 1, len(ws) + 1) if "clock" not in at(k).cues)
+                if found.get(j, (denied,))[0] != denied:
+                    del found[j]
             elif "manual" in at(j).cues:  # "automatic, not a manual"
                 cues.discard("manual")
             else:  # "not before 3": any other "not" turns before into after
@@ -219,7 +223,7 @@ def read(note: Optional[Note], arrived_at: int) -> NoteFacts:
         facts.plates |= "plates" in cues
         facts.summer_tyres |= ("summer" in cues or {"winter", "not"} <= cues) and "cargo" not in cues
         paid, paying = paying or "pay" in cues, "pay" in cues and not times  # "buyer pays first, pickup from 13": the payment clause names the next time
-        if not times or "seller" in cues:
+        if not times or "seller" in cues or len(times) > 1 and times[0] >= times[1]:  # no time, a private seller's slot, or hours that end before they start
             continue
         at = (today + clause.day) * DAY + times[0]
         until = "by" in cues or bool(cues & {"before", "after"}) and ("not" in cues) == ("after" in cues)  # "before 3", "not after 3"
@@ -241,3 +245,80 @@ def read(note: Optional[Note], arrived_at: int) -> NoteFacts:
         elif cues & {"ready", "collect"}:
             facts.ready_at = at
     return facts
+
+
+# What the facts mean for a gig: when the car can really be collected, and by when it must really arrive.
+
+END = 9 * DAY + 22 * HOUR  # the world ends on the second Wednesday at 22:00
+MIN_SPAN = HOUR  # a chance shorter than this finds no driver: take the next one
+SLOW_DRIVE = 15  # percent by which a real drive exceeds the map's minutes one time in twenty (tools/drive_times.py)
+
+Span = tuple[int, int]
+
+
+def real(hours: Optional[OpeningHours], opens: Optional[int], closes: Optional[int]) -> Optional[OpeningHours]:
+    """A site's stated hours cut to the real weekday hours of a note; drivers plan by the stated ones."""
+    if hours is None:
+        return None
+    return {**hours, "opens": max(hours["opens"], opens or 0), "closes": min(hours["closes"], DAY if closes is None else closes)}
+
+
+def arrive_by(delivery: StopPlace, facts: NoteFacts, deadline: int) -> Optional[int]:
+    """The last minute at which the car arrives on time: by the note's deadline, with the delivery site really open."""
+    due = deadline if facts.deadline is None else min(deadline, facts.deadline)
+    return max((b for _, b in open_spans(real(delivery["hours"], facts.delivery_opens, facts.delivery_closes), delivery["window"]["from"], due)), default=None)
+
+
+def collect_spans(pickup: StopPlace, facts: NoteFacts, start: int, end: int, snow: Iterable[Span] = ()) -> list[Span]:
+    """The parts of [start, end] in which the car can be collected: ready, released, the site really open, no snow on summer tyres."""
+    start = max(start, pickup["window"]["from"], facts.ready_at or 0, facts.released_at or 0)
+    spans = open_spans(real(pickup["hours"], facts.pickup_opens, facts.pickup_closes), start, end)
+    for snow_from, snow_to in snow if facts.summer_tyres else ():
+        spans = [(a, b) for lo, hi in spans for a, b in ((lo, min(hi, snow_from - 1)), (max(lo, snow_to), hi)) if a <= b]
+    return spans
+
+
+def chances(request: PriceRequest, option: DeliveryOption, facts: NoteFacts, drive: int) -> list[Span]:
+    """When a request's first car can really be collected and still arrive on time for this option. The last minute of the last
+    span is the true `lastPickupAt`: a late ready time, a note deadline or an early closing shrink the slack the request shows."""
+    leg = request["legs"][0]
+    moved = DAY * max(0, (facts.ready_at or 0) // DAY - leg["pickup"]["window"]["from"] // DAY)  # a car ready days later moves its deadline by the same days
+    arrive = arrive_by(leg["delivery"], facts, option["deadline"] + moved)
+    return [] if arrive is None else collect_spans(leg["pickup"], facts, request["respondBy"], min(arrive - drive, leg["pickup"]["window"]["to"] + moved))
+
+
+import os  # experiment switches, to be removed
+EVERY_PICKUP = "A" in os.environ.get("NOTES_VARIANT", "")  # every gig's pickup window ends at the last minute that is still on time
+EVERY_DELIVERY = "B" in os.environ.get("NOTES_VARIANT", "")  # every gig's delivery window leaves room for a slow drive
+SNOW_ROOM = "S" in os.environ.get("NOTES_VARIANT", "")  # more room when snow is forecast at either end
+
+
+def windows(leg: Leg, facts: NoteFacts, deadline: int, drive: int, now: int, snow: Iterable[Span] = (), slow: int = SLOW_DRIVE) -> tuple[Optional[TimeWindow], Optional[TimeWindow]]:
+    """The windows that a gig's pickup and delivery need so that the driver meets the car ready, both sites really open and
+    the note's deadline. None where the order's own window already says it. A stop has one window and real hours repeat daily,
+    so a pickup with shorter real hours gets one day's chance; when it passes unbooked, the gig expires and the next post takes the next."""
+    pickup, delivery = leg["pickup"], leg["delivery"]
+    arrive, first, second, spans = arrive_by(delivery, facts, deadline), None, None, []
+    earlier = arrive is not None and not delivery["privateAddress"] and (EVERY_DELIVERY or arrive < arrive_by(delivery, NoteFacts(), deadline))
+    for spare in () if arrive is None else (drive * slow // 100, 0) if earlier else (0,):
+        last = min(arrive - spare - drive, pickup["window"]["to"])  # the last minute to collect the car and be on time
+        spans = collect_spans(pickup, facts, now, last, snow)
+        if spans and earlier:  # the note ends the delivery before the order's window does: our window says so, with room for a slow drive if there is any
+            second = {"from": delivery["window"]["from"], "to": arrive - spare}
+        if spans:
+            break
+    late = not spans
+    if late:  # the car can only arrive late: collect it at the first real chance, deliver without a window
+        last = END
+        spans = collect_spans(pickup, facts, now, last, snow)
+    if spans and not pickup["privateAddress"]:
+        stated = lambda start: open_spans(pickup["hours"], start, last)  # when a driver would come by the stated hours alone
+        if spans == stated(spans[0][0]):  # every stated hour from the first chance on is a chance: one window holds them all
+            if EVERY_PICKUP and not late:
+                first = {"from": spans[0][0], "to": spans[-1][1]}
+            elif spans != stated(max(now, pickup["window"]["from"])):
+                first = {"from": spans[0][0], "to": max(last, pickup["window"]["to"])}
+        else:
+            a, b = next((span for span in spans if span[1] - span[0] >= MIN_SPAN), max(spans, key=lambda span: span[1] - span[0]))
+            first = {"from": a, "to": b}
+    return first, second
