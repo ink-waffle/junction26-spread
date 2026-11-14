@@ -1,15 +1,50 @@
 """Trade-ins in saved runs (research/tradein): how many requests a week, what they pay, what we quote, and how the ones we won fared.
 
     python -m tools.tradein_study orch-head-record skeptic-notradein-s14 tradein-w0-s14
+    python -m tools.tradein_study --fit tradein-w0-s14      # the trade-in weight that weeks where we won trade-ins give, the rest of the model held
 """
 from __future__ import annotations
 
+import glob
+import gzip
+import json
+import os
 import sys
 from collections import Counter
+from multiprocessing import Pool
 
+import numpy as np
 import pandas as pd
 
-from tools.study import runs, table
+from dispatch.fleet import ON_TIME
+from tools.fleet_fit import rows
+from tools.study import ROOT, runs, table
+
+
+def first_looks(path: str) -> list[dict]:
+    """The on-time model's signs of each order of a saved week at its first posting, replayed through the books."""
+    with gzip.open(path, "rt") as file:
+        run = json.load(file)
+    return [row for row in rows(run) if row["look"] == 0] if run.get("gigs") else []
+
+
+def fit(tags: list[str]) -> None:
+    """The trade-in weight alone, the other weights and the intercept as baked; its standard error leaves out one week at a time."""
+    with Pool(8) as pool:
+        parts = pool.map(first_looks, [path for tag in tags for path in sorted(glob.glob(os.path.join(ROOT, "runs", tag, "*.json.gz")))])
+    t = pd.DataFrame([row for part in parts for row in part])
+    rest = sum(weight * t[name] for name, weight in ON_TIME.items() if name != "trade_in").to_numpy()
+    y, x, weeks = t.on_time.to_numpy(float), t.trade_in.to_numpy(float), t.seed.to_numpy()
+    grid = np.linspace(-5, 3, 801)
+    def best(keep: np.ndarray) -> float:
+        logits = rest[keep, None] + grid[None, :] * x[keep, None]
+        return float(grid[np.argmax((y[keep, None] * logits - np.log1p(np.exp(logits))).sum(axis=0))])
+    weight, out = best(np.ones(len(t), bool)), np.array([best(weeks != week) for week in np.unique(weeks)])
+    se = np.sqrt((len(out) - 1) * np.mean((out - out.mean()) ** 2))
+    for w in (ON_TIME["trade_in"], weight):
+        chance = 1 / (1 + np.exp(-(rest + w * x)))
+        print(f"   trade_in {w:+.2f}: the model says {chance[x == 1].mean():.1%} of the trade-ins on time")
+    print(f"{', '.join(tags)}: {int(x.sum())} trade-ins in {len(np.unique(weeks))} weeks, {y[x == 1].mean():.1%} on time; the weight they give: {weight:+.2f} (se {se:.2f})")
 
 
 def won(tag: str) -> pd.DataFrame:
@@ -53,6 +88,8 @@ def won(tag: str) -> pd.DataFrame:
 
 
 def main() -> None:
+    if sys.argv[1] == "--fit":
+        return fit(sys.argv[2:])
     for tag in sys.argv[1:]:
         t = table(tag)
         weeks, trade = t.seed.nunique(), t[t.legs == 2]
