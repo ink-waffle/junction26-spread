@@ -6,6 +6,7 @@ Level 8 throughout. "tune" = our seeds halal-01..08, "hold" = halal-09..16 (neve
 
 | When | Best version | tune: margin / min on-time / ranked | hold | Trying now |
 |---|---|---|---|---|
+| Sat 11:00 | `main` 922cddd = ideas 1–9 (all options quoted, lanes in the learner, two-car gigs) | €13,770 / 94.7% / 8 of 8 | pending | The leaderboard says volume: the top ten deliver 345–460 orders a week at 96–99% on time for about our margin per order (we: 214–384). Recalibrating the fleet's cost (it prices the faster option out), exact price thresholds by bisection, pairing with cars that sit |
 | Sat 10:40 | `main` f20e34d = idea 1–7 (price-level learner, on-time model, note reader, reserve 0, live loop with resolver fallback) | €12,711 / 94.4% / 8 of 8 | €11,487 / 93.0% / 8 of 8 | Network outage 03:40–10:00 cost six hours. Now: capacity-aware volume (drivers take ≥ 340 orders a week; top teams deliver 350–400), two-car gigs, loss audit; test final at 14:00 from the Helsinki VM |
 | Sat 03:10 | `main-m1` = base1 + online price-level learner (idea 4) + live final loop | €10,367 / 89.1% / 7 of 8 | — | Fleet cost model with a capacity price (to lift the worst week over 90%), note reader (100% of facts on 24 labelled weeks), two-car gigs (fees 0.89 × vs 1.21 × typical on short pairs) |
 | Sat 02:35 | `base1` (flat 1.15 × fee, 1.45 × list, ≥ 8 h slack, no private pickup / trade-in / premium) | €6,824 / 83.9% / 5 of 8 | — | Five parallel research streams: notes reader, win-curve pricing, fleet cost model, direct offers, live final loop |
@@ -47,6 +48,16 @@ Level 8 throughout. "tune" = our seeds halal-01..08, "hold" = halal-09..16 (neve
 - **Why.** After merging 4–6 every week was 96–99% on time: the market's reserve (30% of cost) and the fleet's risk price charged twice for the same scarcity. The same requests won at 207, 272 and 342 orders a week were booked before the warning 92.7%, 92.6% and 92.4% of the time: up to ~340 a week the drivers are not the limit.
 - **The effect.** Merged system, tune: reserve 0.3 → €10,280 (worst week 96.2% on time); 0.15 → €11,881 (95.5%); 0 → €12,711 (94.4%). Hold at 0: €11,487, worst week 93.0%, 8/8 ranked.
 
+### 8. Quote every option the dealer accepts, each at the same margin
+- **The idea.** Find the option and price with the highest expected margin, then quote every other option at the price that leaves the same margin over its own cost.
+- **Why.** Bisecting each Monday request's price threshold on 7 seeds (`tools/probe.py`, 2,515 options to within 0.5%): the thresholds of two options of one request are nearly independent (r ≈ 0.2; the slower one is 8.6% lower on average with sd 14.7%). Each offered option is a second chance to win.
+- **The effect.** Tune, same fleet: €12,707 → €13,512 a week, worst week 94.4% → 95.0% on time, 343 → 349 orders.
+
+### 9. Two cars in one gig
+- **The idea.** A new one-car order stays out of the app for at most 30 minutes. If a second car starts within 30 km of where the first ends, with at most 5 hours of planned driving and windows a driver can meet, both go as one gig at 0.70 × the two typical fees. No driver in 60 minutes, or a deadline warning: the gig is withdrawn and the cars go alone.
+- **Why.** The typical fee of a trade-in (out and back) is half the sum of two single typical fees: the trip home is half a driver's cost. In randomised tests pairs with ≤ 4 h of driving booked 85% at 0.70 × (median 4 minutes), all-in fees 0.89 × typical against 1.21 × for the same cars as two gigs; pairs over 6 h booked 29%.
+- **The effect.** Merged system on tune: €13,337 → €13,770 a week, worst week 94.7% on time in both; cars delivered in a two-car gig: 0.71 × typical and 99.6% on time.
+
 ## Did not work
 - **Direct offers.** 12.9k random offers on 8 weeks: 25% read, 0.6% accepted (1.4% at ≥ 1.15 × typical; 0 of 556 after a deadline warning; best class — a driver who holds a gig of ours ending within 30 km of the pickup — 4.4%). Targeted offers on every gig unbooked for 20 minutes: 75k offers, 85 yes; €6,723 vs €6,824 a week, on-time 91.3% vs 91.6%. Dropped.
 - **Opening low.** Every gig at 0.6 × typical for 30 minutes, then 1.15 ×: 13–18% book low, fees −3.6%, but one point of on-time lost and a median wait of 33 instead of 3 minutes. Dropped.
@@ -55,4 +66,4 @@ Level 8 throughout. "tune" = our seeds halal-01..08, "hold" = halal-09..16 (neve
 - Flat 1.0 × typical on everything we could win at 1.3 × list (halal-01): −€8,001, 57.7% on time. We won 591 cars; drivers booked ~150 a day.
 
 ## Ranking rounds and test finals
-- none played yet
+- **Saturday 09:00 round** (played 10:38 with commit f20e34d = ideas 1–7): 5 of 5 weeks ranked, total €48,860 (€6,521 / €8,434 / €10,772 / €13,515 / €9,616; on time 93.5–97.6%; 214–384 orders). Place 35 of 45 ranked teams at that moment; top €79,003, 10th €69,979, 20th €59,652, House best €50,660, House starter not ranked. The top ten earn 1.43 × our margin on the same weeks: about €10 more per order, and more orders in worlds where the competitor is cheap.
