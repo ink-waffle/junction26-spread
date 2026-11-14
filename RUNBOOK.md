@@ -103,9 +103,13 @@ Start it again: the same command in the same folder. On the cloud machine the lo
 ## Check before a final
 
 ```sh
-python -m tools.rehearse --tag live-check --seeds halal-01 --speed 4 --until 1440 --trouble kill:2,dead:1,cut:1,fail:1   # a Monday at 4x with a killed desk, a dead stream, a lost request
-python -m tools.rehearse --tag live-thu --seeds halal-02 --start 4320                                                   # a test final: from Thursday 00:00 at the real clock, 19 minutes
+python -m tools.rehearse_remote --commit <commit> --seed halal-03 --speed 1 --start 4320 --kill 4980                     # the test final as it will run: on the cloud machine, in tmux, from Thursday 00:00, with one kill -9
+python -m tools.rehearse_remote --commit <commit> --seed halal-01 --speed 4 --kill 2100                                  # a whole week there at 4x, 9 minutes
+python -m tools.rehearse --tag live-check --seeds halal-01 --speed 4 --until 1440 --trouble kill:2,dead:1,cut:1,fail:1   # on this machine: a Monday at 4x with a killed desk, a dead stream, a lost request
+python -m tools.rehearse --tag live-thu --seeds halal-02 --start 4320 --trouble names@4850,cut@4880,fail@4900,dark@5080  # on this machine: a Thursday join with a dead resolver and a minute without a route
 python -m tools.restart_test --seed halal-02 --restarts 12 --baseline <tag of a harness run of the same commit>          # restart = replay
 ```
+
+`rehearse_remote` creates the practice world here (the slot semaphore lives on this machine), starts pacer and desk on the cloud machine in the tmux session `spread`, watches from here, and takes the session down at the end. It refuses to start while a desk or that session is alive there. Measured on Saturday morning with the merged system: the Thursday dress rehearsal answered all 386 requests of Thursday and Friday through a kill -9 (81 orders, 98.8% on time); the whole week at 4 × ended at €8,128 and 97.4% on time against €8,665 and 96.2% for the practice loop, with 1 of 1,038 requests unanswered, during the restart.
 
 The line of a rehearsal ends with what matters: `unquoted` (requests we did not answer; 0 without trouble), the milliseconds from a request to the world's answer to our quote, and how long the desk thought about a turn. While a final or a test final runs, practice worlds get 20 requests a second for every team: do not rehearse between 14:00 and 14:20 or between 20:00 and 20:20.
