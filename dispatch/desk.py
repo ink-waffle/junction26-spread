@@ -41,6 +41,7 @@ class Desk:
         self.outbox: list[Action] = []
         self.pending: set[tuple[str, int]] = set()  # legs whose post is in the outbox or on its way
         self.pairs = Pairs(policy.pairs, self.books, self.fleet, atlas, self.pending)
+        self.fleet.held = self.pairs.holds
         self.journal, self.verbose = journal, verbose
         self.careful = False  # the final sets it: an event that the desk cannot read is logged and passed over, not fatal
 
@@ -114,11 +115,11 @@ class Desk:
                     gig.schedule = wanted
                     self.outbox.append({"type": "reprice", "gigId": gig.id, "schedule": wanted})
             legs = [leg for leg in state.unposted() if (order_id, leg) not in self.pending]
-            if legs and state.refusals < 4:
+            if legs and state.refusals < 4 and not self.pairs.holds(state):
                 for plan in self.fleet.plan(state, legs):
                     self.pending.update((order_id, leg) for leg in plan.legs)
                     self.outbox.append({"type": "post", "stops": plan.stops, "audience": plan.audience, "schedule": plan.schedule})
-        # an order that still needs a gig from us stays dirty: a two-car gig can go after one of its orders has had its turn
+        # an order that still needs a gig from us stays dirty: it waits for a partner, or its two-car gig went after its turn
         books.dirty = {o for o in books.dirty | dirty if o in books.orders and books.orders[o].refusals < 4 and any((o, leg) not in self.pending for leg in books.orders[o].unposted())}
 
     def sent(self, actions: list[Action], results: list[ActionResult]) -> None:
