@@ -26,6 +26,12 @@ def euros(cents: float) -> int:
     return int(cents / 100 + 0.5) * 100
 
 
+def decline(request: PriceRequest) -> dict[str, int]:
+    """The answer to a request we do not want: one option at a price no dealer pays."""
+    first = request["options"][0]
+    return {first["kind"]: int(first["listPriceCents"] * DECLINE)}
+
+
 @dataclass
 class MarketPolicy:
     slope: float = prior.SLOPE  # how fast a dealer's yes fades: logits per unit of log price (10% dearer is about one logit)
@@ -33,11 +39,9 @@ class MarketPolicy:
     trust: float = prior.TRUST  # log price a dealer adds for each order we delivered to it on time
     level: float = prior.LEVEL  # the log price level of an average world
     spread: dict = field(default_factory=lambda: dict(prior.SPREAD))  # the parts of a level, and how far each strays from its prior (sd)
-    surprises: bool = True  # research: False leaves the war day and the outage day to the day and place parts
-    options: str = "all"  # all: the option that earns most, and the others at the same margin; research: best (that one alone), first, each, random
-    reserve: float = 0.0  # research: a margin every order must earn above the fleet's cost, as a share of it; the cost already prices risk and room
-    explore: Optional[tuple[float, float]] = None  # research: draw each multiple from this range
-    seed: str = ""
+    surprises: bool = True  # False leaves the war day and the outage day to the day and place parts: the market before idea 13, which tools/surprises.py replays
+    explore: Optional[tuple[float, float]] = None  # draw each multiple of the list price from this range: the random weeks that prior.py is fitted on
+    seed: str = ""  # of those draws
 
 
 class Market:
@@ -56,27 +60,22 @@ class Market:
         self.cars: dict[str, int] = defaultdict(int)  # pickup place -> answers so far: how busy its dealers are
 
     def quote(self, request: PriceRequest) -> dict[str, int]:
-        """A price in cents for each option we offer: the option and price with the highest expected margin over the fleet's cost."""
-        policy, options = self.policy, request["options"]
-        if policy.explore:
+        """A price in cents for each option the fleet can move: the option and price with the highest expected margin over its cost, and every other option at that margin."""
+        if self.policy.explore:
             return self.research(request)
-        floors, offers = {}, {}  # per option: what it must earn, and its highest expected gain with the price that gives it
-        for option in options[:1] if policy.options == "first" else options:
+        costs, offers = {}, {}  # per option: what the car costs us, and its highest expected margin with the price that gives it
+        for option in request["options"]:
             cost = self.fleet.cost(request, option)
             if cost is not None:
                 kind, prices = option["kind"], (euros(option["listPriceCents"] * step) for step in STEPS)
-                floors[kind] = cost * (1 + policy.reserve)
+                costs[kind] = cost
                 yes = self.curve(request, option)
-                offers[kind] = max(((price - floors[kind]) * yes(price), price) for price in prices)
+                offers[kind] = max(((price - cost) * yes(price), price) for price in prices)
         best = max(offers, key=offers.get, default=None)
         if best is None or offers[best][0] <= 0:
-            return {options[0]["kind"]: int(options[0]["listPriceCents"] * DECLINE)}
-        margin = offers[best][1] - floors[best]
-        if policy.options == "all":  # the dealer chooses its speed, and we earn the same whichever it takes
-            return {kind: euros(floor + margin) for kind, floor in floors.items()}
-        if policy.options == "each":
-            return {kind: price for kind, (gain, price) in offers.items() if gain > 0}
-        return {best: offers[best][1]}
+            return decline(request)
+        margin = offers[best][1] - costs[best]
+        return {kind: euros(cost + margin) for kind, cost in costs.items()}  # the dealer chooses its speed, and we earn the same whichever it takes
 
     def parts(self, request: PriceRequest) -> list[tuple]:
         """The parts of the level that this request touches, of those the policy gives a spread."""
@@ -183,6 +182,6 @@ class Market:
     def research(self, request: PriceRequest) -> dict[str, int]:
         """Random multiples on a random subset of the options, to measure dealers."""
         policy, rng, options = self.policy, random.Random(f"{self.policy.seed}:{request['id']}"), request["options"]
-        chosen = {"first": options[:1], "best": options}.get(policy.options) or rng.choice([options[:1], options[-1:], options])
+        chosen = rng.choice([options[:1], options[-1:], options])
         prices = {o["kind"]: euros(o["listPriceCents"] * rng.uniform(*policy.explore)) for o in chosen if self.fleet.cost(request, o) is not None}
-        return prices or {options[0]["kind"]: int(options[0]["listPriceCents"] * DECLINE)}
+        return prices or decline(request)
