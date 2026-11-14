@@ -17,9 +17,10 @@ NEAR_KM = 30  # the app notifies drivers who live this close to the pickup (RULE
 # `fleet_fit --add` the second (on weeks of the merged system, the rest held and the model's mean chance kept), `fleet_fit --add flu` the third.
 # "fee" weighs a gig's fee against the fees of our other open gigs, "level" the fee that our open gigs pay together: drivers choose among our gigs.
 # "supply" is the week's drivers near a place; "pay" the typical fee as a share of the list price: it has a noise of its own, and our fee is a multiple of it.
-# "flu" is how much likelier than one working day in five the car's last day is the day of the week's flu (48 weeks; it also moved "one" from -5.80).
+# "flu" is how much likelier than one working day in five the car's last day is the day of the week's flu (48 weeks; it also moved "one" by 0.05).
+# "one" holds what a sign for the week's first hundred bookings added after them (0.25 x log 101): weeks the fit never saw gave that sign the other direction (SKEPTIC.md).
 ON_TIME = {
-    "one": -5.75, "fee": 3.96, "level": 0.88, "slack": 1.13, "short": -1.85, "long": -0.44, "trade_in": -3.35, "backlog": -0.58, "known": 0.25, "waited": -0.75,
+    "one": -4.60, "fee": 3.96, "level": 0.88, "slack": 1.13, "short": -1.85, "long": -0.44, "trade_in": -3.35, "backlog": -0.58, "waited": -0.75,
     "supply_pickup": 0.75, "supply_delivery": 0.71, "private_delivery": -0.75, "premium": -0.82, "pay": 1.97,
     "flu": -2.6,
 }
@@ -31,7 +32,6 @@ LAST_DAY = DAY  # before its last pickup: of the gigs still open then, one in fo
 DOUBT = 4.0  # how firmly we hold, before a week's own outcomes speak, that its world is the model's: the prior's weight, in outcomes
 GRIP = 4  # how steeply the price of a late order rises once we expect more of them than we allow ourselves
 CALM = 20  # orders: a week's first orders say little about its share of late ones
-KNOWN = 100  # bookings after which the drivers know that our fees stay as posted
 
 
 @dataclass
@@ -58,7 +58,6 @@ class Queue:
     """The orders that wait for a driver now: what the drivers are not taking."""
     backlog: int = 0  # how many they are
     going: float = 1.0  # the fee their gigs show, as a mean multiple of the typical fee
-    known: int = 0  # the bookings of the week so far: what the drivers have seen of us
     world: float = 0.0  # how much easier (+) or harder than the model's this week's world has shown itself, in logits
     late: float = 0.0  # how many of them we expect to arrive late
     swing: float = 0.0  # how many more of them arrive on time when all their chances rise by one logit
@@ -70,7 +69,7 @@ class Queue:
 
     def without(self, multiple: float) -> "Queue":
         """The queue as one of its own gigs, at this multiple, meets it: the others."""
-        return Queue(self.backlog - 1, (self.going * self.backlog - multiple) / max(1, self.backlog - 1), self.known)
+        return Queue(self.backlog - 1, (self.going * self.backlog - multiple) / max(1, self.backlog - 1))
 
 
 class Fleet:
@@ -199,7 +198,7 @@ class Fleet:
     def signs(self, car: dict[str, float], multiple: float, queue: Queue) -> dict[str, float]:
         """The car's signs with those of its fee and of the queue it joins: drivers choose among our open gigs."""
         level = queue.level(multiple)
-        return dict(car, fee=math.log(multiple / level), level=math.log(level), backlog=math.log1p(queue.backlog), known=math.log1p(min(queue.known, KNOWN)))
+        return dict(car, fee=math.log(multiple / level), level=math.log(level), backlog=math.log1p(queue.backlog))
 
     def car(self, request: PriceRequest, spans: list[Span], at: int, since: Optional[int] = None) -> dict[str, float]:
         """The signs of a request at minute `at`: how easily it finds a driver in time, given when its car can be collected and since when it has waited."""
@@ -237,7 +236,7 @@ class Fleet:
         books = self.books
         waiting = [state for state in books.orders.values() if state is not but and self.waits(state)]
         fees = [self.posted(state) or 1.0 for state in waiting]  # an order without a gig of its own counts at the typical fee
-        queue = Queue(len(waiting), sum(fees) / max(1, len(waiting)), sum(1 for gig in books.gigs.values() if gig.driver))
+        queue = Queue(len(waiting), sum(fees) / max(1, len(waiting)))
         logits = {}
         for state, multiple in zip(waiting, fees):
             car = self.car(state.request, self.timetable.chances_left(state), books.now, state.won_at)

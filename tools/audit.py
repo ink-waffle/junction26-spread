@@ -116,7 +116,7 @@ def answers(tag: str, seeds: set) -> pd.DataFrame:
             (kind, cents), leg = next(iter(quote.items())), r["legs"][0]
             skip, option = next((i, o) for i, o in enumerate(r["options"]) if o["kind"] == kind)
             if cents < 3 * option["listPriceCents"]:
-                known = prior.PLACES["from"].get(leg["pickup"]["placeId"], 0) + prior.PLACES["to"].get(leg["delivery"]["placeId"], 0) - prior.SPEED * skip + prior.TRUST * trust.get(r["id"], 0)
+                known = -prior.SPEED * skip + prior.TRUST * trust.get(r["id"], 0)
                 out.append((f"{run['seed']}|{r['arrivedAt'] // DAY}", f"{run['seed']}|{r['id']}", math.log(cents / option["listPriceCents"]), float(item["outcome"] == "won"), known))
     return pd.DataFrame(out, columns=["day", "request", "x", "won", "known"])
 
@@ -138,7 +138,7 @@ def thresholds(t: pd.DataFrame, pool: list[str]) -> pd.DataFrame:
     seen = pd.concat([answers(tag, set(t.seed)) for tag in pool], ignore_index=True)
     day = levels(seen.day, seen.known.values, seen.x.values, seen.won.values, prior.SLOPE)
     own = levels(seen.request, seen.known.values + seen.day.map(day).values, seen.x.values, seen.won.values, REQUEST_SLOPE, REQUEST_SPREAD)
-    t["day_level"] = (t.pu.map(prior.PLACES["from"]).fillna(0) + t.de.map(prior.PLACES["to"]).fillna(0) + (t.seed + "|" + t.day.astype(str)).map(day)).values
+    t["day_level"] = (t.seed + "|" + t.day.astype(str)).map(day).values
     t["threshold"] = t.day_level + (t.seed + "|" + t.id).map(own).fillna(0).values
     quoted = []
     for r in t.itertuples():  # the option we priced, as multiples of its list price: our quote and the dealer's threshold for it

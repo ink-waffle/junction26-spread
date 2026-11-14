@@ -46,13 +46,12 @@ class MarketPolicy:
 
 class Market:
     """Believes that a dealer says yes with a chance that is logistic in log price, around a level that is a sum of parts:
-    the world, the day, the dealer, the two places, their lane, the pickup place today. Each answer moves every part it touched (one Kalman step).
+    the world, the day, the two places, their lane. Each answer moves every part it touched (one Kalman step).
     A week also has one price war day and one outage day and region: each answer weighs every such week, and today's level is the mix they leave.
     The day part has two beliefs, one if today is the war day and one if not: a war and a low calm day differ only in what they ask of it."""
 
-    def __init__(self, policy: MarketPolicy, books: Books, fleet: Fleet, places: Optional[dict] = None):
+    def __init__(self, policy: MarketPolicy, books: Books, fleet: Fleet):
         self.policy, self.books, self.fleet = policy, books, fleet
-        self.places = prior.PLACES if places is None else places  # tools/winmodel.py fits this table through here
         self.beliefs: dict[tuple, tuple[float, float]] = {}  # part -> mean and variance of its share of the log level
         atlas = fleet.atlas if fleet and policy.surprises else None  # without a map the events are not weighed
         self.regions = {town: frozenset(place for place in atlas.places if atlas.crow_km(town, place) <= REACH) for town in sorted(atlas.places)} if atlas else {}  # town -> the places an outage around it reaches
@@ -118,14 +117,14 @@ class Market:
         """The parts of the level that this request touches, of those the policy gives a spread. With `war`, the day part is its belief for a war day."""
         leg, day = request["legs"][0], request["arrivedAt"] // DAY
         pickup, delivery = leg["pickup"]["placeId"], leg["delivery"]["placeId"]
-        keys = {"world": (), "day": (day, "war") if war else (day,), "dealer": (request["dealerId"],), "from": (pickup,), "to": (delivery,), "lane": (pickup, delivery), "from today": (pickup, day)}
+        keys = {"world": (), "day": (day, "war") if war else (day,), "from": (pickup,), "to": (delivery,), "lane": (pickup, delivery)}
         return [(name, *keys[name]) for name in self.policy.spread]
 
     def belief(self, part: tuple) -> tuple[float, float]:
-        """Mean and variance of one part: what the answers taught, or its prior (the average world's level, a place's level in other weeks, else zero)."""
+        """Mean and variance of one part: what the answers taught, or its prior (the average world's level for the world, zero for every other part)."""
         if part in self.beliefs:
             return self.beliefs[part]
-        mean = self.policy.level if part[0] == "world" else self.places.get(part[0], {}).get(part[1], 0.0)
+        mean = self.policy.level if part[0] == "world" else 0.0
         return mean, self.policy.spread[part[0]] ** 2  # a prior is not kept: only what an answer taught is, so a replay of the answers rebuilds it all
 
     # The week's two events: which of them today can be, and what each does to a level.

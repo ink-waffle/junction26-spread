@@ -87,7 +87,7 @@ def rows(run: dict, tag: str = "") -> list[dict]:
             if (order["id"], order["option"]) in signs and order["id"] in first_fee:
                 car, queue, list_price, fastest = signs[(order["id"], order["option"])]
                 leg = books.requests[order["id"]]["legs"][0]
-                out[order["id"]] = dict(fleet.signs(car, first_fee[order["id"]], queue), queue=queue.backlog, going=queue.going, bookings=queue.known, list=list_price, fastest=fastest,
+                out[order["id"]] = dict(fleet.signs(car, first_fee[order["id"]], queue), queue=queue.backlog, going=queue.going, list=list_price, fastest=fastest,
                                         km=atlas().km[(leg["pickup"]["placeId"], leg["delivery"]["placeId"])],
                                         seed=run["seed"], tag=tag, id=order["id"], option=order["option"], multiple=first_fee[order["id"]], booked=0, warned=0,
                                         on_time=int(order["id"] in paid and order["id"] not in refund), refund=refund.get(order["id"], 0), price=order["priceCents"],
@@ -112,7 +112,7 @@ def rows(run: dict, tag: str = "") -> list[dict]:
                 multiple = fleet.posted(state)
                 others = queue.without(multiple)
                 car = fleet.car(state.request, fleet.timetable.chances_left(state), books.now, state.won_at)
-                looks.append(dict(fleet.signs(car, multiple, others), queue=others.backlog, going=others.going, bookings=queue.known, list=out[state.id]["list"], seed=run["seed"], tag=tag, id=state.id,
+                looks.append(dict(fleet.signs(car, multiple, others), queue=others.backlog, going=others.going, list=out[state.id]["list"], seed=run["seed"], tag=tag, id=state.id,
                                   option=state.order["option"], multiple=multiple, on_time=out[state.id]["on_time"], refund=out[state.id]["refund"], won_at=state.won_at, look=1))
     return [dict(row, look=0) for row in out.values()] + [row for row in looks if row["id"] in out]
 
