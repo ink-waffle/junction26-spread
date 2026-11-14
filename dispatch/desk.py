@@ -29,7 +29,7 @@ class Policy:
         """The default policy with `{"market": {...}, "fleet": {...}, "pairs": {...}}` overrides, for experiments."""
         def part(name: str) -> dict:  # JSON has lists where a policy has tuples
             return {key: tuple(value) if isinstance(value, list) else value for key, value in (overrides or {}).get(name, {}).items()}
-        return Policy(MarketPolicy(seed=seed, **part("market")), FleetPolicy(seed=seed, **part("fleet")), PairsPolicy(**part("pairs")))
+        return Policy(MarketPolicy(seed=seed, **part("market")), FleetPolicy(**part("fleet")), PairsPolicy(**part("pairs")))
 
 
 class Desk:
