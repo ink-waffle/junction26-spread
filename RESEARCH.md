@@ -18,7 +18,7 @@ Final: Sunday 08:00, level 8, live clock. We need a top-10 margin among ~130 tea
 | `dispatch/run.py` | Practice loop (advance), the live loop of the final, and the CLI. | Both loops call `Desk.step`. |
 | `tools/harness.py`, `tools/study.py` | Experiments: N seeds in parallel; saved runs → one pandas table. | |
 
-`README.md` has the table of all ten modules (also `pairs`, `atlas`, `prior`, `names`). `Policy` (in `desk.py`) = `MarketPolicy` + `FleetPolicy` + `PairsPolicy` dataclasses; every knob of an experiment lives there, so an experiment is a JSON override.
+`README.md` has the table of all eleven modules (also `pairs`, `timetable`, `atlas`, `prior`, `names`). `Policy` (in `desk.py`) = `MarketPolicy` + `FleetPolicy` + `PairsPolicy` dataclasses; every knob of an experiment lives there, so an experiment is a JSON override.
 
 ## How to run experiments
 
