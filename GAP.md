@@ -70,3 +70,33 @@ More leads measured on saved weeks and dropped:
    to Thursday, 35% on Friday (weekend work): one step after Monday, no slide through the week.
 8. **What we price out**: 288 requests a week get a quote over 1.8 x list (81 declined): trade-ins (97% of them), private delivery (68%), private pickup (60%),
    over 600 km (49%), under 40 km (41%), pickups with two drivers or fewer near (47%). All are the on-time model's refusals.
+9. **The whole pack, not only Juhus** (`runs/board-sun00.json`, the closed 21:00 round, 57 ranked teams): places 3-14 all earn EUR 39.7-42.1 an order on
+   2,008-2,352 orders at 96.4-98.1% on time; we earn 36.7 on 2,166 at 96.8%. Across teams margin goes with orders (r = 0.80). MathNet1 moves 2,629 orders
+   at 96.9% (36.8 an order): at that volume our own frontier (below) is at 92.6% on time. So others get cars booked on time that we do not.
+10. **The competitor answers what we win** (HANDBOOK: each morning it lowers its prices for a dealer where we won most, raises them where we won few).
+    Seen (scratch `answer.py`, 487 dealer-days of 8 requests or more): after a day on which we won under 30% of a dealer's requests the dealer says yes
+    4 points more often than the market expects, after 30-50% 1-3 points less, over 50% as expected. A few points of yes = about 2% of price: too small to steer.
+11. **A driver hears of each order once** (HANDBOOK). The cars of a two-car gig that found no driver (64 a week) then go alone without a notification:
+    the first car waits a median 1.0 h and is paid 0.98 x, the second 6.7 h and 1.02 x, a car that sat before 14 h and 1.01-1.12 x with 10-12% late
+    (a new car posted alone: 0.2 h, 0.87 x, 0.8% late). A failed pair costs about EUR 11 a car; `gap-hold0` / `gap-hold15` below test not holding new cars.
+
+### The on-time target and the fee floor: our frontier (24 weeks, stride 14; the target also at stride 13)
+
+| on-time target | margin | on time (worst week) | weeks under 93.5% / 92% | orders | fee x typical | margin an order |
+|---|---|---|---|---|---|---|
+| 98.5% | 14,050 | 97.9% (96.1) | 0 / 0 | 380 | 0.930 | 37.0 |
+| 98% | 14,400 | 97.3% (94.9) | 0 / 0 | 410 | 0.938 | 35.1 |
+| **97.5% (main)** | 15,444 | 96.8% (94.5) | 0 / 0 | 444 | 0.939 | 34.8 |
+| 97% | 15,526 | 96.0% (94.2) | 0 / 0 | 469 | 0.946 | 33.1 |
+| 96% | 15,774 | 94.9% (92.6) | 8 / 0 | 499 | 0.953 | 31.6 |
+| 95% | 15,637 | 93.7% (90.3; 89.8 at stride 13) | 7 / 5 | 528 | 0.964 | 29.6 |
+| 94% | 15,065 | 92.6% (89.0) | 14 / 8 | 546 | 0.975 | 27.6 |
+
+Two samples a side: 97% +190, 96.5% +135, 96% +290, 95.5% +130, 95% +150, 94% -245 against main. **Below 97.5% the margin is flat and the tail arrives;
+above it a half point costs EUR 1,000.** The leaders' weeks at 93% are not where their money comes from, for a system like ours.
+A lower fee floor does lower what we pay (floor 0.80: 0.908 x typical, on time 96.5%, worst 94.5%; floor 0.75: 0.897 x, 96.0%) but the model wins
+13-17 fewer orders, and the margin is -200 / -826.
+
+Single knobs, stride 14, one sample (se about 200): two-car fee 0.65 x -388, 0.75 x -120; board pairs 0.80 x -47, 0.75 x +167; patience 30 min +19,
+120 min -83; idle 2 h -101; hold 45 min -88; urgent fee 1.3 x -152, 2.0 x -536; late fee 1.0 x +120, 1.6 x -628; look at 4 h -707, 9 h -409;
+fee grid with half steps -282; late price 200 +28 (-0.4 point), 450 -151 (+0.2).
