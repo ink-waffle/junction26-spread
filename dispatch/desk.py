@@ -41,7 +41,6 @@ class Desk:
         self.outbox: list[Action] = []
         self.pending: set[tuple[str, int]] = set()  # legs whose post is in the outbox or on its way
         self.pairs = Pairs(policy.pairs, self.books, self.fleet, atlas, self.pending)
-        self.fleet.saving = self.pairs.saving
         self.journal, self.verbose = journal, verbose
         self.careful = False  # the final sets it: an event that the desk cannot read is logged and passed over, not fatal
 
@@ -95,7 +94,7 @@ class Desk:
         for action in self.pairs.match():
             self.pending.update((stop["orderId"], stop["leg"]) for stop in action.get("stops", []))
             self.outbox.append(action)
-        dirty, books.dirty = books.dirty, set()
+        dirty, books.dirty = books.dirty | self.fleet.due(), set()
         for order_id in sorted(dirty):
             state = books.orders.get(order_id)
             if state is None:

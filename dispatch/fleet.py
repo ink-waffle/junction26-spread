@@ -6,39 +6,39 @@ import random
 from dataclasses import dataclass, replace
 from typing import Optional
 
-from spread.types import Audience, DeliveryOption, FeeStep, PriceRequest, StopRef
+from spread.types import Audience, DeliveryOption, FeeStep, Leg, PriceRequest, StopRef
 
 from . import notes
 from .atlas import DAY, HOUR, Atlas, next_business_day, open_spans
 from .books import Books, GigState, OrderState
-from .notes import NoteFacts
+from .notes import NoteFacts, Span
 
 MAX_PLAN_MINUTES = 12 * HOUR  # a gig with several cars may not plan more driving (RULES.md)
 CHARGING = 40  # minutes of a charging stop (RULES.md)
 RETRY = 2 * HOUR  # after a failed visit whose cause no note gave: how far to move the next one
 NEAR_KM = 30  # the app notifies drivers who live this close to the pickup (RULES.md)
 # What tools/fleet_fit.py measures on our own weeks. ON_TIME: logistic weights of "the car arrives on time".
-ON_TIME = {
-    "one": -1.06, "fee": 1.98, "slack": 1.28, "short": -1.42, "long": -0.55, "note": -0.48, "private_pickup": 0.60, "private_delivery": -0.33, "premium": -1.08, "trade_in": -1.80,
-    "drivers_pickup": 0.17, "drivers_delivery": 0.16, "backlog": -0.66,
-}
-WAIT = (1.08, 5.57)  # hours that a car waits for a driver while requests arrive: a base, and more per unit of its chance of being late
-CROWDING = 0.034  # other orders that arrive late for each hour that a car waits: the same cars under a heavier and a lighter book
+# "fee" weighs a gig's fee against the fees of our other open gigs, "level" the fee that our open gigs pay together: drivers choose among our gigs.
+ON_TIME = {"one": -1.21, "fee": 3.96, "level": 0.88, "slack": 1.13, "short": -1.85, "long": -0.44, "premium": -0.92, "trade_in": -3.35,
+           "drivers_delivery": 0.28, "backlog": -0.58, "known": 0.25, "waited": -0.75}
+BOOKED_LATE = 0.030  # the share of cars with a driver that still arrive late: drops and slow drives
+REFUND = 0.54  # what a late order pays back on average, as a share of its list price
+DOUBT = 4.0  # how firmly we hold, before a week's own outcomes speak, that its world is the model's: the prior's weight, in outcomes
+GRIP = 4  # how steeply the price of a late order rises once we expect more of them than we allow ourselves
+CALM = 20  # orders: a week's first orders say little about its share of late ones
+LAST_DAY = DAY  # before its last pickup: a gig still open then ends in a deadline warning two times in three (AUDIT.md)
+KNOWN = 100  # bookings after which the drivers know that our fees stay as posted
 
 
 @dataclass
 class FleetPolicy:
     fees: tuple[float, ...] = (0.85, 1.0, 1.15, 1.3, 1.5)  # the fees a gig may open at, as multiples of the typical fee
     urgent_fee: float = 1.6  # after the deadline warning
-    late_fee: float = 1.3  # once the car can only arrive late
+    late_fee: float = 1.3  # once the car can only arrive late: enough for the drivers who saw it at less, or it is never delivered
     on_time: float = 0.95  # the share of orders we want on time: the delivery minimum with room to spare
     late_price: float = 300.0  # euros that a late order costs us beyond its refund while we are within that share
-    grip: float = 4.0  # how steeply that price rises once we expect more late orders than the share allows
-    refund: float = 0.5  # what a late order pays back on average, as a share of the list price
-    booked_late: float = 0.05  # the share of cars with a driver that still arrive late: drops, failed visits, slow drives
-    crowding: float = 1.0  # research: how much of the measured crowding we charge
-    ladder: bool = False  # give each gig windows that end at the deadline, and a late car's at the next step of the refund ladder
-    buffer: float = 0.0  # the share of the drive, plus a quarter of an hour, that those windows end before the site closes
+    crowding: float = 1.0  # research: how much of the harm to the waiting cars we charge
+    early_look: float = 0.0  # research: hours in the app after which a gig without a taker gets its fee chosen again; 0: never
     explore: Optional[tuple[float, ...]] = None  # research: draw each order's fee multiple from these
     seed: str = ""
 
@@ -51,90 +51,142 @@ class GigPlan:
     schedule: list[FeeStep]
 
 
+@dataclass
+class Queue:
+    """The orders that wait for a driver now: what the drivers are not taking."""
+    backlog: int = 0  # how many they are
+    going: float = 1.0  # the fee their gigs show, as a mean multiple of the typical fee
+    known: int = 0  # the bookings of the week so far: what the drivers have seen of us
+    late: float = 0.0  # how many of them we expect to arrive late
+    swing: float = 0.0  # how many more of them arrive on time when all their chances rise by one logit
+    refunds: float = 0.0  # the cents of refund that this saves
+
+    def level(self, multiple: float) -> float:
+        """The going fee once a gig at this multiple joins the queue."""
+        return (self.backlog * self.going + multiple) / (self.backlog + 1)
+
+
 class Fleet:
     def __init__(self, policy: FleetPolicy, books: Books, atlas: Atlas):
         self.policy, self.books, self.atlas = policy, books, atlas
         homes = [driver.profile["homePlaceId"] for driver in books.drivers.values()]
         self.drivers_near = {place: sum(1 for home in homes if atlas.crow_km(home, place) <= NEAR_KM) for place in atlas.places}
-        self.saving = lambda request, option, risk: 0  # the desk's pairs say what a request saves when a car without a driver could share one with it
+        self.forecast: dict[str, float] = {}  # order -> the model's logit when we posted it: what this week's outcomes are measured against
+        self.world = 0.0  # how much easier (+) or harder than the model's this week's world has shown itself, in logits
+        self.held = lambda state: False  # the desk's pairs say which orders we keep out of the app ourselves: no driver has turned those down
 
     def cost(self, request: PriceRequest, option: DeliveryOption) -> Optional[int]:
-        """What we expect to pay, in cents, to move this request by this option's deadline: the fee, the late car's refund, its use of the room under the delivery minimum, and the orders it makes late while it waits."""
-        last = self.last_pickup(request, option)
-        if last is None:
+        """What we expect to pay, in cents, to move this request by this option's deadline: the fee, the late car's refund, its use of the room under the delivery minimum, and what it does to the cars that wait for a driver."""
+        spans = notes.chances(request, option, notes.read(request["note"], request["arrivedAt"]), self.road(request["legs"][0]))
+        if not spans:
             return None
-        waiting = self.waiting()
-        policy, typical = self.policy, request["referenceFeeCents"]
-        late_price, refund = self.late_price(waiting), policy.refund * option["listPriceCents"]
-        hour = self.waiting_hour(refund)
-        multiple, late = self.fee(self.signs(request, last, request["respondBy"], len(waiting)), typical, refund + late_price + WAIT[1] * hour)
-        risk = late * refund + (late - (1 - policy.on_time)) * late_price + (WAIT[0] + WAIT[1] * late) * hour
-        return int(typical * multiple + max(0.0, risk)) - self.saving(request, option, max(0.0, risk))
+        queue = self.queue()
+        typical, refund, late_price = request["referenceFeeCents"], REFUND * option["listPriceCents"], self.late_price(queue)
+        multiple, late = self.fee(self.car(request, spans, request["respondBy"]), typical, refund, late_price, queue)
+        risk = late * refund + (late - (1 - self.policy.on_time)) * late_price + self.harm(multiple, queue, late_price)
+        return int(typical * multiple + max(0.0, risk))
 
-    def waiting_hour(self, refund: float) -> float:
-        """What an hour of a car's waiting costs, in cents: the orders it makes late, at the price of a late order."""
-        return self.policy.crowding * CROWDING * (refund + self.policy.late_price * 100)
+    def queue(self, but: Optional[OrderState] = None) -> Queue:
+        """The orders that wait for a driver now, but for one: how many, at what fee, with what chances."""
+        books, policy = self.books, self.policy
+        waiting = [(state, self.posted(state) or 1.0, self.car(state.request, self.chances(state), books.now, state.won_at)) for state in books.orders.values() if state is not but and self.waits(state)]
+        queue = Queue(len(waiting), sum(multiple for _, multiple, _ in waiting) / max(1, len(waiting)), sum(1 for gig in books.gigs.values() if gig.driver))
+        logits = {}
+        for state, multiple, car in waiting:
+            others = Queue(queue.backlog - 1, (queue.going * queue.backlog - multiple) / max(1, queue.backlog - 1), queue.known)
+            logits[state.id] = self.logit(car, multiple, others)
+        self.world = self.learned(logits)
+        for state, _, _ in waiting:
+            on_time = 1 / (1 + math.exp(-logits[state.id] - self.world))
+            queue.late += 1 - on_time
+            queue.swing += on_time * (1 - on_time)
+            queue.refunds += on_time * (1 - on_time) * REFUND * self.list_price(state)
+        return queue
 
-    def late_price(self, waiting: list[OrderState], calm: int = 20) -> float:
-        """The shadow price, in cents, of one late order: it rises steeply once we expect more late orders than the minimum leaves room for."""
-        books, policy, late = self.books, self.policy, 0.0
-        for state in books.orders.values():
-            if state.undelivered():
-                late += 1.0 if state.late else policy.booked_late
-            else:
-                late += state.id in books.refunded
-        for state in waiting:  # a car without a driver: the model's chance, at its fee and with the time it has left
-            late += 1 - self.on_time(self.signs(state.request, state.order["lastPickupAt"], books.now, len(waiting) - 1), self.posted(state) or 1.0) - policy.booked_late
-        share = late / (calm + len(books.orders))  # the first orders of a week say little
-        return policy.late_price * 100 * min(2.0, max(1.0, share / (1 - policy.on_time))) ** policy.grip
+    def waits(self, state: OrderState) -> bool:
+        """True for an order that the drivers can see and have not taken: not held back by us for a partner, not in a two-car gig, not late."""
+        gigs = [self.books.gigs[gig_id] for gig_id in state.gig_of.values()]
+        return not state.late and not self.held(state) and self.needs_driver(state) and not any(gig.shared and gig.status == "open" for gig in gigs)
+
+    def learned(self, waiting: dict[str, float]) -> float:
+        """The intercept that best explains this week's own orders against what the model said when we posted each: this world's drivers, as far as they have shown themselves.
+        An order with a driver counts as almost on time, a waiting one as the model sees it now, a late or delivered one as it ended."""
+        books, seen = self.books, []
+        for order_id, logit in self.forecast.items():
+            state = books.orders.get(order_id)
+            if state is None or state.undelivered() and not state.late and self.needs_driver(state) and order_id not in waiting:
+                continue
+            outcome = 0.0 if state.late else 1 / (1 + math.exp(-waiting[order_id])) if order_id in waiting else 1 - BOOKED_LATE if state.undelivered() else float(order_id not in books.refunded)
+            seen.append((logit, outcome))
+        shift = 0.0
+        for _ in range(4):  # Newton's method on one number, from a prior that the world is the model's
+            chances = [1 / (1 + math.exp(-logit - shift)) for logit, _ in seen]
+            shift += (sum(outcome - chance for (_, outcome), chance in zip(seen, chances)) - DOUBT * shift) / (sum(chance * (1 - chance) for chance in chances) + DOUBT)
+        return max(-1.0, min(1.0, shift))
 
     def needs_driver(self, state: OrderState) -> bool:
         return any(leg not in state.gig_of or self.books.gigs[state.gig_of[leg]].status == "open" for leg in state.undelivered())
 
-    def waiting(self) -> list[OrderState]:
-        """The orders that wait for a driver now: what the drivers are not taking."""
-        return [state for state in self.books.orders.values() if not state.late and self.needs_driver(state)]
+    def late_price(self, queue: Queue) -> float:
+        """The shadow price, in cents, of one late order: next to nothing while the books expect far fewer late orders than we allow ourselves, steep as they come near that share and past it."""
+        books, allowed, late = self.books, 1 - self.policy.on_time, queue.late - BOOKED_LATE * queue.backlog
+        for state in books.orders.values():
+            late += (1.0 if state.late else BOOKED_LATE) if state.undelivered() else state.id in books.refunded
+        used = late / (CALM + len(books.orders)) / allowed
+        return self.policy.late_price * 100 * min(2.0, used) ** GRIP
 
-    def signs(self, request: PriceRequest, last_pickup: int, at: int, backlog: int) -> dict[str, float]:
-        """What we know at minute `at` about how easily this request finds a driver in time."""
+    def harm(self, multiple: float, queue: Queue, late_price: float) -> float:
+        """What one more gig at this fee costs the cars that wait, in cents: it lengthens the queue, and a fee above theirs draws their drivers."""
+        outbid = (ON_TIME["fee"] - ON_TIME["level"]) * math.log(queue.level(multiple) / queue.going) if queue.backlog else 0.0
+        return self.policy.crowding * (queue.refunds + queue.swing * late_price) * (outbid - ON_TIME["backlog"] / (1 + queue.backlog))
+
+    def chances(self, state: OrderState) -> list[Span]:
+        """When an order's first car can still be collected, from now on, and arrive on time."""
+        leg, facts = state.order["legs"][0], self.facts(state, 0)
+        arrive = notes.arrive_by(leg["delivery"], facts, state.order["deadline"])
+        return [] if arrive is None else notes.collect_spans(leg["pickup"], facts, self.books.now, min(arrive - self.road(leg), leg["pickup"]["window"]["to"]))
+
+    def car(self, request: PriceRequest, spans: list[Span], at: int, since: Optional[int] = None) -> dict[str, float]:
+        """What we know at minute `at` about how easily this request finds a driver in time, given when its car can be collected and since when it has waited."""
         leg = request["legs"][0]
-        pickup, delivery = leg["pickup"], leg["delivery"]
-        km = self.atlas.km[(pickup["placeId"], delivery["placeId"])]
+        km = self.atlas.km[(leg["pickup"]["placeId"], leg["delivery"]["placeId"])]
+        slack = math.log1p(max(0, max((b for _, b in spans), default=at) - at) / HOUR)
         return {
             "one": 1.0,
-            "slack": math.log1p(max(0, last_pickup - at) / HOUR),
+            "slack": slack,
             "short": float(km < 40),
-            "long": min(max(km, 250), 800) / 100 - 2.5,
-            "note": float(bool(request["note"])),
-            "private_pickup": float(pickup["privateAddress"]),
-            "private_delivery": float(delivery["privateAddress"]),
-            "premium": float(any(l["car"]["premium"] for l in request["legs"])),
+            "long": min(max(km, 100), 800) / 100 - 1,
+            "premium": any(l["car"]["premium"] for l in request["legs"]) * max(0.0, math.log1p(3 * DAY / HOUR) - slack),  # one driver in fourteen may take it: it needs room
             "trade_in": float(len(request["legs"]) > 1),
-            "drivers_pickup": math.log1p(self.drivers_near[pickup["placeId"]]),
-            "drivers_delivery": math.log1p(self.drivers_near[delivery["placeId"]]),
-            "backlog": math.log1p(backlog),
+            "drivers_delivery": math.log1p(self.drivers_near[leg["delivery"]["placeId"]]),
+            "waited": min(1.0, max(0, at - (at if since is None else since)) / HOUR),  # a gig that is an hour in the app did not pay the drivers who saw it
         }
 
-    def on_time(self, signs: dict[str, float], multiple: float) -> float:
-        """The chance that the car arrives on time when its gig pays this multiple of the typical fee."""
-        return 1 / (1 + math.exp(-sum(ON_TIME[name] * value for name, value in signs.items()) - ON_TIME["fee"] * (multiple - 1)))
+    def signs(self, car: dict[str, float], multiple: float, queue: Queue) -> dict[str, float]:
+        """The car's signs with those of its fee and of the queue it joins: drivers choose among our open gigs."""
+        level = queue.level(multiple)
+        return dict(car, fee=math.log(multiple / level), level=math.log(level), backlog=math.log1p(queue.backlog), known=math.log1p(min(queue.known, KNOWN)))
 
-    def fee(self, signs: dict[str, float], typical: float, late_cost: float, floor: float = 0.0) -> tuple[float, float]:
-        """The fee multiple that minimises the fee plus the expected cost of a late car, and the chance of a late car at that fee."""
-        multiple = min((m for m in self.policy.fees if m >= floor), key=lambda m: m * typical + (1 - self.on_time(signs, m)) * late_cost, default=floor)
-        return multiple, 1 - self.on_time(signs, multiple)
+    def logit(self, car: dict[str, float], multiple: float, queue: Queue) -> float:
+        """The model's log odds that the car arrives on time when its gig pays this multiple of the typical fee and the queue is this one."""
+        signs = self.signs(car, multiple, queue)
+        return sum(weight * signs[name] for name, weight in ON_TIME.items())
 
-    def last_pickup(self, request: PriceRequest, option: DeliveryOption) -> Optional[int]:
-        """The last minute to collect the first car and still deliver it by the option's deadline, by road minutes and stated hours."""
-        leg = request["legs"][0]
-        pickup, delivery = leg["pickup"], leg["delivery"]
-        drive = self.atlas.drive(pickup["placeId"], delivery["placeId"])
-        due = min(option["deadline"], delivery["window"]["to"]) if delivery["privateAddress"] else option["deadline"]
-        arrive = max((b for a, b in open_spans(delivery["hours"], delivery["window"]["from"], due)), default=None)
-        if arrive is None:
-            return None
-        end = min(arrive - drive, pickup["window"]["to"])
-        return max((b for a, b in open_spans(pickup["hours"], pickup["window"]["from"], end)), default=None)
+    def on_time(self, car: dict[str, float], multiple: float, queue: Queue) -> float:
+        """The chance that the car arrives on time: the model's, moved by what this week's world has shown."""
+        return 1 / (1 + math.exp(-self.logit(car, multiple, queue) - self.world))
+
+    def fee(self, car: dict[str, float], typical: float, refund: float, late_price: float, queue: Queue, floor: float = 0.0) -> tuple[float, float]:
+        """The fee multiple that costs least in all: the fee, the expected cost of a late car, and the harm to the cars that wait. With it, the chance of a late car."""
+        def total(multiple: float) -> float:
+            return multiple * typical + (1 - self.on_time(car, multiple, queue)) * (refund + late_price) + self.harm(multiple, queue, late_price)
+        multiple = min((m for m in self.policy.fees if m >= floor), key=total, default=floor)
+        return multiple, 1 - self.on_time(car, multiple, queue)
+
+    def road(self, leg: Leg) -> int:
+        """Minutes from a leg's pickup to its delivery by the map, with the charging stop of an electric car that needs one."""
+        car, ends = leg["car"], (leg["pickup"]["placeId"], leg["delivery"]["placeId"])
+        return self.atlas.drive(*ends) + CHARGING * bool(car["electric"] and car["chargePercent"] is not None and car["chargePercent"] < 30 and self.atlas.km[ends] > 200)
 
     def list_price(self, state: OrderState) -> int:
         return next(option["listPriceCents"] for option in state.request["options"] if option["kind"] == state.order["option"])
@@ -158,40 +210,55 @@ class Fleet:
         return sum(self.atlas.drive(a, b) for a, b in zip(places, places[1:]))
 
     def timed(self, state: OrderState, stops: list[StopRef]) -> list[StopRef]:
-        """Ends a gig's windows at the next minute where arriving later costs more: the deadline, then each step of the refund ladder. Past it the world expires the gig, and we post the car for the next step."""
-        policy, now = self.policy, self.books.now
-        for pickup, delivery in zip(stops[::2], stops[1::2]) if policy.ladder else []:
+        """Ends a gig's windows at the next minute where arriving later costs more. Past it the world expires the gig, and we post the car for the next step."""
+        for pickup, delivery in zip(stops[::2], stops[1::2]) if not state.refusals else []:  # the world refused our windows once: post without them
             leg = state.order["legs"][pickup["leg"]]
-            if leg["pickup"]["privateAddress"] or leg["delivery"]["privateAddress"]:
-                continue
-            drive = self.atlas.drive(leg["pickup"]["placeId"], leg["delivery"]["placeId"])
-            spare = int(policy.buffer * drive) + 15 if policy.buffer else 0  # real drives run longer than the map, and a driver plans to the last minute
             start, due = pickup.get("window", leg["pickup"]["window"])["from"], delivery.get("window", {"to": state.order["deadline"]})["to"]
-            next_day = next_business_day(due // DAY) * DAY + due % DAY
-            for step in (due, due + 2 * HOUR, next_day, next_business_day(next_day // DAY) * DAY + due % DAY):  # on time, then 10%, 25%, 50% back (RULES.md)
-                arrive = max((b for a, b in open_spans(leg["delivery"]["hours"], max(now, start) + drive, step)), default=None)
-                collect = arrive and max((b for a, b in open_spans(leg["pickup"]["hours"], max(now, start), arrive - spare - drive)), default=None)
-                if collect and collect >= now + 30:
-                    pickup["window"] = {"from": start, "to": min(collect, pickup.get("window", {"to": collect})["to"])}
-                    delivery["window"] = {"from": delivery.get("window", leg["delivery"]["window"])["from"], "to": arrive - spare}
-                    break
+            collect, arrive = self.step(leg, start, due)
+            if collect and not leg["pickup"]["privateAddress"] and not leg["delivery"]["privateAddress"]:
+                pickup["window"] = {"from": start, "to": min(collect, pickup.get("window", {"to": collect})["to"])}
+                delivery["window"] = {"from": delivery.get("window", leg["delivery"]["window"])["from"], "to": arrive}
         return stops
 
+    def step(self, leg: Leg, start: int, due: int) -> tuple[Optional[int], Optional[int]]:
+        """The last minutes to collect and to deliver a car so that it arrives by its due minute or, once that is out of reach, by the next step of the refund ladder: 10%, 25%, 50% back (RULES.md)."""
+        now, drive = self.books.now, self.road(leg)
+        next_day = next_business_day(due // DAY) * DAY + due % DAY
+        for step in (due, due + 2 * HOUR, next_day, next_business_day(next_day // DAY) * DAY + due % DAY):
+            arrive = max((b for a, b in open_spans(leg["delivery"]["hours"], max(now, start) + drive, step)), default=None)
+            collect = arrive and max((b for a, b in open_spans(leg["pickup"]["hours"], max(now, start), arrive - drive)), default=None)
+            if collect and collect >= now + 30:
+                return collect, arrive
+        return None, None
+
     def fee_multiple(self, state: OrderState, legs: list[int], typical: float) -> float:
-        """One fee for as long as a gig waits, so drivers never learn to wait: chosen when the order needs a driver, and again only when it loses one or its deadline warning comes."""
-        policy, gig = self.policy, self.open_gig(state, legs[0])
+        """One fee for as long as a gig waits, so drivers never learn to wait. It is chosen when the order needs a driver, and again only
+        when it loses one, when its deadline warning comes, and once when the gig has waited into the last day before its last pickup."""
+        policy, books, gig = self.policy, self.books, self.open_gig(state, legs[0])
         posted = gig.schedule[-1]["feeCents"] / typical if gig else 0.0
         if state.late:
             return policy.late_fee
-        if gig and gig.schedule[-1]["at"] >= state.alarm_at:
+        if gig and self.looked(state, gig):
             return posted
         if state.urgent:
             return max(posted, policy.urgent_fee)
-        if policy.explore and not posted:
-            return random.Random(f"{policy.seed}:{state.id}").choice(policy.explore)
-        waiting, refund = self.waiting(), policy.refund * self.list_price(state)
-        late_cost = refund + self.late_price(waiting) + WAIT[1] * self.waiting_hour(refund)
-        return self.fee(self.signs(state.request, state.order["lastPickupAt"], self.books.now, max(0, len(waiting) - 1)), typical, late_cost, floor=posted)[0]
+        queue = self.queue(but=state)
+        floor = posted if not gig or gig.schedule[-1]["at"] < state.alarm_at else min((m for m in policy.fees if m > posted), default=posted)  # a gig that waited that long did not pay the drivers who saw it
+        car = self.car(state.request, self.chances(state), books.now, state.won_at)
+        chosen = self.fee(car, typical, REFUND * self.list_price(state), self.late_price(queue), queue, floor)[0]
+        multiple = random.Random(f"{policy.seed}:{state.id}").choice(policy.explore) if policy.explore and not posted else chosen
+        self.forecast.setdefault(state.id, self.logit(car, multiple, queue))
+        return multiple
+
+    def looked(self, state: OrderState, gig: GigState) -> bool:
+        """True when the gig's fee was chosen after everything that asks for a new choice: a lost driver, the deadline warning, the last day before its last pickup."""
+        marks = [gig.posted_at + int(self.policy.early_look * HOUR)] * bool(self.policy.early_look) + [state.order["lastPickupAt"] - LAST_DAY]
+        return gig.schedule[-1]["at"] >= max([state.alarm_at] + [mark for mark in marks if mark <= self.books.now])
+
+    def due(self) -> set[str]:
+        """The orders whose gig has waited past such a moment at the fee it had: their fee is chosen again."""
+        return {state.id for state in self.books.orders.values() if state.undelivered() and not state.urgent and not state.late
+                and (gig := self.open_gig(state, state.undelivered()[0])) and not self.looked(state, gig)}
 
     def schedule(self, state: OrderState, legs: list[int]) -> list[FeeStep]:
         typical = state.request["referenceFeeCents"] * len(legs) / len(state.order["legs"])

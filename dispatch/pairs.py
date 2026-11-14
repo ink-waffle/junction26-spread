@@ -4,9 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from spread.types import Action, DeliveryOption, PriceRequest
+from spread.types import Action
 
-from . import notes
 from .atlas import HOUR, Atlas, open_spans
 from .books import Books, GigState, OrderState
 from .fleet import CHARGING, NEAR_KM, Fleet
@@ -22,7 +21,6 @@ class PairsPolicy:
     patience: int = 60  # minutes from its posting that a two-car gig may be without a driver before its cars go alone
     lead: int = 3 * HOUR  # a pair must still fit a driver who reaches the first pickup this much later
     idle: int = HOUR  # the most minutes that driver may stand waiting at the stops
-    kept: float = 0.0  # the share of a car's risk that a partner takes away when we price it: a pair has its driver in minutes
 
 
 class Pairs:
@@ -97,19 +95,6 @@ class Pairs:
                     return None
                 idle, t, here = idle + (at - t if here else 0), at, site["placeId"]
         return idle if idle <= policy.idle else None
-
-    def saving(self, request: PriceRequest, option: DeliveryOption, risk: float) -> int:
-        """Cents of its risk that a request loses because a car without a driver could share one with it: `risk` is what waiting and lateness would cost it alone."""
-        policy = self.policy
-        if not policy.kept or not policy.fee or len(request["legs"]) != 1:
-            return 0
-        leg = dict(request["legs"][0])
-        for end in ("pickup", "delivery"):  # an order's windows at dealer sites end at the deadline of the option the dealer chose
-            if not leg[end]["privateAddress"]:
-                leg[end] = dict(leg[end], window={"from": leg[end]["window"]["from"], "to": min(leg[end]["window"]["to"], option["deadline"])})
-        mine = OrderState({"id": request["id"], "legs": [leg], "deadline": option["deadline"]}, request, notes.read(request["note"], request["arrivedAt"]), request["respondBy"])
-        others = [self.books.orders[order_id] for order_id in self.sitting()]
-        return int(policy.kept * risk) if any(self.idle(other, mine) is not None or self.idle(mine, other) is not None for other in others) else 0
 
     def alarm(self) -> int:
         """The next minute to act at when no event comes first: a two-car gig's patience runs out."""
