@@ -1,9 +1,12 @@
 """The dealer side against weeks it was not fitted on (research/skeptic): how well the market foretells the dealers' answers of saved weeks
-with each part of the level taken out. No practice world is played: each week is replayed through the learner, as tools/winmodel.py does.
+with each part of the level taken out, or with each fitted number of dispatch/prior.py moved. No practice world is played: each week is
+replayed through the learner, as tools/winmodel.py does.
 
-    python -m tools.skeptic_market final-fresh skeptic-base-s14
+    python -m tools.skeptic_market final-fresh skeptic-base-s14               # the parts
+    python -m tools.skeptic_market --numbers final-fresh skeptic-base-s14     # the numbers of the prior, each moved both ways
 
-Prints, per variant, the mean log-likelihood of an answer (x 1000) and its paired difference to the whole market over weeks, with a standard error."""
+Prints, per variant, the mean log-likelihood of an answer (x 1000) and its paired difference to the whole market over weeks, with a standard error.
+The dealer and pickup-today parts are in the table only on a tree whose prior.SPREAD still has them (main up to 832baf6, research/skeptic-switches)."""
 from __future__ import annotations
 
 import glob
@@ -22,25 +25,40 @@ from dispatch.books import Books
 from dispatch.market import Market, MarketPolicy
 from tools.study import ROOT, atlas
 
+GONE = [name for name in ("lane", "from today", "dealer") if name in prior.SPREAD]
+
 
 def spread(*without: str, **changed: float) -> dict:
     return {**{name: sd for name, sd in prior.SPREAD.items() if name not in without}, **changed}
 
 
-VARIANTS = {
+def scaled(name: str, factor: float) -> dict:
+    return {"spread": spread(**{name: prior.SPREAD[name] * factor})}
+
+
+PARTS = {
     "the market as it is": {},
-    "no place table": {"places": False},
-    "no lane part": {"spread": spread("lane")},
-    "no pickup-today part": {"spread": spread("from today")},
-    "no dealer part": {"spread": spread("dealer")},
-    "no lane, pickup-today, dealer": {"spread": spread("lane", "from today", "dealer")},
+    "no place table": {"places": {}},
+    **{f"no {name} part": {"spread": spread(name)} for name in GONE},
+    f"no {', '.join(GONE)}": {"spread": spread(*GONE)},
     "no event weighting": {"surprises": False},
     "no event weighting, day 0.125 (before idea 13)": {"surprises": False, "spread": spread(day=0.125)},
     "no trust": {"trust": 0.0},
-    "no place parts at all (world, day, events)": {"spread": spread("lane", "from today", "dealer", "from", "to"), "places": False},
-    "world + day only (0.125), no events": {"surprises": False, "places": False, "spread": {"world": prior.SPREAD["world"], "day": 0.125}},
-    "one fixed level (no learning)": {"surprises": False, "places": False, "spread": {}},
+    "no place parts at all (world, day, events)": {"spread": spread(*GONE, "from", "to"), "places": {}},
+    "world + day only (0.125), no events": {"surprises": False, "places": {}, "spread": {"world": prior.SPREAD["world"], "day": 0.125}},
+    "one fixed level (no learning)": {"surprises": False, "places": {}, "spread": {}},
 }
+NUMBERS = {
+    "the market as it is": {},
+    "slope x 0.8": {"slope": prior.SLOPE * 0.8}, "slope x 1.25": {"slope": prior.SLOPE * 1.25},
+    "speed x 0.5": {"speed": prior.SPEED * 0.5}, "speed x 1.5": {"speed": prior.SPEED * 1.5},
+    "trust x 0.5": {"trust": prior.TRUST * 0.5}, "trust x 1.5": {"trust": prior.TRUST * 1.5},
+    "level - 0.05": {"level": prior.LEVEL - 0.05}, "level + 0.05": {"level": prior.LEVEL + 0.05},
+    **{f"{name} spread x {factor}": scaled(name, factor) for name in prior.SPREAD for factor in (0.5, 2)},
+    "place table x 0.5": {"places": {end: {place: level / 2 for place, level in table.items()} for end, table in prior.PLACES.items()}},
+    "place table x 1.5": {"places": {end: {place: level * 1.5 for place, level in table.items()} for end, table in prior.PLACES.items()}},
+}
+VARIANTS = NUMBERS if "--numbers" in sys.argv else PARTS
 
 
 def week(path: str) -> dict[str, float]:
@@ -48,8 +66,10 @@ def week(path: str) -> dict[str, float]:
         run = json.load(file)
     out = {}
     for name, overrides in VARIANTS.items():
+        overrides = dict(overrides)
+        places = overrides.pop("places", None)
         books = Books(run["roster"])  # the replay of tools/winmodel.py, with a map so that the events are weighed
-        market = Market(MarketPolicy(**overrides), books, SimpleNamespace(atlas=atlas()))
+        market = Market(MarketPolicy(**overrides), books, SimpleNamespace(atlas=atlas()), places)
         total, count, chances = 0.0, 0, {}
         for event in run["events"]:
             books.observe(event)
@@ -75,11 +95,12 @@ def week(path: str) -> dict[str, float]:
 
 
 def main() -> None:
-    paths = [path for tag in sys.argv[1:] for path in sorted(glob.glob(os.path.join(ROOT, "runs", tag, "*.json.gz")))]
+    tags = [arg for arg in sys.argv[1:] if not arg.startswith("--")]
+    paths = [path for tag in tags for path in sorted(glob.glob(os.path.join(ROOT, "runs", tag, "*.json.gz")))]
     with Pool(8) as pool:
         scores = pool.map(week, paths)
     base = np.array([s["the market as it is"] for s in scores])
-    print(f"{len(paths)} weeks of {', '.join(sys.argv[1:])}; log-likelihood of an answer x 1000")
+    print(f"{len(paths)} weeks of {', '.join(tags)}; log-likelihood of an answer x 1000")
     print(f"{'variant':<50} {'mean':>8} {'against the market':>19} {'se':>6} {'weeks worse':>12}")
     for name in VARIANTS:
         x = np.array([s[name] for s in scores])
