@@ -19,6 +19,7 @@ from spread.client import Client, SpreadError
 
 from dispatch.atlas import DAY
 from tools.harness import RUNS, Slot, create
+from tools.probe_week import copy
 
 FOLDER = os.path.join(RUNS, "census")
 NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon+"]
@@ -30,7 +31,7 @@ def census(parent, days: list[int], drivers: list[str]) -> dict:
     """The days on one copy of the world: each driver's answers by day. The cars are won on the first of the days, with a deadline after the last."""
     queue, answers = drivers * ROUNDS, {day: defaultdict(list) for day in days}
     with Slot() as slot:
-        fork = parent.fork()
+        fork = copy(parent)
         slot.hold(fork.id)
         fork._last_seq = parent._last_seq  # the copy's log starts with the parent's: read only what is new
         try:
