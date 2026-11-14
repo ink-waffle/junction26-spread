@@ -1,38 +1,41 @@
 # Halal Team — Spread: the deck as text
 
-Ten slides. Each slide is one claim (its title), the evidence, and one figure to draw.
+Eleven slides. Each slide is one claim (its title), the evidence, and one figure to draw.
 
 - Everything is level 8. A week counts ("ranked") only when at least 90% of its orders are on time.
-- The system described is the default policy of commit `0b050b8` (Saturday 17:35; ideas 1–14 of `NIGHT_LOG.md`) `[UPDATE: the frozen commit that plays the final]`.
+- The system described is the default policy of commit `8ae61c5` (Saturday 23:00; ideas 1–15 of `NIGHT_LOG.md`). It plays the final. Idea 15 is a skeptic's pass over ideas 1–14 (slide 9; `SKEPTIC.md`).
 - Practice weeks, and what each was used for:
   - **tune** = seeds `halal-01..08`: fitted on from the start.
   - **wide** = `halal-17..32`: their notes and Mondays helped build the note reader and the bisection; no price or fee number came from them until Saturday afternoon, when the surprise days of slide 6 were designed and fitted on tune and wide weeks together.
   - **hold** = `halal-09..16`: nothing was fitted on them. They were played to confirm, and one of them, `halal-09`, was opened to study the flu.
-  - The on-time target was chosen after looking at hold weeks (96%) and then on tune and wide weeks (97%).
-  - So the clean test is the 32 fresh weeks of slide 9 `[UPDATE]`.
-- "Stride 14" marks weeks played with the practice clock moving 14 minutes a turn while requests arrive. A week is then three times faster to play, and our answers come up to 14 minutes later than in the final.
-- One week moves by about ±1.3 points of on-time and €1,000–3,000 between two plays of nearly the same policy. So the late comparisons use 24 weeks with several samples a side (`tools/replicates.py`) and give a standard error (se).
-- `[UPDATE: source]` marks a number that can still move. `OPEN_NUMBERS.md` has the command or file for each one.
+  - **untouched** = `halal-65..128`: first played by the skeptic's pass. Its deletions and its two numbers were decided on `65..96` and confirmed once on `97..128`.
+  - **fresh** = `halal-33..64` and `halal-129..160`: each played once, after the decisions were frozen, as the record of a frozen system. `129..160` is the record of this one.
+  - The on-time target was chosen after looking at hold weeks (96%), then on tune and wide weeks (97%), then on `halal-65..96` (97.5%).
+  - So the clean test is the 32 fresh weeks `halal-129..160` (slides 9 and 10): no system of ours had played them before.
+- "Stride 14" marks weeks played with the practice clock moving 14 minutes a turn while requests arrive. A week is then three times faster to play, and our answers come up to 14 minutes later than in the final. "No stride" is the final's pace.
+- One week moves by about ±1.3 points of on-time and €1,000–3,000 between two plays of nearly the same policy. So the late comparisons use 24 to 32 weeks, paired per week, often with several samples a side (`tools/replicates.py`, `tools/ablations.py`), and give a standard error (se).
+- `[FINAL …]` and `[SUNDAY …]` mark results still to come. `OPEN_NUMBERS.md` has the command or file for every number.
 - Run tags in `code font` are folders under `runs/` and lines of `runs/log.jsonl`.
 
 ---
 
-## Slide 1 — The answer: a driver side that prices each car's risk, a dealer side that learns each dealer's price, and both weigh the events that nobody announces
+## Slide 1 — The answer: a driver side that prices each car's risk, a dealer side that learns what dealers pay, both weigh the events that nobody announces, and only what holds on unseen weeks stays
 
 **Result.**
 - Final: `[FINAL: € … margin, … % on time, … orders, place … of …]`
-- Best ranking round: Saturday 15:00, **€82,278** for five weeks, 5 of 5 ranked, on time 95.0–97.1%; 14th of 42 ranked teams; **1.28 × House best** (€64,249) on the same weeks `[UPDATE: the 18:00 round and Sunday's rounds, runs/board.jsonl + leaderboard]`.
-- Test final, Saturday 14:00, live clock: €3,747, 97.6% on time, **2nd of 55 ranked teams** (217 entered) `[TEST FINAL 20:00: € …, … % on time, place … of …]`.
-- Practice, against the kit starter on the same weeks: on the 8 weeks we fitted on, **€17,846 a week**, worst week 95.9% on time, against **−€63,232** and 52.1% for the starter (no week ranked). On 8 weeks we did not fit on, €14,806 a week, worst week 93.2%, against −€68,908 and 47.8% `[UPDATE: 32 fresh weeks on the frozen commit]`.
+- On 32 weeks that no system of ours had played (`halal-129..160`, once, at the final's pace): **€14,313 a week, 32 of 32 ranked**, on time 96.3% in the mean and 92.8% in the worst week. The system before idea 15 on the same weeks: €13,547. The kit starter on our own weeks: −€63,232 (tune) and −€68,908 (hold), no week ranked. We quote €14–15k a week; the €17,846 of the 8 tune weeks is 8 rich worlds.
+- Best ranking round: Saturday 18:00, **€75,405** for five weeks, 5 of 5 ranked, on time 95.3–97.6%; **10th of 67 ranked teams**; **1.29 × House best** (€58,677) on the same weeks. Rounds from Sunday 00:00 are played by the frozen system `[SUNDAY: rounds 00:00, 03:00, 06:00, runs/board.jsonl + leaderboard]`.
+- Test finals, live clock, from a cloud machine, the system before idea 15: Saturday 14:00 (joined on Thursday) €3,747, 97.6% on time, **2nd of 55 ranked teams**; Saturday 20:00 (a full week from Monday, the final's shape) €15,752.50, 424 orders, 97.2% on time, 18th of 75 ranked (first €19,592, 10th €16,623).
 
 **The big ideas** (one slide each):
 1. One fee per gig, because drivers learn.
 2. A car costs its fee plus its risk of arriving late. That cost alone decides which cars we want.
-3. Each dealer's price level is learned from every yes and no. The quote maximises (price − cost) × P(yes).
+3. The price level dealers pay is learned from every yes and no. The quote maximises (price − cost) × P(yes).
 4. The practice world is deterministic, so we bisected the competitor.
 5. Nobody announces the price war, the outage or the flu. Each side weighs which day it is.
 6. Two cars in one gig: the trip home is half a driver's cost.
 7. Notes are read by a small grammar.
+8. We audited our own system on weeks nobody had played, deleted what did not hold, and earned more.
 
 **Figure: the system in one picture.**
 
@@ -58,7 +61,7 @@ Ten slides. Each slide is one claim (its title), the evidence, and one figure to
 ```
 
 One turn, the same in practice and in the final: fold the events, move the clock, issue the actions that make the world match the plan. A restart replays the world's log and the journal through the same fold.
-1,948 lines of Python, standard library only, eleven modules `[UPDATE: wc -l dispatch/*.py]`.
+1,900 lines of Python, standard library only, eleven modules; 123 numbers fitted or set by hand (129 before idea 15).
 
 ---
 
@@ -75,7 +78,7 @@ One turn, the same in practice and in the final: fold the events, move the clock
 - The look after six hours, same 8 tune weeks (`offers-m8-board96` → `main-m9-look6-ot96`): €14,935 → €16,838 a week, 350 → 438 orders, worst week 94.5% → 94.7% on time.
 - Its price, measured (`tools/waiting_study.py`): new one-car gigs booked at their first fee within 15 minutes, Monday to Friday, are 73 / 71 / 65 / 67 / 48% without the look and 71 / 67 / 59 / 58 / 33% with it. Drivers do learn from one raise. More raises do not pay: a look every day, a look every six hours, and steps up to 2 × each gave between −€514 and +€236 a week on 8 weeks, which 8 weeks cannot tell from zero; a look after 12 hours instead of 6 gave −€342 on 24 weeks.
 
-**Figure.** Bar chart, x = weekday of the starter's week, y = median booked fee as a multiple of the typical fee: Mon 1.0, Tue 1.5, Wed 1.5, Thu 1.5, Fri 2.5. A dashed step line marks the cap of the starter's schedule (1.5 ×, then 2.5 × after the deadline warning). A flat line at 0.94 × marks our average fee `[UPDATE: fee column of the final tune run]`. Caption: "Monday: 7 minutes to a booking at 1.0 ×. Tuesday: drivers wait for the cap."
+**Figure.** Bar chart, x = weekday of the starter's week, y = median booked fee as a multiple of the typical fee: Mon 1.0, Tue 1.5, Wed 1.5, Thu 1.5, Fri 2.5. A dashed step line marks the cap of the starter's schedule (1.5 ×, then 2.5 × after the deadline warning). A flat line at 0.95 × marks our average fee (32 fresh weeks, `orch-head-record`). Caption: "Monday: 7 minutes to a booking at 1.0 ×. Tuesday: drivers wait for the cap."
 
 ---
 
@@ -86,7 +89,7 @@ One turn, the same in practice and in the final: fold the events, move the clock
 - A higher fee stops helping. Share booked before the warning at a flat 0.70 / 0.85 / 1.00 / 1.15 / 1.30 / 1.50 × typical: 39 / 61 / 81 / 91 / 88 / 91%. Above 1.15 × what is left is the car and the town.
 - The shortage differs from town to town. Orders with ≤ 3 / 4–15 / 16–50 / > 50 drivers living within 30 km of the pickup were late 12.6 / 10.0 / 6.5 / 3.3%. Our first model said 12% for all of them.
 
-**The idea.** An on-time model (16 weights, fitted on our own weeks by `tools/fleet_fit.py`) gives P(late) for a car at a fee. The fee is the step that costs least in all. The cost that the dealer side sees is that fee plus the risk. There is no list of forbidden cars: a car we should not win gets a cost that no dealer pays.
+**The idea.** An on-time model (15 weights, fitted on our own weeks by `tools/fleet_fit.py`; its level set on 64 weeks the fit never saw, slide 9) gives P(late) for a car at a fee. The fee is the step that costs least in all. The cost that the dealer side sees is that fee plus the risk. There is no list of forbidden cars: a car we should not win gets a cost that no dealer pays.
 
 **The effect.**
 
@@ -105,22 +108,22 @@ P(late)  from a logistic model of: the gig's fee against the fees of our other o
          last possible pickup, lane length, the drivers who live near the pickup and near the delivery,
          premium, trade-in, private delivery, the typical fee as a share of the list price, cars already
          waiting, an hour already waited, the chance that the car's last day is the flu's (slide 6);
-         plus one number per week, learned from the week itself
+         its intercept where 64 weeks the fit never saw put it, the same all week
 fee   =  the step f of {0.85, 1.0, 1.15, 1.3, 1.5} × typical fee with the lowest
          f + P(late | f) × (refund + λ) + harm to the cars that already wait
-cost  =  fee + P(late) × refund + (P(late) − 3%) × λ + harm
-λ     =  €300 × (late orders we expect this week ÷ 3% of orders)⁴      €19 at half the allowance, €300 at it
+cost  =  fee + P(late) × refund + (P(late) − 2.5%) × λ + harm
+λ     =  €300 × (late orders we expect this week ÷ 2.5% of orders)⁴    €19 at half the allowance, €300 at it
 ```
 
 ---
 
-## Slide 4 — A dealer's price level is learned online as a sum of parts; the quote maximises (price − cost) × P(yes), and every option goes at the same margin
+## Slide 4 — The price level dealers pay is learned online as a sum of parts; the quote maximises (price − cost) × P(yes), and every option goes at the same margin
 
 **Why.** With random quotes on 8 weeks (`explore1`), the price at which half the quotes win was 1.20–1.49 × list price by world, and 1.01–1.78 × by world and day. A fixed 1.45 × list won 177 cars in one world and 485 in another.
 
 **The idea.**
 - A dealer says yes with a chance that is logistic in log(price ÷ list price) around a level.
-- The level is a sum of parts: the world, the day, the dealer, the pickup place, the delivery place, the lane, the pickup place today. The two place parts start from a table of 60 numbers fitted on our tune weeks; the others start at zero. Two terms are known, not learned: +1.05% per order delivered on time to this dealer (trust), −8.5% per step slower than the fastest option.
+- The level is a sum of parts: the world, the day, the pickup place, the delivery place, the lane. The two place parts start from a table of 60 numbers fitted on our tune weeks; the others start at zero. Two terms are known, not learned: +1.05% per order delivered on time to this dealer (trust), −8.5% per step slower than the fastest option. (A dealer part and a pickup-place-today part were in it until idea 15: on 64 unseen weeks they foretold no answer, slide 9.)
 - Every yes and no moves each part it touched by one Kalman step.
 - The quote: the option and price with the highest (price − cost) × P(yes). Every other option is quoted at the same margin over its own cost. The dealer chooses its speed. We earn the same whichever it takes.
 
@@ -138,7 +141,7 @@ Since the model of slide 3 knows the town, the faster option costs a median €1
 
 ```
 P(yes | price) = σ( 11.9 × ( level − ln(price ÷ list price) ) )          flatter while the level is uncertain
-level          = world + day + dealer + pickup place + delivery place + lane + pickup place today
+level          = world + day + pickup place + delivery place + lane
                  + 1.05% × on-time orders of this dealer − 8.5% × steps slower than the fastest option
 for each option:   best price = argmax over 0.80…3.50 × list of (price − cost) × P(yes | price)
 quote:             margin m of the best option; every option at  cost of that option + m
@@ -215,7 +218,7 @@ sign in the on-time model = how far that chance for the car's last day is above 
 | the same, target 96% (`offers-m8-board96`) | €14,935 | 350 | 94.5% |
 
 - In randomised tests inside the same worlds, pairs with at most 4 hours of driving at 0.70 × were booked 85% of the time, in a median 4 minutes. Their fees came to 0.89 × typical, against 1.21 × for the same cars as two gigs.
-- Today 28% of our cars are delivered in a two-car gig, at 0.81 × typical and 98.8% on time. Cars never paired: 0.97 × and 96.3% `[UPDATE: tools.offers_study paired <final tune tag>]`.
+- On the 32 fresh weeks 27% of our cars are delivered in a two-car gig, at 0.80 × typical and 99.1% on time. Cars never paired: 0.98 × and 95.5% (`python -m tools.offers_study paired orch-head-record`).
 - More pairs (a wait of 60 minutes, up to 6 hours of driving): +€284 a week (se 304) for −0.57 point of on-time on 24 weeks. Not adopted.
 
 **Figure.** A map sketch of one pair: car 1 from A to B, car 2 from B′ to C, B′ within 30 km of B, one driver, one gig, "0.70 × (typical 1 + typical 2)". Beside it the trade-in fact: "out and back = 0.50 × two singles".
@@ -247,16 +250,47 @@ Second line on the slide, with a typo: `"Buyer pays first, pcikup from 14:00"` �
 
 ---
 
-## Slide 9 — Robust: all 32 of our practice weeks ranked, where the kit starter ranks none of 16; a restart replays the log into the same desk
+## Slide 9 — We audited our own system on weeks nobody had played: what did not hold is deleted, and the system earns more on every untouched set
 
-**Many weeks.** The system of this deck against the kit starter on the same weeks:
+**Why.** On Saturday evening the system held 129 numbers fitted or set by hand. It made €17,846 a week on the 8 weeks we fitted on and €14,360 on 32 fresh ones. Was it fitted to its own weeks? One agent with no stake in any part counted every number and took each part out in turn on 32 weeks that nobody had played (`halal-65..96`; `SKEPTIC.md`).
 
-| weeks | ours: margin a week | ours: on time, worst week (mean) | ours ranked | starter: margin a week | starter: on time (mean) | starter ranked |
-|---|---|---|---|---|---|---|
-| tune `halal-01..08` (`fleet3-cand-ns`) | €17,846 | 95.9% (96.9%) | 8 of 8 | −€63,232 | 52.1% | 0 of 8 |
-| hold `halal-09..16`, stride 14 (`fleet3-cand-hold`) | €14,806 | 93.2% (95.8%) | 8 of 8 | −€68,908 | 47.8% | 0 of 8 |
-| wide `halal-17..32`, stride 14 (`orch-base-s14`); see the header for what they were used for | €13,418 | 93.4% (96.2%) | 16 of 16 | not played | | |
-| 32 fresh weeks, frozen commit | `[UPDATE: runs/final-fresh.out]` | `[UPDATE]` | `[UPDATE]` | | | |
+**What did not hold.**
+- **A model level off by a factor of two, patched every week.** On 64 weeks the fit never saw, the on-time model said 10.0% of the cars late where 4.8% were: as baked it foretold worse than a constant. A learner inside the week (`Fleet.learned`, behind a hand-set prior and a clamp of one logit) found the missing intercept again every week, slowly: +0.35 by Monday noon, +0.75 from Thursday. So Monday was priced as twice as risky as Wednesday: 72 orders against 89–92.
+- **One sign with the wrong sign.** `known`, the drivers have seen our week's first hundred bookings: baked +0.25, the unseen weeks say −0.17 ± 0.06.
+- **Two parts of the dealer's level that predict nothing.** The dealer part and the pickup-place-today part: −0.3 and +1.2 per mille of log-likelihood on 64 weeks, where the lane part gives 15.
+
+**What we did.** Deleted all four: 1,948 → 1,900 lines, 129 → 123 numbers, and the fleet now remembers nothing that a restart must rebuild. Set the model's level once, where the unseen weeks put it: +0.88, the same on three disjoint sets of weeks (+0.86 / +0.90 / +0.87). On its own play the model now says 4.3% late where 4.0% are. A level that is right makes caution cheap, so the aim went from 97% to 97.5%.
+
+**The effect.** Against the system before the pass, same weeks, paired per week:
+
+| weeks | before | after |
+|---|---|---|
+| **fresh `halal-129..160`**, once each, after the freeze, no stride (`orch-old-record` → `orch-head-record`) | €13,547 a week, on time 96.3%, worst week 93.1%, 402 orders | **€14,313 (+€766, se 221)**, on time 96.3% (−0.03 point, se 0.15), worst week 92.8%, 426 orders; 24 of 32 weeks up |
+| untouched `halal-97..128`, no stride (`skeptic-Bbase-B-s0` → `skeptic-C975-B-s0`) | €15,829, 96.2%, worst 94.3% | €16,266, 96.4%, worst 94.1%, 32 of 32 ranked |
+| untouched `halal-65..96`, where it was decided, two samples a side | | +€679 (se 206), on time +0.52 point (se 0.11) |
+| hold `halal-09..16`, four samples a side | | +€694 (se 142), on time +0.03 point |
+| orders won Monday / Tuesday / Wednesday / Thursday / Friday, fresh weeks | 71 / 85 / 81 / 96 / 73 | 82 / 91 / 88 / 95 / 76; Monday's sales +€1,178 (se 232) |
+
+**What stayed, on the same untouched weeks.** Taking out each of these cost money: the harm to the cars that wait −€2,967 a week, the pickup-side signs −€1,702, two-car gigs −€1,444, the six-hour look −€1,394, the note grammar −€998. The place table, the lane part and the events each foretell the dealers' answers in 55 to 64 of 64 unseen weeks. A deliberately small system ranks in 4 of 32 weeks.
+
+**Judged and not chosen.** A second agent built a smaller system still: the old one minus 64 numbers (the 60 of the place table, `known`, the two parts), equal to it in margin (−€76, se 184; `research/simple`). Two of its findings stand. The slow Monday is mostly the world: dealers who do not yet trust us pay about 12% less on Monday. And the learner was insurance against a world much harder than ours: with a model one logit too easy, on time fell 2.8 points without it and 1.0 with it. We chose the measured constant: one line explains it, and it earns more on every untouched set. We accept that risk (slide 11).
+
+**Figure.** Left, two pairs of bars, "the model says late / late in fact": before 10.0% / 4.8%, after 4.3% / 4.0%. Right, orders won by weekday on the 32 fresh weeks, two bars a day: before 71 / 85 / 81 / 96 / 73, after 82 / 91 / 88 / 95 / 76. Caption: "129 → 123 numbers, 1,948 → 1,900 lines, +€766 a week on weeks nobody had played."
+
+---
+
+## Slide 10 — Robust: every week the frozen system played is ranked (216 plays of 128 weeks), where the kit starter ranks none of 16; a restart replays the log into the same desk
+
+**Many weeks.** The frozen system, each set once:
+
+| weeks | margin a week | on time, worst week (mean) | ranked | orders |
+|---|---|---|---|---|
+| **fresh `halal-129..160`**, no stride (`orch-head-record`) | **€14,313** | 92.8% (96.3%) | 32 of 32 | 426 |
+| untouched `halal-97..128`, no stride (`skeptic-C975-B-s0`) | €16,266 | 94.1% (96.4%) | 32 of 32 | 454 |
+| hold `halal-09..16`, stride 14 (`skeptic-holdC975-x-s14`) | €15,488 | 94.6% (96.3%) | 8 of 8 | 422 |
+| tune and wide `halal-01..32`, stride 14 (`skeptic-twC975-x-s14`) | €15,444 | 94.5% (96.8%) | 24 of 24 | 444 |
+
+With the other samples of slide 9: 216 plays of 128 different weeks, none unranked, the worst 92.8%. The kit starter on our own weeks, against the system before idea 15 (ideas 1–14) on the same weeks: tune −€63,232 at 52.1% on time against €17,846; hold −€68,908 at 47.8% against €14,806; the starter ranked 0 of 16, ours 16 of 16. The system before idea 15 on the first fresh set, `halal-33..64`: €14,360, worst week 93.2%, 32 of 32 (`final-fresh`).
 
 Secret weeks, the same for every team:
 
@@ -264,24 +298,28 @@ Secret weeks, the same for every team:
 |---|---|---|---|
 | Ranking round Saturday 09:00 (Saturday morning's system: no menu of options, no pairs, no second look) | €48,860 | 0.96 × | 35th of 45 |
 | Ranking round Saturday 12:00 | €82,785 | 1.07 × | 22nd of 58 |
-| Ranking round Saturday 15:00 | €82,278 | 1.28 × | 14th of 42 |
-| Ranking round Saturday 18:00 and later | `[UPDATE: runs/board.jsonl]` | `[UPDATE: leaderboard]` | `[UPDATE]` |
+| Ranking round Saturday 15:00 | €82,278 | 1.28 × | 19th of 63 |
+| Ranking round Saturday 18:00 (ideas 1–14) | €75,405 | 1.29 × | 10th of 67 |
+| Ranking round Saturday 21:00 (ideas 1–14) | €79,391 | 1.20 × | 3rd of 11 ranked at 21:08 `[SUNDAY: closing place, leaderboard]` |
+| Ranking rounds from Sunday 00:00, the frozen system | `[SUNDAY: runs/board.jsonl]` | `[SUNDAY: leaderboard]` | `[SUNDAY]` |
 | Test final Saturday 14:00, live clock, joined on Thursday | €3,747, 97.6% on time | first team €4,023, 10th €3,292 | 2nd of 55 |
-| Test final Saturday 20:00 | `[TEST FINAL 20:00]` | | |
+| Test final Saturday 20:00, live clock, a full week from Monday (the final's shape) | €15,752.50, 424 orders, 97.2% on time | first team €19,592, 10th €16,623 | 18th of 75 |
 
-**How we decided late.** One week moves by ±1.3 points of on-time between two plays of nearly the same policy. So each late change was played on 24 weeks with several samples a side: the same seed at strides of 12 to 15 minutes is another sample of the same policy (`tools/replicates.py`). Then every knob of the final configuration was moved both ways on 24 weeks, two samples a side. None was worth changing: fee floor at 0.75 × typical −€771 a week (se 222), at 0.90 × −€47 (se 246); aim at 96.5% +€112 (se 176) for −0.51 point of on-time; second look at 12 hours −€342.
+The 20:00 test final won 49 / 99 / 73 / 109 / 94 orders Monday to Friday. Its slow Monday sent the skeptic to the start of the week; on the fresh weeks the frozen system wins 11 more orders on Monday (slide 9).
 
-**A restart.** State is a fold over the world's events and the actions the world acknowledged (a journal on disk). A new desk replays both and is the desk that died. `tools/restart_test.py` compares every object, and then the week's margin: 12 of 12 restarts rebuilt the same desk, and the week ended at €20,493.78 with and without them (halal-02, ideas 1–14) `[UPDATE: restart_test on the frozen commit]`. The test caught a real bug on Saturday: when the fleet began to learn inside the week, 1 of 12 restarts matched and a week with restarts ended €2,309 lower. Since the fix every week with restarts has ended at the same margin to the cent.
+**How we decided late.** One week moves by ±1.3 points of on-time between two plays of nearly the same policy. So each late change was played on 24 to 32 weeks, paired per week, with several samples a side: the same seed at strides of 12 to 15 minutes is another sample of the same policy (`tools/replicates.py`, `tools/ablations.py`). Every knob of ideas 1–14 was moved both ways on 24 weeks, two samples a side; none was worth changing (fee floor at 0.75 × typical −€771 a week, se 222; second look at 12 hours −€342). Idea 15 was decided on `halal-65..96`, confirmed once on `halal-97..128`, and recorded on `halal-129..160`.
+
+**A restart.** State is a fold over the world's events and the actions the world acknowledged (a journal on disk). A new desk replays both and is the desk that died. `tools/restart_test.py` compares every object, and then the week's margin: on the frozen system 8 of 8 restarts rebuilt the same desk, and the week ended at €21,126.94 with and without them (halal-02; 12 of 12 for ideas 1–14). The test caught a real bug on Saturday: when the fleet began to learn inside the week, 1 of 12 restarts matched and a week with restarts ended €2,309 lower. Idea 15 deleted that learner: the fleet's state is now the books alone. The frozen commit plays a week of the skeptic's branch again to the cent (halal-98, €9,309.09): what plays the final is what was measured.
 
 **A slow network and a surprise.** In the final a request must be answered within 4.5 real seconds.
-- The test final ran on a cloud machine 9 ms from the server: every request of Thursday and Friday was quoted, no action was refused, and the slowest turn took 0.86 s.
-- Rehearsals with an earlier version: a whole week at the final's clock from a laptop on a phone hotspot, 0 of 1,038 requests unanswered; with 1.5 seconds added to every request, 0 unanswered; a Thursday join with a dead resolver, two cut streams, 90 seconds without a route and a kill: the desk rejoined by itself three times `[UPDATE: rehearse on the frozen commit]`.
+- The test finals ran on a cloud machine 9 ms from the server. At 14:00 every request of Thursday and Friday was quoted, no action was refused, and the slowest turn took 0.86 s. At 20:00, a full week from Monday: all 1,030 requests quoted, the slowest turn under 0.25 s.
+- Rehearsals with an earlier version: a whole week at the final's clock from a laptop on a phone hotspot, 0 of 1,038 requests unanswered; with 1.5 seconds added to every request, 0 unanswered; a Thursday join with a dead resolver, two cut streams, 90 seconds without a route and a kill: the desk rejoined by itself three times. `[SUNDAY: the rehearsal of a full week with a kill on 8ae61c5, if it ran]`
 
-**Figure.** A dot plot: x = on-time share from 30% to 100% with a red line at 90%, y = margin from −€90k to +€25k. 32 dots of ours (three colours for tune, hold, wide) sit right of the line and above zero; 16 starter dots (tune and hold) sit far left and far below. Beside it a two-line diagram: "world's log + journal → fold → desk" drawn twice, once for play and once after a restart, with an equals sign between the two desks.
+**Figure.** A dot plot: x = on-time share from 30% to 100% with a red line at 90%, y = margin from −€90k to +€25k. 32 dots of the frozen system on the fresh weeks sit right of the line and above zero; 16 starter dots (tune and hold) sit far left and far below. Beside it a two-line diagram: "world's log + journal → fold → desk" drawn twice, once for play and once after a restart, with an equals sign between the two desks.
 
 ---
 
-## Slide 10 — What did not work, and what would break the system
+## Slide 11 — What did not work, and what would break the system
 
 **Did not work.**
 
@@ -290,31 +328,72 @@ Secret weeks, the same for every team:
 | Meeting the drivers on the day: keep a car out of the app until 07:00 of its last day. Randomised by order number inside 9 worlds | The kept half ended late 11.1% against 7.0%, and 30% against 15% in the flu's night. A weak promise is far better than none. |
 | A rule for the night of the flu: when five orders lose their driver within an hour, reopen at the fee of a deadline warning | Late among those cars 14% → 10% on tune and wide weeks, nothing on hold weeks. Not taken; slide 6 weighs the night instead. |
 | A crisis price, to win safe cars after a bad night | −€481 a week on 14 weeks, on time unchanged. |
-| A better-calibrated on-time model (predicted late 10.3% → 9.0%, realised 6.0%) | €14,973 → €12,707 a week. It accepts more risk on Monday, and the late cars show two days later. |
+| A better-calibrated refit of the on-time model, Saturday morning (predicted late 10.3% → 9.0%, realised 6.0%) | €14,973 → €12,707 a week. It accepts more risk on Monday, and the late cars show two days later: the pessimism was the safety margin. Idea 15 set the level right and moved that margin into the aim (97.5%) instead. |
 | A finer fee grid (steps of 0.05 from 0.8 to 1.2 × typical) | −€624 a week (se 284) on 24 weeks. |
 | Finding the flu by a census: a direct offer that pays nothing, to every driver each day | Names a silent day in 7 of 20 weeks, but it is the night that takes our bookings in only 2 of them. |
 | Opening low (0.6 × for 30 minutes, then 1.15 ×); one low fee for everything; trade-ins at a higher fee | Slide 2; 76.7% on time at 550 orders a week; trade-ins on time 17–61% at any fee we tried. |
 | Direct offers to the likeliest drivers | 75,390 offers, 85 accepted. €6,723 against €6,824 a week. |
 
 **What would break it.**
-- **A week that is not the rules' week.** Slide 6 assumes one war day, one outage, one flu night. In the replay a week without a war still gains €66; without both events it loses €118. A flu on Monday shows no night before it. A week whose drivers are unlike our practice weeks can move only two numbers of the on-time model: one intercept, and which day the flu is.
-- **A Friday flu in the capital region** is still our hardest week: 94.6% on time on the mean of four samples, 93.2% on the worst.
-- **A note in words we have not seen.** A cue outside the vocabulary is missed silently.
+- **A week whose drivers are much scarcer than in any of ours.** Since idea 15 a week moves one thing in the on-time model: which day the flu is. Such a week is braked by the price of the delivery minimum alone, which counts the late orders as they show, two days after we accept them. With a model one logit too easy, on time falls 2.8 points and one week ends at 90.5%; with the deleted learner it falls 1.0 point (`runs/reports/simple.md`). Our 128 weeks put the worst at 92.8%. We chose this risk with open eyes (slide 9).
+- **A week that is not the rules' week.** Slide 6 assumes one war day, one outage, one flu night. In the replay a week without a war still gains €66; without both events it loses €118. A flu on Monday shows no night before it.
+- **A Friday flu in the capital region** is still our hardest week: 94.5% on time on the mean of four samples (94.6% before idea 15).
+- **A note in words we have not seen.** A cue outside the vocabulary is missed silently. On the 64 untouched weeks the reader left 0.2 failed visits a week (the kit's reader: 10.6).
 - **Two desks on one world.** Only a lock file and a procedure prevent it.
 
 **What we do not know.**
-- The margin of knowing where the drivers live sits on the weeks it was fitted on (+€1,144 a week on tune; −€39 on wide; +€282 on hold). On unseen weeks it buys on-time.
-- The flu sign costs nothing on tune and wide weeks (−€23, se 232) and may cost a little on hold weeks (−€252, se 209).
-- Two of the 16 weights (the drivers who know us, an hour already waited) have no support in a refit any more. Taking them out changes decisions, and we have not tested that on 24 weeks.
-- The on-time model is pessimistic on purpose: it says 12.9% late where 6.4% are, and the week's own intercept corrects it within about forty orders.
+- Three weights are still open: `waited`, `short`, `trade_in`. On untouched weeks the model without `waited` earned +€601 a week (se 187) and lost 0.29 point of on-time; we win almost none of the cars the other two describe. Not played without them on the frozen system.
+- The pickup-side signs earn €1,702 a week on untouched weeks. Two of them, where the drivers live, are real but twice too large there (0.75 and 0.71 baked, 0.31 and 0.34 measured). They stay as fitted.
+- The flu sign costs margin on untouched weeks (+€432 a week without it, se 205) and buys 0.21 point of on-time and the floor: without it one week ends at 90.9%. It stays for the floor.
+- The numbers set by hand that remain (the fourth power and its cap, `CALM`, the two-car fees, `SURE`, `RETRY`, `MIN_SPAN`) have no measurement of their own. The barrier they shape keeps the floor: a flat €300 a late order ends one week at 90.3%.
 
 **Figure.** One bar: 75,390 direct offers, with a sliver of 85 marked "yes". Next to it the two lists "would break it" and "do not know" as plain text.
 
 ---
 
-## Appendix A — every practice week of this system, with the kit starter on the same week
+## Appendix A — every fresh week of the frozen system, with the system before idea 15 on the same week
 
-Source: `weeks fleet3-cand-ns fleet3-cand-hold orch-base-s14` (helper in `OPEN_NUMBERS.md`) and `runs/starter-tune.out`, `runs/starter-hold.out`. Tune weeks without stride; hold and wide weeks with stride 14, one sample each. `[UPDATE: add the 32 fresh weeks of the frozen commit, runs/final-fresh.out]`
+Source: `weeks orch-head-record orch-old-record` (helper in `OPEN_NUMBERS.md`); `runs/orch-head-record.out`, `runs/orch-old-record.out`. Seeds `halal-129..160`, no stride, one play each, after the decisions were frozen. The frozen system is ahead in 24 of 32 weeks; every week of both is ranked.
+
+| seed | frozen: margin | on time | orders | before idea 15: margin | on time | orders |
+|---|---|---|---|---|---|---|
+| halal-129 | €15,478 | 97.7% | 386 | €14,559 | 96.6% | 439 |
+| halal-130 | €16,639 | 97.0% | 439 | €14,355 | 97.1% | 420 |
+| halal-131 | €16,759 | 95.5% | 462 | €16,771 | 96.9% | 445 |
+| halal-132 | €13,475 | 98.0% | 447 | €12,632 | 97.3% | 403 |
+| halal-133 | €14,009 | 97.6% | 460 | €13,982 | 97.8% | 448 |
+| halal-134 | €13,126 | 96.6% | 356 | €13,154 | 96.4% | 357 |
+| halal-135 | €8,632 | 96.7% | 331 | €7,341 | 96.9% | 289 |
+| halal-136 | €17,738 | 94.7% | 433 | €16,471 | 96.3% | 410 |
+| halal-137 | €12,092 | 96.7% | 359 | €11,727 | 96.7% | 390 |
+| halal-138 | €14,122 | 97.3% | 450 | €11,369 | 96.7% | 420 |
+| halal-139 | €13,290 | 97.4% | 378 | €13,248 | 96.0% | 353 |
+| halal-140 | €12,738 | 96.0% | 451 | €12,599 | 95.2% | 418 |
+| halal-141 | €13,004 | 95.8% | 385 | €10,866 | 97.3% | 366 |
+| halal-142 | €16,424 | 96.9% | 387 | €16,327 | 96.0% | 425 |
+| halal-143 | €18,592 | 96.1% | 466 | €18,804 | 94.9% | 470 |
+| halal-144 | €11,977 | 95.2% | 481 | €11,643 | 97.1% | 382 |
+| halal-145 | €9,684 | 92.8% | 346 | €8,116 | 93.1% | 274 |
+| halal-146 | €17,579 | 94.3% | 460 | €15,349 | 95.0% | 402 |
+| halal-147 | €17,767 | 97.0% | 499 | €16,078 | 96.5% | 492 |
+| halal-148 | €18,815 | 96.1% | 460 | €17,380 | 96.5% | 427 |
+| halal-149 | €11,515 | 96.9% | 420 | €10,350 | 96.4% | 393 |
+| halal-150 | €16,443 | 96.1% | 436 | €13,000 | 95.7% | 348 |
+| halal-151 | €10,057 | 96.5% | 434 | €11,058 | 96.0% | 445 |
+| halal-152 | €18,092 | 97.4% | 503 | €17,151 | 97.7% | 442 |
+| halal-153 | €16,795 | 95.9% | 413 | €18,251 | 96.0% | 426 |
+| halal-154 | €13,831 | 97.1% | 447 | €11,414 | 97.8% | 358 |
+| halal-155 | €8,168 | 95.7% | 370 | €10,235 | 94.8% | 381 |
+| halal-156 | €14,340 | 96.7% | 452 | €15,009 | 95.9% | 412 |
+| halal-157 | €12,395 | 96.3% | 378 | €13,059 | 96.5% | 396 |
+| halal-158 | €11,136 | 96.6% | 386 | €9,464 | 97.3% | 333 |
+| halal-159 | €18,533 | 95.6% | 504 | €17,343 | 96.7% | 479 |
+| halal-160 | €14,784 | 94.5% | 454 | €14,414 | 95.0% | 437 |
+| **mean** | **€14,313** | **96.3%** (worst 92.8%) | **426** | **€13,547** | **96.3%** (worst 93.1%) | **402** |
+
+## Appendix A2 — the system before idea 15 on our practice weeks, with the kit starter on the same week
+
+Source: `weeks fleet3-cand-ns fleet3-cand-hold orch-base-s14` and `runs/starter-tune.out`, `runs/starter-hold.out`. Ideas 1–14 (decisions of `52aaf93`). Tune weeks without stride; hold and wide weeks with stride 14, one sample each. The frozen system on these sets: slide 10.
 
 | set | seed | margin | on time | orders | starter: margin | starter: on time |
 |---|---|---|---|---|---|---|
@@ -376,3 +455,5 @@ One line per step, each against the line above it. "Merged" marks a step where s
 | + the model knows where the drivers live, target 97% | `fleet2-v2` | €17,116 | 94.2% | 8 of 8 | 457 |
 | + the dealer side weighs the war day and the outage day | `surprise-weighs-ns` | €17,607 | 93.4% | 8 of 8 | 463 |
 | + the driver side weighs the flu day | `fleet3-cand-ns` | €17,846 | 95.9% | 8 of 8 | 478 |
+
+Idea 15 is not a row here on purpose: it was decided and measured on weeks nobody had played, never on the tune weeks as a set (slide 9). On the 24 tune and wide weeks at stride 14 it is +€625 a week (se 331) and +0.43 point of on-time against ideas 1–14 at the same stride (`orch-base-s14`).

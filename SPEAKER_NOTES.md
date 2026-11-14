@@ -4,25 +4,25 @@ For a speaker who did not write the code. Per slide: three sentences to say, the
 
 Before you present:
 - The jury's own rule: "If an agent wrote your slides, read every line and cut each one that you cannot explain yourself." Do that. Every claim here names its source, so you can check it.
-- Fill the placeholders first (`OPEN_NUMBERS.md`). Do not say a number that still carries `[UPDATE]`.
-- Timing: ten slides, 30 seconds each. If you must cut, cut slide 8 (notes) to one sentence and slide 10 to its second sentence.
+- Fill the placeholders first (`OPEN_NUMBERS.md`). Do not say a number that still carries `[FINAL]` or `[SUNDAY]`.
+- Timing: eleven slides, about 27 seconds each. If you must cut, cut slide 8 (notes) to one sentence and slide 11 to its second sentence. Do not cut slide 9: it is the answer to "is this overfitted?".
 - Use their words: dealer, request, option, gig, fee, typical fee, list price, deadline, deadline warning, delivery minimum, direct offer.
-- State of these notes: Saturday 17:45, commit `0b050b8`, ideas 1–14 of `NIGHT_LOG.md`.
+- State of these notes: Saturday 23:15, commit `8ae61c5`, ideas 1–15 of `NIGHT_LOG.md`. This commit plays the final.
 
 ---
 
 ## Slide 1 — The answer
 
 **Say.**
-1. "In the final we made `[FINAL]`; in our best ranking round we earned 1.28 times the organisers' best system on the same weeks, and in the test final we were 2nd of 55 `[UPDATE]`."
+1. "In the final we made `[FINAL]`. On 32 weeks that no system of ours had ever played we earn €14,300 a week, every week above the delivery minimum; our best ranking round was 1.29 times the organisers' best system on the same weeks, 10th of 67."
 2. "The system asks two questions about every request: what will this dealer pay, and what does this car cost us. The quote is the price that earns most between the two."
-3. "Nobody announces the price war, the outage or the flu, so each side works out which day it is; and everything the system knows is rebuilt from the world's event log, so a restart continues as the same desk."
+3. "Nobody announces the price war, the outage or the flu, so each side works out which day it is. And on Saturday night we audited our own system on weeks nobody had played and deleted what did not hold: it earns more for it."
 
 **Q: Which single idea is worth the most?**
-Measured one at a time on the same 8 practice weeks: learning the dealer's price level, +€3,543 a week (€6,824 → €10,367). Pricing a car as fee plus risk, +€2,789, and it took the ranked weeks from 5 of 8 to 8 of 8. Dropping the extra reserve, +€2,431. The second look at a gig that sits, +€1,903. They were measured at different stages, so they do not add up exactly. The later ideas (the town's drivers, the surprise days) buy on-time more than money: the worst hold week went from 91.5% to 93.2% on time and the worst wide week from 92.6% to 93.4%. Appendix B of the deck has the whole path.
+Measured one at a time on the same 8 practice weeks: learning the dealer's price level, +€3,543 a week (€6,824 → €10,367). Pricing a car as fee plus risk, +€2,789, and it took the ranked weeks from 5 of 8 to 8 of 8. Dropping the extra reserve, +€2,431. The second look at a gig that sits, +€1,903. They were measured at different stages, so they do not add up exactly. On weeks nobody had played, taking a part out costs most for the harm a new gig does to the cars that wait (−€2,967 a week), then the pickup-side signs (−€1,702), two-car gigs (−€1,444) and the six-hour look (−€1,394). The last idea, the audit, added +€766 a week on 32 fresh weeks. Appendix B of the deck has the whole path.
 
 **Q: How big is it?**
-1,948 lines of Python in eleven modules, standard library only `[UPDATE: recount on the frozen commit]`. Each module has one stated reason; the table is in `README.md`, and `REVIEW.md` is our own reading of where a reader still stumbles.
+1,900 lines of Python in eleven modules, standard library only, and 123 numbers fitted or set by hand: the audit counted 129 and deleted six. Each module has one stated reason; the table is in `README.md`, and `REVIEW.md` is our own reading of where a reader still stumbles.
 
 ---
 
@@ -37,7 +37,7 @@ Measured one at a time on the same 8 practice weeks: learning the dealer's price
 It is a compromise, and we measured both sides of it. With a fee that never moved, 26 orders a week sat for a median 70 hours and half of them arrived late. One look after six hours earned €1,903 a week (€14,935 → €16,838): 88 more orders, and the worst week no worse. Drivers do learn from it (71 / 67 / 59 / 58 / 33% booked within 15 minutes, Monday to Friday, against 73 / 71 / 65 / 67 / 48%). More looks, daily or six-hourly, or steps up to twice the typical fee, did not earn more. A raise sends no notification, so after a gig's first minutes a higher fee reaches few drivers.
 
 **Q: Is the starter comparison on the same weeks?**
-Yes, since Saturday afternoon. On our 8 tune weeks the starter makes −€63,232 a week at 52.1% on time and ranks in none; we make €17,846 at 96.9%. On the 8 hold weeks: −€68,908 against €14,806. That compares whole systems. The evidence for the fee alone is our own test of a fee that rises once: weeks ranked 5 of 8 → 3 of 8 on the same weeks.
+Yes, since Saturday afternoon. On our 8 tune weeks the starter makes −€63,232 a week at 52.1% on time and ranks in none; ideas 1–14 made €17,846 at 96.9%. On the 8 hold weeks: −€68,908 against €14,806, and the frozen system €15,488. That compares whole systems. The evidence for the fee alone is our own test of a fee that rises once: weeks ranked 5 of 8 → 3 of 8 on the same weeks.
 
 ---
 
@@ -49,10 +49,10 @@ Yes, since Saturday afternoon. On our 8 tune weeks the starter makes −€63,23
 3. "Then we taught the model where the drivers live: orders from yards with three drivers nearby were late 12.6% of the time, with more than fifty nearby 3.3%. With that and an aim of 97%, late orders on weeks it never saw fell from 23 to 16 a week."
 
 **Q: How do you know the chance of a late car? Is it calibrated?**
-It is a logistic model with 16 weights, fitted on our own practice weeks by `tools/fleet_fit.py`. It is pessimistic on purpose: it says 12.9% late where 6.4% are, and one number per week, learned from the week's own outcomes, corrects that within about forty orders. We tried a better-calibrated fit and earned €2,266 a week less: it accepts more risk on Monday, and the late cars show two days later. Two of the 16 weights (the drivers who know us, an hour already waited) no longer have support in a refit. We left them in, because taking them out changes decisions and we have not tested that on 24 weeks.
+It is a logistic model with 15 weights, fitted on our own practice weeks by `tools/fleet_fit.py`. Until Saturday night it was not: on 64 weeks the fit never saw it said 10% late where 4.8% were, and a learner inside each week corrected that, slowly, so every Monday was priced as twice as risky as Wednesday. The audit measured the missing intercept on three disjoint sets of weeks (+0.86, +0.90, +0.87), set it once at +0.88, and deleted the learner. On its own play the model now says 4.3% late where 4.0% are. One weight, `known`, came back from the unseen weeks with the opposite sign and is gone; `waited` is still open (slide 11).
 
-**Q: Why 97%, why €300, why the fourth power?**
-They are set by hand, and the 97% is measured. On 24 tune and wide weeks, an aim of 96.5% gave €15,081 a week at 95.6% on time, 97% gave €14,608 at 96.2%, and 97.5% gave €14,269 at 96.6%. We chose 97% for the final: a week under 90% is then four to five standard deviations away. The price of the minimum is €300 × (expected late share ÷ 3%)⁴: about €19 at half the allowance and €300 at it. We bracketed the aim again on Saturday evening: 96.5% gives +€112 a week (se 176) for half a point of on-time.
+**Q: Why 97.5%, why €300, why the fourth power?**
+The €300 and the fourth power are set by hand; the aim is measured. With a model whose level is right, caution is cheap: from 97% to 97.5% the frozen system gives up about €280 a week for half a point to 0.8 point of on-time, where the old system paid €546 for a point. At 97.5% it earns more than the old one and is on time more often on both untouched sets (+€679 and +0.52 point on 32 weeks, two samples a side). The price of the minimum is €300 × (expected late share ÷ 2.5%)⁴: about €19 at half the allowance and €300 at it. Without that steep curve a flat €300 a late order ends one week at 90.3%, and a flat €100 leaves 24 of 32 weeks unranked.
 
 ---
 
@@ -60,14 +60,14 @@ They are set by hand, and the 97% is measured. On 24 tune and wide weeks, an aim
 
 **Say.**
 1. "The price at which a dealer buys half the time moves from 1.0 to 1.8 times the list price between worlds and days, so a fixed price wins 177 cars in one world and 485 in another."
-2. "We model the dealer's yes as a logistic curve around a level, and the level as a sum of parts: world, day, dealer, places, lane. Every yes and no moves the parts it touched."
+2. "We model the dealer's yes as a logistic curve around a level, and the level as a sum of parts: world, day, the two places, lane. Every yes and no moves the parts it touched."
 3. "We quote the price with the highest expected margin over the car's cost, and offer every option at that same margin: learning the level gave €6,824 → €10,367 a week, and offering every option another 5.5% on tune weeks and 12.7% on hold weeks."
 
 **Q: Why the same margin on every option?**
 Because of how a dealer chooses (slide 5): among the options it would buy, it takes the one with the largest threshold minus price, in euros. If every option carries the same margin over its own cost, we earn the same whichever it takes, and it takes the faster one exactly when speed is worth more to it than it costs us. Today the faster option costs a median €11 more in our quotes, and dealers value it at a median €14.5.
 
 **Q: The competitor answers your wins. Do you model that?**
-No, on evidence. We measured it: a dealer's level falls about 4% per unit of the share of its Monday requests that we won, so about 2% at the biggest dealer after we took 30% of its Monday. Trust is larger: about +1% per order delivered on time. The day and dealer parts of the level absorb the competitor's answer.
+No, on evidence. We measured it: a dealer's level falls about 4% per unit of the share of its Monday requests that we won, so about 2% at the biggest dealer after we took 30% of its Monday. Trust is larger: about +1% per order delivered on time. The day part of the level absorbs the competitor's answer. (A dealer part was in the level until the audit: on 64 unseen weeks it foretold no answer, so it went.)
 
 ---
 
@@ -106,13 +106,13 @@ Then we lose a little. In the replay a week without a war still gains €66 over
 **Say.**
 1. "The typical fee of a trade-in, one car out and one back, is half of two single typical fees. So the trip home is half of what a driver is paid for."
 2. "A new car waits up to 30 minutes for a second car whose pickup is within 30 km of its delivery; the two go as one gig at 0.70 times both typical fees."
-3. "28% of our cars now travel that way, at 0.81 times the typical fee and 98.8% on time."
+3. "On 32 fresh weeks 27% of our cars travel that way, at 0.80 times the typical fee and 99% on time."
 
 **Q: Why 0.70 and 0.85, 30 km and 5 hours?**
 From randomised tests inside the same worlds. Pairs with at most 4 hours of driving at 0.70 × were booked 85% of the time, in a median 4 minutes; their fees came to 0.89 × typical against 1.21 × for the same cars as two gigs. Pairs over 6 hours were booked 29% of the time. When one of the two cars already sits in the app, 0.70 × delivered 46% as a pair and 0.85 × delivered 76%, at the same cost in the end. 30 km is the radius in which the app notifies a driver of a new gig.
 
 **Q: Why not pair more?**
-We tried: a wait of 60 minutes and pairs up to 6 hours gave +€284 a week (se 304) for −0.57 point of on-time on 24 weeks. That buys volume the way a lower on-time aim does, so we left it.
+We tried: a wait of 60 minutes and pairs up to 6 hours gave +€284 a week (se 304) for −0.57 point of on-time on 24 weeks. That buys volume the way a lower on-time aim does, so we left it. The pairs as they are earn €1,444 a week on weeks nobody had played (the audit took them out to see).
 
 ---
 
@@ -131,43 +131,58 @@ The reader takes 13 microseconds a note, needs no network inside a 4.5-second de
 
 ---
 
-## Slide 9 — Robust
+## Slide 9 — We audited ourselves
 
 **Say.**
-1. "All 32 of our practice weeks met the delivery minimum; the kit starter met it in none of the 16 we played it on. `[UPDATE: and on 32 fresh weeks that the code had never seen: …]`"
-2. "One week moves by more than a point of on-time between two plays of the same policy, so we decided late changes on 24 weeks with several samples each, and moved every knob both ways: none was worth changing."
-3. "A restart replays the world's log and our journal through the same code: 12 of 12 rebuilt desks were identical and the week ended at the same margin to the cent; and the test final ran from a cloud machine with every request answered."
+1. "On Saturday evening we asked whether our system was fitted to its own weeks. One agent with no stake in any part counted every number, 129 of them, and took each part out in turn on 32 weeks nobody had played."
+2. "Four things did not hold: the on-time model's level was off by a factor of two and a learner patched it every week, slowly, so every Monday was priced as twice as risky; one sign had the wrong sign; and two parts of the dealer's level predicted nothing."
+3. "We deleted all four and set the level once where the unseen weeks put it. On 32 fresh weeks it earns €766 a week more at the same on-time, and Monday wins 11 more orders."
 
-**Q: Why should we believe your practice numbers?**
-Believe the ones the code never saw. The 8 tune weeks are the ones we fitted on: €17,846 a week. The 16 wide weeks were clean until Saturday afternoon, when we used them to design the surprise days. The 8 hold weeks were only played to confirm, and one of them was opened to study the flu. So the clean evidence is three things: the 32 fresh weeks `[UPDATE]`; the secret weeks of the ranking rounds, where we went from 0.96 to 1.07 to 1.28 times House best in six hours; and the test final, 2nd of 55. The limits: single weeks are noisy (±1.3 points of on-time), and the on-time aim was chosen after looking at unseen weeks.
+**Q: Is that not just tuning on more weeks?**
+It is the opposite of a search. The +0.88 is a measurement, the free intercept of the model on weeks it never saw, and it comes out the same on three disjoint sets (+0.86, +0.90, +0.87); it was chosen before its neighbours were played. The deletions were decided on `halal-65..96`, confirmed once on `halal-97..128`, and then the frozen system was played once on `halal-129..160`, weeks no system of ours had touched: €14,313 against €13,547 for the old one, paired per week, se €221, 24 of 32 weeks up. The aim went from 97% to 97.5% on `halal-65..96` and was confirmed on `97..128`.
 
-**Q: What exactly happens when the process dies in the final?**
-A shell loop starts it again within a second. The new desk reads the world's whole log and its snapshot, replays them with the journal of what we sent, and then quotes every request that is still open and posts every car that has no gig. While it is down, requests go to the competitor and booked drivers keep driving. The beliefs about the war day, the outage and the flu are rebuilt too, because they are functions of the log. On another machine, without the journal, every order and gig is still recovered, but the dealer side starts again from its prior: that cost 2 to 4% of a week in two early measurements. The test earned its keep: on Saturday it caught the fleet remembering something that the journal did not hold.
+**Q: Why not the even smaller system the other agent proposed?**
+It deleted 64 numbers, including the 60 of the place table, and earned the same as the old system (−€76 a week, se 184). Ours earns more on every untouched set and can be explained in one line: the level is where the unseen weeks put it. That agent's findings are on the slide: the slow Monday is mostly the world (dealers who do not trust us yet pay about 12% less on Monday), and the deleted learner was insurance against a much harder world (a model one logit too easy costs 2.8 points of on-time without it, 1.0 with it). We took the constant and accept that risk.
 
 ---
 
-## Slide 10 — What did not work, what would break it
+## Slide 10 — Robust
+
+**Say.**
+1. "Every week the frozen system has played met the delivery minimum: 216 plays of 128 weeks, the worst at 92.8%. The kit starter met it in none of the 16 weeks we played it on."
+2. "One week moves by more than a point of on-time between two plays of the same policy, so we decided late changes on 24 to 32 weeks, paired per week, with several samples each."
+3. "A restart replays the world's log and our journal through the same code: 8 of 8 rebuilt desks were identical and the week ended at the same margin to the cent; and both test finals ran from a cloud machine with every request answered."
+
+**Q: Why should we believe your practice numbers?**
+Believe the ones the code never saw. The 8 tune weeks are the ones we fitted on: €17,846 a week with ideas 1–14, which is 8 rich worlds. The 16 wide weeks were clean until Saturday afternoon, when we used them to design the surprise days. The 8 hold weeks were only played to confirm, and one of them was opened to study the flu. So the clean evidence is three things: the 32 fresh weeks `halal-129..160`, played once after the freeze, €14,313 a week, all ranked; the secret weeks of the ranking rounds, where we went from 0.96 to 1.07 to 1.28 to 1.29 times House best in nine hours; and the test finals, 2nd of 55 joined on Thursday and 18th of 75 over a full week. The limits: single weeks are noisy (±1.3 points of on-time), and the on-time aim was chosen after looking at unseen weeks.
+
+**Q: What exactly happens when the process dies in the final?**
+A shell loop starts it again within a second. The new desk reads the world's whole log and its snapshot, replays them with the journal of what we sent, and then quotes every request that is still open and posts every car that has no gig. While it is down, requests go to the competitor and booked drivers keep driving. The beliefs about the war day, the outage and the flu are rebuilt too, because they are functions of the log. On another machine, without the journal, every order and gig is still recovered, but the dealer side starts again from its prior: that cost 2 to 4% of a week in two early measurements. The test earned its keep: on Saturday it caught the fleet remembering something that the journal did not hold. The audit then deleted that memory: the fleet's state is now the books alone.
+
+---
+
+## Slide 11 — What did not work, what would break it
 
 **Say.**
 1. "The most instructive failure: keeping a car out of the app until the morning of its last day, to avoid weak promises. In a randomised test the kept cars were late 11% of the time against 7%: a weak promise is far better than none."
 2. "Also not working: a better-calibrated risk model, a finer fee grid, a crisis price after a bad night, and direct offers, 85 accepted of 75,000."
-3. "What would break us: a week that is not the rules' week, a flu on a Friday in the capital region, which is still our hardest week at 93 to 96% on time, and a note in words we have not seen."
+3. "What would break us: a week whose drivers are much scarcer than in any of ours, a week that is not the rules' week, a flu on a Friday in the capital region, which is still our hardest week at 93 to 96% on time, and a note in words we have not seen."
 
 **Q: What happens in a world unlike the practice ones?**
-The dealer side adapts: its world and day parts are learned from the first answers, and it already handled levels from 1.20 to 1.49 times the list price. The driver side adapts less. Its weights come from practice weeks; during a week it learns one intercept, limited to one logit either way, and which day the flu is. The price of the delivery minimum cuts volume once late cars appear, but late cars show two days after we accept them. Our aim is 97% so that a bad week still ends above 90%: over 32 practice weeks the average week ended 0.9 points under the aim and the worst 6.3 points under it, in an earlier version.
+The dealer side adapts: its world and day parts are learned from the first answers, and it already handled levels from 1.20 to 1.49 times the list price. The driver side adapts less. Its weights come from practice weeks and its level from 64 weeks it never saw; during a week it learns only which day the flu is. The price of the delivery minimum cuts volume once late cars appear, but late cars show two days after we accept them. That is the risk we chose: in a world where our model is one logit too easy, on time falls 2.8 points (1.0 with the learner we deleted). Our aim is 97.5% so that a bad week still ends above 90%: on the 32 fresh weeks the mean week ended 1.2 points under the aim and the worst 4.7 points under it, at 92.8%.
 
 **Q: What would you do with one more day?**
-Two things we measured and did not finish. A booking made the day before a car's last day is given back 18% of the time, against 5% for one made that morning; holding the car back was the wrong answer, and a better one may exist. And about 30% of the bookings held for the second Monday come back at its midnight in every week; we do not handle that, and those orders are late 3 to 5% of the time. We would also test the model without its two unsupported weights on 24 weeks.
+Two things we measured and did not finish. A booking made the day before a car's last day is given back 18% of the time, against 5% for one made that morning; holding the car back was the wrong answer, and a better one may exist. And about 30% of the bookings held for the second Monday come back at its midnight in every week; we do not handle that, and those orders are late 3 to 5% of the time. We would also play the frozen system without its three open weights (`waited`, `short`, `trade_in`).
 
 ---
 
 ## Questions that can come on any slide
 
 **How much of this was written by agents?**
-As far as the repository shows, all of the code, the experiments and the first draft of these slides. 124 of the 158 commits carry a `Co-Authored-By: Claude` line; the others are merges and a reader's pass, also made by agents `[UPDATE: recount]`. The work ran from Saturday 02:25 as parallel research streams in separate git branches (dealer side, driver side, notes, direct offers and pairs, the live loop, later the surprise days, the flu, and a reader's pass over the code) with one coordinating agent that merged them. The rules the agents worked under are in `RESEARCH.md`: few parts, each with a reason in one sentence; every baked-in constant regenerated by a script from saved weeks; fit on 8 seeds and never on the hold seeds; for each idea the triple idea, why, effect on the same seeds; failed ideas logged too. `[FILL IN, truthfully: what the two of you did yourselves — the brief, the choice of ideas, the checks you made on Saturday and Sunday, what you changed.]` Do not claim more than that. What you can claim: every number on the slides is reproduced by a command in `OPEN_NUMBERS.md`, and you have run them.
+As far as the repository shows, all of the code, the experiments and the first draft of these slides. 152 of the 186 commits on `main` (Saturday 23:05) carry a `Co-Authored-By: Claude` line; the 34 others are merges, two work-in-progress commits and a reader's pass, also made by agents. The work ran from Saturday 02:25 as parallel research streams in separate git branches (dealer side, driver side, notes, direct offers and pairs, the live loop, later the surprise days, the flu, a reader's pass over the code, and at night a skeptic's audit and a rival simplification) with one coordinating agent that merged them. The rules the agents worked under are in `RESEARCH.md`: few parts, each with a reason in one sentence; every baked-in constant regenerated by a script from saved weeks; fit on 8 seeds and never on the hold seeds; for each idea the triple idea, why, effect on the same seeds; failed ideas logged too. `[FILL IN, truthfully: what the two of you did yourselves — the brief, the choice of ideas, the checks you made on Saturday and Sunday, what you changed.]` Do not claim more than that. What you can claim: every number on the slides is reproduced by a command in `OPEN_NUMBERS.md`, and you have run them.
 
 **Did the agents see the hold weeks?**
-No constant was fitted on them, but they were not locked away either. They were played about twenty times to confirm changes, and three decisions used what they showed: the on-time aim of 96% (one hold week had ended at 89.7%), dropping a rule for the flu night that helped on tune and wide weeks and did nothing on hold, and confirming the flu sign with three samples a side. The aim of 97% was chosen on tune and wide weeks. One hold week, `halal-09`, was opened on Saturday afternoon to find out why it ended near 90%: that is how the flu night was found, and that week is named as the declared test wherever it is counted. The dealers of the wide worlds were bisected; those of the hold worlds never were.
+No constant was fitted on them, but they were not locked away either. They were played about twenty times to confirm changes, and three decisions used what they showed: the on-time aim of 96% (one hold week had ended at 89.7%), dropping a rule for the flu night that helped on tune and wide weeks and did nothing on hold, and confirming the flu sign with three samples a side. The aim of 97% was chosen on tune and wide weeks. One hold week, `halal-09`, was opened on Saturday afternoon to find out why it ended near 90%: that is how the flu night was found, and that week is named as the declared test wherever it is counted. The dealers of the wide worlds were bisected; those of the hold worlds never were. The audit of Saturday night played the hold weeks four times a side to confirm, and decided on weeks that nobody had played at all (`halal-65..96`).
 
 **Why should a dispatcher in real life care about any of this?**
 Four things carry over without the simulator. A fee that rises teaches drivers to wait. A car's cost is mostly its risk of finding no driver in time, not its fee, and that risk depends on who lives near the pickup. The return trip is half of a driver's cost, so a car that shares a gig with one that starts where it ends costs about a sixth less in fees. And a bad day announces itself: in the first hour, drivers give back what they held for it.
@@ -187,6 +202,8 @@ Four things carry over without the simulator. A fee that rises teaches drivers t
 | price of the delivery minimum | A cost added to every risky car. It is near zero while we expect far fewer late orders than 3%, and steep near 3%. |
 | queue | Our orders that are in the app without a driver. Drivers choose among our own gigs, so a new gig competes with them. |
 | tune / hold / wide | Practice seeds 01–08 (fitted on), 09–16 (only to confirm), 17–32 (unseen until Saturday afternoon). |
+| untouched / fresh | Seeds 65–128: first played by the audit (65–96 to decide, 97–128 to confirm). Seeds 33–64 and 129–160: each played once, after a freeze, as the record of a frozen system. |
+| intercept | The constant of the on-time model: how likely a car is on time before any of its own signs. Set once, where 64 unseen weeks put it. |
 | stride | In practice only: the clock moves 14 minutes a turn while requests arrive. Another stride is another sample of the same policy. |
 | bisect | Halve a price bracket with each replay of the same day, until the dealer's threshold is known. |
 | se | Standard error: how far the measured difference could be from the true one by chance. A gain smaller than its se is not shown. |
