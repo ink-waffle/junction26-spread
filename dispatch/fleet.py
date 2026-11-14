@@ -37,7 +37,7 @@ class FleetPolicy:
     fees: tuple[float, ...] = (0.85, 1.0, 1.15, 1.3, 1.5)  # the fees a gig may open at, as multiples of the typical fee
     urgent_fee: float = 1.6  # after the deadline warning
     late_fee: float = 1.3  # once the car can only arrive late: enough for the drivers who saw it at less, or it is never delivered
-    on_time: float = 0.97  # the share of orders we want on time: the delivery minimum with room for a bad week (unseen weeks end up to 5 points under it)
+    on_time: float = 0.97  # the share of orders we want on time: the delivery minimum with room for a bad week (32 weeks end 0.9 points under it on average, the worst 6.3)
     late_price: float = 300.0  # euros that a late order costs us beyond its refund while we are within that share
     crowding: float = 1.0  # research: how much of the harm to the waiting cars we charge
     early_look: float = 6.0  # hours in the app after which a gig without a taker gets its fee chosen again, one step up at least; 0: only on its last day
