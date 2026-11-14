@@ -19,7 +19,7 @@ STEPS = [1 + i / 100 for i in range(-20, 151)]  # the prices we consider, as mul
 
 @dataclass
 class MarketPolicy:
-    reserve: float = 0.3  # the volume knob: what a driver's booking is worth elsewhere, as a share of the order's cost
+    reserve: float = 0.0  # the volume knob: what a driver's booking is worth elsewhere, as a share of the order's cost
     slope: float = prior.SLOPE  # how fast a dealer's yes fades: logits per unit of log price (10% dearer is about one logit)
     speed: float = prior.SPEED  # log price a dealer gives up for each faster option we do not offer
     trust: float = prior.TRUST  # log price a dealer adds for each order we delivered to it on time
