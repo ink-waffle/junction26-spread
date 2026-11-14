@@ -18,9 +18,9 @@ NEAR_KM = 30  # the app notifies drivers who live this close to the pickup (RULE
 # "fee" weighs a gig's fee against the fees of our other open gigs, "level" the fee that our open gigs pay together: drivers choose among our gigs.
 # "supply" is the week's drivers near a place; "pay" the typical fee as a share of the list price: it has a noise of its own, and our fee is a multiple of it.
 # "flu" is how much likelier than one working day in five the car's last day is the day of the week's flu (48 weeks; it also moved "one" by 0.05).
-# "one" holds what a sign for the week's first hundred bookings added after them (0.25 x log 101): weeks the fit never saw gave that sign the other direction (SKEPTIC.md).
+# "one" is the level that 64 weeks the fit never saw gave the model (SKEPTIC.md): as fitted it said 10% late where 5% were, on a week's first day most of all.
 ON_TIME = {
-    "one": -4.60, "fee": 3.96, "level": 0.88, "slack": 1.13, "short": -1.85, "long": -0.44, "trade_in": -3.35, "backlog": -0.58, "waited": -0.75,
+    "one": -3.72, "fee": 3.96, "level": 0.88, "slack": 1.13, "short": -1.85, "long": -0.44, "trade_in": -3.35, "backlog": -0.58, "waited": -0.75,
     "supply_pickup": 0.75, "supply_delivery": 0.71, "private_delivery": -0.75, "premium": -0.82, "pay": 1.97,
     "flu": -2.6,
 }
@@ -39,7 +39,7 @@ class FleetPolicy:
     fees: tuple[float, ...] = (0.85, 1.0, 1.15, 1.3, 1.5)  # the fees a gig may open at, as multiples of the typical fee
     urgent_fee: float = 1.6  # after the deadline warning
     late_fee: float = 1.3  # once the car can only arrive late: enough for the drivers who saw it at less, or it is never delivered
-    on_time: float = 0.97  # the on-time share we aim at: the 90% minimum with room for a bad week (32 weeks end 0.9 points under the aim, the worst 6.3)
+    on_time: float = 0.975  # the on-time share we aim at: the 90% minimum with room for a bad week (weeks end about a point under the aim)
     late_price: float = 300.0  # euros that a late order costs us beyond its refund while we are within that share
     early_look: float = 6.0  # hours in the app after which a gig nobody took has its fee chosen again, a step up at least; 0: only on its last day
 
@@ -260,14 +260,14 @@ class Fleet:
 
     def learned(self, waiting: dict[str, float]) -> float:
         """The intercept that best explains this week's own orders against what the model said when we posted each: this world's drivers,
-        as far as they have shown themselves. A week moves the model by one logit at most."""
+        as far as they have shown themselves: a world one logit harder than the model, unlearned, costs 2.8 points of on-time (SIMPLE.md)."""
         seen = [(logit, outcome) for order_id, logit in self.forecast.items() for outcome in [self.outcome(order_id, waiting)] if outcome is not None]
         shift = 0.0
         for _ in range(4):  # Newton's method on one number, from a prior that the world is the model's
             chances = [1 / (1 + math.exp(-logit - shift)) for logit, _ in seen]
             surprise = sum(outcome - chance for (_, outcome), chance in zip(seen, chances)) - DOUBT * shift
             shift += surprise / (sum(chance * (1 - chance) for chance in chances) + DOUBT)
-        return max(-1.0, min(1.0, shift))
+        return shift
 
     def outcome(self, order_id: str, waiting: dict[str, float]) -> Optional[float]:
         """How an order of the week stands, as a chance of on time: late 0, delivered 1 unless it paid a refund, with a driver almost 1,
