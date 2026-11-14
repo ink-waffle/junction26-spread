@@ -133,6 +133,9 @@ class Desk:
                 print(f"No journal from here on: {error}", file=sys.stderr, flush=True)
                 self.journal = None
         for action, result in zip(actions, results):
+            if action["type"] == "post" and result["ok"]:
+                self.fleet.gig_posted(action)  # before the books take the batch: the fleet's memory is of the minute it planned these gigs
+        for action, result in zip(actions, results):
             if action["type"] == "post":
                 legs = [(s["orderId"], s["leg"]) for s in action["stops"] if s["kind"] == "pickup"]
                 self.pending.difference_update(legs)
