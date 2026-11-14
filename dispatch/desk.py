@@ -14,20 +14,23 @@ from .atlas import Atlas, clock
 from .books import Books
 from .fleet import Fleet, FleetPolicy
 from .market import Market, MarketPolicy
+from .pairs import Pairs, PairsPolicy
 
 
 @dataclass
 class Policy:
     market: MarketPolicy = field(default_factory=MarketPolicy)
     fleet: FleetPolicy = field(default_factory=FleetPolicy)
+    pairs: PairsPolicy = field(default_factory=PairsPolicy)
 
     @staticmethod
     def of(overrides: Optional[dict] = None, seed: str = "") -> "Policy":
-        """The default policy with `{"market": {...}, "fleet": {...}}` overrides, for experiments."""
+        """The default policy with `{"market": {...}, "fleet": {...}, "pairs": {...}}` overrides, for experiments."""
         overrides = overrides or {}
         def tuples(part: dict) -> dict:
             return {k: tuple(v) if isinstance(v, list) else v for k, v in part.items()}
-        return Policy(MarketPolicy(seed=seed, **tuples(overrides.get("market", {}))), FleetPolicy(seed=seed, **tuples(overrides.get("fleet", {}))))
+        return Policy(MarketPolicy(seed=seed, **tuples(overrides.get("market", {}))), FleetPolicy(seed=seed, **tuples(overrides.get("fleet", {}))),
+                      PairsPolicy(**overrides.get("pairs", {})))
 
 
 class Desk:
@@ -37,6 +40,8 @@ class Desk:
         self.market = Market(policy.market, self.books, self.fleet)
         self.outbox: list[Action] = []
         self.pending: set[tuple[str, int]] = set()  # legs whose post is in the outbox or on its way
+        self.pairs = Pairs(policy.pairs, self.books, self.fleet, atlas, self.pending)
+        self.fleet.held = self.pairs.holds
         self.journal, self.verbose = journal, verbose
         self.careful = False  # the final sets it: an event that the desk cannot read is logged and passed over, not fatal
 
@@ -49,7 +54,7 @@ class Desk:
 
     def alarm(self) -> int:
         """The minute the desk next wants a turn at when no event comes first: both loops give it one then. A plan that waits says so here."""
-        return 10 ** 9
+        return self.pairs.alarm()
 
     def take(self) -> list[Action]:
         """Empties the outbox, quotes first: a dealer waits 15 minutes for a price, and no longer.
@@ -87,6 +92,9 @@ class Desk:
     def reconcile(self) -> None:
         """Makes each touched order's gigs match the plan: post what is missing, reprice what is off."""
         books = self.books
+        for action in self.pairs.match():
+            self.pending.update((stop["orderId"], stop["leg"]) for stop in action.get("stops", []))
+            self.outbox.append(action)
         dirty, books.dirty = books.dirty, set()
         for order_id in sorted(dirty):
             state = books.orders.get(order_id)
@@ -100,16 +108,19 @@ class Desk:
                     books.gig_gone(gig.id)
                 open_gigs = []
             for gig in open_gigs:
+                if gig.shared:  # a two-car gig keeps its fee until the pairs take it out of the app
+                    continue
                 wanted = self.fleet.schedule(state, [leg for owner, leg in gig.legs if owner == order_id])
                 if [step["feeCents"] for step in wanted] != [step["feeCents"] for step in gig.schedule]:
                     gig.schedule = wanted
                     self.outbox.append({"type": "reprice", "gigId": gig.id, "schedule": wanted})
             legs = [leg for leg in state.unposted() if (order_id, leg) not in self.pending]
-            if legs and state.refusals < 4:
+            if legs and state.refusals < 4 and not self.pairs.holds(state):
                 for plan in self.fleet.plan(state, legs):
                     self.pending.update((order_id, leg) for leg in plan.legs)
                     self.outbox.append({"type": "post", "stops": plan.stops, "audience": plan.audience, "schedule": plan.schedule})
-        books.dirty -= dirty
+        # an order that still needs a gig from us stays dirty: it waits for a partner, or its two-car gig went after its turn
+        books.dirty = {o for o in books.dirty | dirty if o in books.orders and books.orders[o].refusals < 4 and any((o, leg) not in self.pending for leg in books.orders[o].unposted())}
 
     def sent(self, actions: list[Action], results: list[ActionResult]) -> None:
         """Reads the world's answer to each action, and keeps both in the journal: the world's log never repeats them."""
@@ -130,7 +141,10 @@ class Desk:
                     continue
                 for order_id, _ in legs:
                     state = books.orders.get(order_id)
-                    if state and "already in a live gig" not in result["reason"]:  # that one a driver booked before we could replace it: its booking puts it back in the books
+                    if state and len({owner for owner, _ in legs}) > 1:  # a refused two-car gig sends its cars alone, and says nothing of their windows
+                        state.tried = True
+                        books.dirty.add(order_id)
+                    elif state and "already in a live gig" not in result["reason"]:  # that one a driver booked before we could replace it: its booking puts it back in the books
                         state.refusals += 1
                         state.late = True  # the usual reason is a window that has ended: post without windows
                         books.dirty.add(order_id)

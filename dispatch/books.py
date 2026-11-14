@@ -27,6 +27,11 @@ class GigState:
     def legs(self) -> list[tuple[str, int]]:
         return [(s["orderId"], s["leg"]) for s in self.stops if s["kind"] == "pickup"]
 
+    @property
+    def shared(self) -> bool:
+        """The gig carries cars of more than one order."""
+        return len({s["orderId"] for s in self.stops}) > 1
+
 
 @dataclass
 class OrderState:
@@ -41,6 +46,7 @@ class OrderState:
     alarm_at: int = 0  # the last minute the order lost its driver or got its deadline warning
     late: bool = False  # a gig expired or a window ended: the car can only go late, without windows
     changed: bool = False  # the dealer changed the order after we posted it
+    tried: bool = False  # the world has heard of a gig with this order: it does not wait for a partner again
     refusals: int = 0
 
     @property
@@ -88,6 +94,7 @@ class Books:
         for order_id, leg in gig.legs:
             if order_id in self.orders:
                 self.orders[order_id].gig_of[leg] = gig_id
+                self.orders[order_id].tried = True
         return gig
 
     def gig_gone(self, gig_id: str) -> None:
