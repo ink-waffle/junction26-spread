@@ -44,7 +44,7 @@ class OrderState:
     changed: bool = False  # the dealer changed the order after we posted it
     tried: bool = False  # the world has heard of a gig with this order: it does not wait for a partner again
     paired: bool = False  # the order has been in a two-car gig: it is not paired a second time
-    refusals: int = 0
+    refusals: int = 0  # posts of this order that the world refused: after the first it goes without windows, after four the desk stops
 
     @property
     def id(self) -> str:
@@ -59,6 +59,7 @@ class OrderState:
 
 @dataclass
 class DriverState:
+    """A driver of the week's roster. The books learn nothing more of a driver: the fleet counts who lives where."""
     profile: DriverProfile
 
 
@@ -75,12 +76,23 @@ class Books:
         self.gigs: dict[str, GigState] = {}
         self.drivers: dict[str, DriverState] = {d["id"]: DriverState(d) for d in roster}
         self.trust: dict[str, int] = defaultdict(int)  # dealer id -> its trust count (RULES.md, level 8)
-        self.ledger: dict[str, int] = defaultdict(int)
-        self.refunded: set[str] = set()
-        self.snow: list[tuple[int, int, set[str]]] = []
+        self.ledger: dict[str, int] = defaultdict(int)  # kind of ledger line -> cents so far
+        self.refunded: set[str] = set()  # orders that paid a late refund or were not delivered
+        self.snow: list[tuple[int, int, set[str]]] = []  # forecasts: from, to, the places
         self.dirty: set[str] = set()  # orders whose gigs may no longer match the plan
 
-    def gig_posted(self, action: PostAction, gig_id: str, posted_at: Optional[int] = None) -> GigState:
+    def observe(self, event: DeskEvent) -> bool:
+        """Folds one event in. False for a repeat: a stream that reconnects, or a server that restarted, can send one twice."""
+        if event["seq"] <= self.seq:
+            return False
+        self.seq, self.now = event["seq"], max(self.now, event["at"])
+        handler = getattr(self, f"_{event['kind']}", None)
+        if handler:
+            handler(event)
+        return True
+
+    def gig_posted(self, action: PostAction, gig_id: str, posted_at: Optional[int] = None) -> None:
+        """The world took a gig of ours: it carries its legs from now on. No event says so; the desk does, from the world's answer."""
         gig = GigState(gig_id, action["stops"], action["schedule"], self.now if posted_at is None else posted_at)
         self.gigs[gig_id] = gig
         for order_id, leg in gig.legs:
@@ -88,7 +100,6 @@ class Books:
                 self.orders[order_id].gig_of[leg] = gig_id
                 self.orders[order_id].tried = True
                 self.orders[order_id].paired |= gig.shared
-        return gig
 
     def gig_gone(self, gig_id: str) -> None:
         """A gig left the app without a driver: its cars need a new gig."""
@@ -102,15 +113,10 @@ class Books:
                 del state.gig_of[leg]
                 self.dirty.add(order_id)
 
-    def observe(self, event: DeskEvent) -> bool:
-        """Folds one event in. False for a repeat: a stream that reconnects, or a server that restarted, can send one twice."""
-        if event["seq"] <= self.seq:
-            return False
-        self.seq, self.now = event["seq"], max(self.now, event["at"])
-        handler = getattr(self, f"_{event['kind']}", None)
-        if handler:
-            handler(event)
-        return True
+    def margin(self) -> int:
+        return sum(self.ledger.values())
+
+    # One handler per kind of event, named after it.
 
     def _price_request(self, e) -> None:
         self.requests[e["request"]["id"]] = e["request"]
@@ -214,7 +220,7 @@ class Books:
         self.ledger[line["kind"]] += line["cents"]
         order_id = line.get("orderId")
         dealer = self.requests[order_id]["dealerId"] if order_id in self.requests else None
-        if line["kind"] in ("late_refund", "undelivered_penalty") and dealer and order_id not in self.refunded:
+        if line["kind"] in ("late_refund", "undelivered_penalty") and dealer and order_id not in self.refunded:  # halves the dealer's count; a late order's revenue had raised it by one
             self.refunded.add(order_id)
             self.trust[dealer] = (self.trust[dealer] - 1) // 2 if line["kind"] == "late_refund" else self.trust[dealer] // 2
         elif line["kind"] == "revenue" and dealer:
@@ -223,6 +229,3 @@ class Books:
     def _leg_done(self, order_id: str, leg: int) -> bool:
         state = self.orders.get(order_id)
         return state is None or state.order["deliveredAt"][leg] is not None or leg not in state.gig_of
-
-    def margin(self) -> int:
-        return sum(self.ledger.values())
