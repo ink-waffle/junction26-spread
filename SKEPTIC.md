@@ -164,20 +164,25 @@ A point of on-time costs EUR 512 of margin through the target (`skeptic-t965`: +
 | Without | weeks × samples | margin (se) | on time, points (se) | margin at equal on time (se) | late orders a week (se) | orders | worst sample | samples < 93.5% | not ranked |
 |---|---|---|---|---|---|---|---|---|---|
 | **The dealer side** | | | | | | | | | |
-| the place table of the prior (60 numbers, all zero) (`places0`) | 32×1 | -122 (259) | +0.09 (0.12) | -76 (242) | -0.8 (0.6) | -7 | 94.5% | 0 | 0 |
-| the lane part of the level (`nolane`) | 32×1 | -385 (238) | -0.01 (0.11) | -389 (238) | +0.1 (0.5) | +1 | 94.1% | 0 | 0 |
+| the place table of the prior (60 numbers, all zero) (`places0`) | 32×2 | +146 (222) | +0.11 (0.11) | +202 (223) | -0.8 (0.5) | -6 | 94.5% | 0 | 0 |
+| the lane part of the level (`nolane`) | 32×2 | -65 (145) | -0.00 (0.10) | -66 (156) | +0.2 (0.4) | +4 | 93.9% | 0 | 0 |
 | the pickup-today part (`nofromtoday`) | 32×1 | -28 (209) | +0.17 (0.15) | +58 (234) | -0.7 (0.6) | +1 | 94.3% | 0 | 0 |
 | the dealer part (`nodealer`) | 32×1 | -98 (166) | +0.23 (0.11) | +20 (184) | -1.0 (0.5) | -1 | 94.1% | 0 | 0 |
-| the weighting of the week's events (idea 13) (`nosurprises`) | 32×1 | -295 (201) | +0.07 (0.14) | -261 (215) | +0.1 (0.6) | +4 | 93.6% | 0 | 0 |
-| quoting every option (one option only) (`oneoption`) | 32×1 | -369 (263) | +0.19 (0.13) | -272 (262) | -0.8 (0.6) | +0 | 94.3% | 0 | 0 |
+| the weighting of the week's events (idea 13) (`nosurprises`) | 32×2 | -259 (149) | +0.08 (0.11) | -220 (163) | -0.1 (0.4) | +1 | 93.6% | 0 | 0 |
+| quoting every option (one option only) (`oneoption`) | 32×2 | -271 (178) | +0.08 (0.10) | -231 (184) | -0.2 (0.4) | +1 | 93.1% | 1 | 0 |
 | **The driver side: the on-time model** | | | | | | | | | |
 | the pickup-side signs (the model before idea 12, target still 97%) (`pre12`) | 32×1 | -1,702 (298) | -0.31 (0.23) | -1,862 (281) | -2.3 (0.9) | -83 | 93.6% | 0 | 0 |
 | idea 12 whole (the model before it, target 96%) (`pre12t96`) | 32×1 | -592 (249) | -1.58 (0.22) | -1,402 (284) | +5.2 (1.0) | -26 | 92.6% | 7 | 0 |
-| the flu sign (idea 14) (`noflu`) | 32×1 | +220 (253) | -0.19 (0.20) | +124 (287) | +1.0 (0.9) | +5 | 92.7% | 1 | 0 |
+| the flu sign (idea 14) (`noflu`) | 32×2 | +432 (205) | -0.21 (0.21) | +323 (261) | +1.2 (0.9) | +7 | 90.9% | 3 | 0 |
 | `known` (the week's first hundred bookings) (`noknown`) | 32×1 | +200 (232) | +0.20 (0.15) | +300 (241) | -0.6 (0.7) | +6 | 94.1% | 0 | 0 |
-| `waited` (an hour in the app) (`nowaited`) | 32×1 | +405 (274) | -0.30 (0.15) | +249 (282) | +2.1 (0.7) | +20 | 93.0% | 1 | 0 |
+| `waited` (an hour in the app) (`nowaited`) | 32×2 | +601 (187) | -0.29 (0.11) | +451 (208) | +2.1 (0.5) | +22 | 93.0% | 1 | 0 |
 | `known` and `waited` (`noknownwaited`) | 32×1 | +410 (269) | +0.09 (0.18) | +454 (279) | +0.2 (0.8) | +16 | 94.5% | 0 | 0 |
 | the two supply signs (drivers near pickup and delivery) (`nosupply`) | 32×1 | -1,607 (248) | -1.07 (0.25) | -2,155 (281) | +1.1 (1.0) | -67 | 91.7% | 4 | 0 |
+| `pay` (typical fee as a share of list) (`nopay`) | 32×1 | -150 (220) | -0.03 (0.15) | -163 (233) | +0.4 (0.6) | +5 | 94.6% | 0 | 0 |
+| `premium` (`nopremium`) | 32×1 | -322 (232) | +0.05 (0.13) | -294 (252) | -0.3 (0.6) | -1 | 93.6% | 0 | 0 |
+| `private_delivery` (`noprivdel`) | 32×1 | +72 (196) | +0.24 (0.14) | +193 (210) | -1.0 (0.6) | -2 | 94.6% | 0 | 0 |
+| `short` (lanes under 40 km) (`noshort`) | 32×1 | +365 (225) | -0.09 (0.17) | +317 (279) | +1.7 (0.7) | +33 | 93.4% | 1 | 0 |
+| `trade_in` (`notradein`) | 32×1 | +26 (194) | -0.03 (0.13) | +10 (205) | -0.0 (0.6) | -4 | 94.0% | 0 | 0 |
 | `long` (lane length) (`nolong`) | 32×1 | -3,133 (319) | -1.78 (0.29) | -4,046 (390) | +1.4 (0.8) | -97 | 89.1% | 8 | 1 |
 | the week's learned intercept (`noworld`) | 32×1 | -505 (228) | +1.16 (0.15) | +90 (243) | -6.1 (0.7) | -48 | 96.0% | 0 | 0 |
 | the harm to the cars that wait (`noharm`) | 32×1 | -2,967 (403) | -0.32 (0.20) | -3,131 (436) | +4.2 (0.9) | +73 | 92.8% | 1 | 0 |
@@ -212,12 +217,12 @@ A point of on-time costs EUR 512 of margin through the target (`skeptic-t965`: +
 | **B at a target of 97.5%: the head of the branch** (af4fd92 plays the same weeks to the cent) (`B975`) | 32×2 | +679 (206) | +0.52 (0.11) | +946 (215) | -1.6 (0.5) | +18 | 94.8% | 0 | 0 |
 <!-- /ABLATIONS -->
 
-**How to read it** (numbers of the first sample; the table above is regenerated as samples come in, and since 20:26 a week takes ten times as long to play as before 20:00, so most rows will stay at one sample).
+**How to read it** (the numbers are the table's: rows marked × 1 have one sample, the close calls two, the candidates two to four).
 
 - **Load-bearing, each beyond 2.5 standard errors on weeks it never saw:** the harm to the cars that wait (−€2,967), the pickup-side signs of idea 12 (−€1,702 at the same target; against the whole of idea 12 the old system is −€592 *and* −1.6 points of on-time, with 7 of 32 weeks under 93.5%), two-car gigs (−€1,444, though they cost 0.65 point of on-time), the six-hour look (−€1,394), the note grammar against the kit's keyword reader (−€998), pairs with a car that sits (−€672), the look when the last day begins (−€403, 2.2 se).
 - **The barrier is what keeps the floor, not what earns the margin.** A flat €300 a late order earns €1,498 *more* and loses a point of on-time, with one week at 90.3% and four under 93.5%; a flat €100 leaves 24 of 32 weeks unranked. No flat price is safe in every week; the barrier finds each week's price.
-- **Parts that trade on-time for margin, as the target does:** the week's learned intercept (without it −€505 and +1.16 points: the model stays as cautious all week as it is on Monday), the flu sign (without it +€220, −0.19 point), `waited` (+€405, −0.30 point). At the price the target sets on these weeks (€512 for a point of on-time) removing each is +€90 (se 243), +€124 (se 287) and +€249 (se 282) at equal on-time: none of the three can be told from turning the target.
-- **Nothing measurable in play:** the place table (−€122, se 259), the dealer part (−€98, se 166), the pickup-today part (−€28, se 209), `known` (+€200, se 232: the system earns more without it, 6 more orders on Monday). The lane part (−€385, se 238), the events (−€295, se 201) and the menu of options (−€369, se 263) are each under two standard errors alone; the lane part and the events have the replay of section 3 behind them (63 and 55 of 64 weeks), so they stay; the menu has the team's two earlier measurements (+€784 tune, +€1,375 hold).
+- **Parts that trade on-time for margin, as the target does** (a point of on-time costs €512 through the target on these weeks): the week's learned intercept (without it −€505 and +1.16 points, +€90 at equal on-time: the model stays as cautious all week as it is on Monday); the flu sign (two samples: without it +€432, se 205, and −0.21 point, +€323 at equal on-time, but the worst week falls from 92.8% to 90.9% and three plays end under 93.5% for one: the sign is there for the floor, and that is where it shows); `waited` (two samples: without it +€601, se 187, and −0.29 point, se 0.11; +€451, se 208, at equal on-time). **`waited` is the third open candidate for a deletion**: it costs more margin than the on-time it buys is worth at the target's price, and unseen weeks cannot decide its weight (section 3). It was not taken out tonight: the change moves on-time, and the head was not played with it.
+- **Nothing measurable in play:** the place table (two samples: +€146 without it, se 222), the lane part (two samples: −€65, se 145), the dealer part (−€98, se 166), the pickup-today part (−€28, se 209), `known` (+€200, se 232: the system earns more without it, 6 more orders on Monday). The events (two samples: −€259, se 149) and the menu of options (−€271, se 178) are each under two standard errors alone. Together the dealer side's parts are worth €1,390 (se 244; the ladder below), and the replay of section 3 can tell them apart where play cannot: the place table, the lane part and the events foretell answers in 64, 63 and 55 of 64 unseen weeks and stay; the dealer and pickup-today parts foretell nothing and are out. The menu has the team's two earlier measurements behind it (+€784 tune, +€1,375 hold).
 - **A deliberately small system does not rank, and the way back up says what each part is for** (one sample each, halal-65..96):
 
 | System | margin a week | on time | weeks ranked |
@@ -231,6 +236,7 @@ A point of on-time costs EUR 512 of margin through the target (`skeptic-t965`: +
 | − the learner, `known`, two parts; the level and the target set on unseen weeks = the head of this branch (the same stride) | €15,914 | 96.8% | 32 |
 
   The on-time model's car signs are what turns an unranked system into a ranked one (+€5,800 and ten points of on-time); a model without them does worse when it is allowed to choose the fee than when it is not. The looks are worth €3,100, the pairs €1,000, the dealer side's parts together €1,390 (se 244), though no one of them alone passes two standard errors. The two supply signs alone carry €1,607 (se 248) and a point of on-time (their weights are twice what unseen weeks give them, and still the system is far worse without them); choosing the fee at all, against every gig at 1.0 ×, carries €3,005 (se 521).
+- **The other weights of the on-time model, one at a time** (the weight set to zero, the intercept moved by the sign's mean on the weeks of the fit; one sample each): lane length −€3,133 (se 319) and 1.8 points, with one week unranked: load-bearing. `premium` −€322 (se 232), `pay` −€150 (se 220), `private_delivery` +€72 (se 196), `trade_in` +€26 (se 194), `short` +€365 (se 225, 33 more orders): none of the five is seen in play. Unseen weeks support `pay`, `premium` and `private_delivery` in the fit (section 3), so they stay; **`short` and `trade_in` are the two open candidates for a deletion that this pass did not make**: one sample is too little, and both guard classes of cars that the randomised weeks of Saturday morning showed to arrive late (trade-ins 17–61% on time).
 
 ### The start of the week (asked by the orchestrator at 20:10, after Monday and Tuesday of the 20:00 test final)
 
@@ -256,11 +262,12 @@ Monday can be bought back, and it is only worth buying without the learner. With
 | `known`, `KNOWN`, `Queue.known` | +€200 (se 232), +0.20 point, 6 more orders on Monday | opposite sign (baked +0.25, unseen −0.17 ± 0.06) | **out** (its end value, 1.15, goes into the intercept) |
 | the dealer part of the level | −€98 (se 166), +0.23 point | −0.3 per mille (se 0.2) | **out** |
 | the pickup-today part | −€28 (se 209), +0.17 point | **+1.2** per mille without it (se 0.3) | **out** |
-| the place table (60 numbers) | −€122 (se 259) | −15.3 per mille (se 0.9), 64 of 64 weeks; its size is right (× 0.5 and × 1.5 both worse) | stays: play cannot see it, the replay can |
-| `waited` | +€405 (se 274) with −0.30 point | undecided | stays: it buys on-time at the target's price |
-| the flu sign | +€220 (se 253) with −0.19 point | −3.07 ± 0.65 (baked −2.6) | stays: the same +0.2 to +0.4 point on three sets of weeks now |
-| the events, the lane part, the menu | −€295, −€385, −€369 (each under 2 se) | events 55 of 64 weeks, lane 63 of 64 | stay |
-| everything else in the table | 2 to 7 standard errors | | stays |
+| the place table (60 numbers) | +€146 (se 222), two samples | −15.3 per mille (se 0.9), 64 of 64 weeks; its size is right (× 0.5 and × 1.5 both worse) | stays: play cannot see it, the replay can |
+| `waited` | +€601 (se 187) with −0.29 point (se 0.11), two samples | undecided | stays for tonight; **open candidate** (it moves on-time, and the head was not played without it) |
+| `short`, `trade_in` | +€365 (se 225), +€26 (se 194), one sample | undecided (we win almost none of these cars) | stay; **open candidates** |
+| the flu sign | +€432 (se 205) with −0.21 point, two samples; the worst week 92.8% → 90.9% | −3.07 ± 0.65 (baked −2.6) | stays: it is there for the floor, and without it a week at 90.9% appears |
+| the events, the lane part, the menu | −€259 (se 149), −€65 (se 145), −€271 (se 178), two samples each | events 55 of 64 weeks, lane 63 of 64 | stay (with the places they are worth €1,390 together) |
+| everything else in the table | 2 to 10 standard errors | | stays |
 
 **The candidate (B)** is `main` with the four deletions of the table and one number changed. As clean code on this branch: `dispatch/` goes from 1,948 to 1,900 lines; the on-time model from 16 weights to 15; the level from 7 parts to 5; the numbers set by hand in `fleet.py` from 7 to 4 (`DOUBT`, `KNOWN` and the clamp are gone); the inventory of section 3 from 129 numbers to 123; the fleet remembers nothing that a restart must rebuild (`Fleet.forecast` and `gig_posted` are gone: its state is the books).
 
