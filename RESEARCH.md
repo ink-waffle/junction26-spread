@@ -15,10 +15,10 @@ Final: Sunday 08:00, level 8, live clock. We need a top-10 margin among ~130 tea
 | `dispatch/fleet.py` | `Fleet.cost(request, option)` (expected cost or None = do not win) and `Fleet.plan(order, legs)` (gigs: stops, audience, fee schedule). | The driver side: which cars we can move, and at what fee. |
 | `dispatch/notes.py` | `read(note, arrived_at)` → `NoteFacts`. | The world acts on the note whether we read it or not. |
 | `dispatch/desk.py` | Loop: observe event → `reconcile()` issues the actions that make the world match the plan; `rejoin()` after a restart. | One control loop, same path after a restart. |
-| `dispatch/run.py` | Practice loop (advance) and CLI. Live final loop: to be built. | |
+| `dispatch/run.py` | Practice loop (advance), the live loop of the final, and the CLI. | Both loops call `Desk.step`. |
 | `tools/harness.py`, `tools/study.py` | Experiments: N seeds in parallel; saved runs → one pandas table. | |
 
-`Policy` (in `desk.py`) = `MarketPolicy` + `FleetPolicy` dataclasses; every tunable lives there, so an experiment is a JSON override.
+`README.md` has the table of all ten modules (also `pairs`, `atlas`, `prior`, `names`). `Policy` (in `desk.py`) = `MarketPolicy` + `FleetPolicy` + `PairsPolicy` dataclasses; every knob of an experiment lives there, so an experiment is a JSON override.
 
 ## How to run experiments
 
@@ -26,7 +26,7 @@ Final: Sunday 08:00, level 8, live clock. We need a top-10 margin among ~130 tea
 export SPREAD_SHARED=/Users/ink_waffle/OverengineeringLife/Junction2026/spread   # shared runs/ and .slots/ for all worktrees
 set -a; . $SPREAD_SHARED/.env; set +a                                            # never print SPREAD_KEY
 PY=$SPREAD_SHARED/.venv/bin/python
-$PY -m tools.harness --tag <yourname>-<what> --seeds quick --policy '{"fleet": {"fee": 1.1}, "market": {"price": 1.5}}'
+$PY -m tools.harness --tag <yourname>-<what> --seeds quick --policy '{"fleet": {"on_time": 0.96}, "pairs": {"hold": 0}}'
 $PY -m tools.study <tag>            # or: from tools.study import table; t = table("<tag>")
 ```
 

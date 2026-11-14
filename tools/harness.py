@@ -1,6 +1,6 @@
 """Runs one policy on several seeds in parallel and prints margin, on-time share and what drove them.
 
-    python -m tools.harness --tag flat10 --seeds tune --policy '{"fleet": {"fee": 1.0}}'
+    python -m tools.harness --tag target96 --seeds tune --policy '{"fleet": {"on_time": 0.96}}'
 
 Every run is saved to runs/<tag>/<seed>.json.gz (score, policy, quotes, events, reveal, roster) for study.
 Any number of harness processes can run at once: they share the team's 8 practice slots through .slots/."""

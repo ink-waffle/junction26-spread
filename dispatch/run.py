@@ -20,7 +20,7 @@ from .desk import Desk, Policy
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 # The events that can need an action. Everything else arrives with the next of these.
 WAKE_ON: list[DeskEventKind] = ["price_request", "order_won", "order_changed", "order_cancelled", "visit_failed", "gig_expired", "deadline_close",
-                                "gig_dropped", "no_show", "offer_answered"]
+                                "gig_dropped", "no_show"]
 GAP = 0.02  # seconds of silence that end a burst of events
 QUIET = 1.0  # seconds without an event before the live loop reads the clock
 SILENCE = 15  # world minutes the clock may move without an event before the live loop reads the log: a stream can die without a word
@@ -203,7 +203,7 @@ def main() -> None:
     parser.add_argument("--board", action="store_true", help="play the next ranking run at the level")
     parser.add_argument("--final", action="store_true", help="play our copy of the final from the live stream; start it again at any time and it rejoins")
     parser.add_argument("--world", help="with --final: play this world instead of the final (a rehearsal: someone else advances a practice world)")
-    parser.add_argument("--policy", default="{}", help='JSON overrides, for example {"market": {"price": 1.4}}')
+    parser.add_argument("--policy", default="{}", help='JSON overrides of the default policy, for example {"fleet": {"on_time": 0.96}}')
     args = parser.parse_args()
     if args.final:
         lock = open("journal-desk.lock", "a")  # two desks on one world would both quote and both post
