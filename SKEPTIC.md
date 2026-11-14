@@ -9,6 +9,14 @@ python -m tools.skeptic_market final-fresh skeptic-base-s14                 # th
 python -m tools.ablations skeptic-base skeptic-nolook ...                   # the table of section 2 (weeks halal-65..96, strides 14 and 13)
 ```
 
+## 0. Report for the orchestrator
+
+**State at 20:10 (interim).** The audit is done (sections 1–3). The ablations have one sample of each part (section 4); second samples run after the pause for the 20:00 test final. The simplified candidate is written as clean code (bf20fcf) and **not yet proven**.
+
+**Recommendation until this line changes: play `main` as frozen at 52aaf93.** Nothing in the audit says the frozen system is unsafe on an unseen week.
+
+- The verdict in five lines: section 1. The inventory: 129 numbers and one vocabulary (section 3). The ablation table: section 4. What to delete and what it costs, the commit, the proofs: section 5.
+
 ## 1. Verdict
 
 1. **The level is not overfitted; the headline number is.** The frozen system earns €14,360 a week on 32 fresh weeks (halal-33..64, played once) and €15,208 on 32 more that nobody had touched (halal-65..96, two samples each): 96 of 96 week-plays ranked, on time 96.3% in the mean, 92.8% in the worst. The €17,846 of the tune weeks is 8 rich worlds: a world's margin has a spread (sd) of €4,000, so the mean of 8 worlds strays by €1,400, and tune was already 10–19% above hold for the simple systems of Saturday morning. **Quote €14–15k, never €17.8k.**
@@ -50,7 +58,8 @@ Each idea, in sample and out:
 | 8 lane and pickup-today parts | tune +€1,064 | hold +€89 | **tune only** in play; the lane part does foretell unseen answers (63 of 64 weeks), pickup-today does not |
 | 9 two-car gigs | tune +€433 (8 weeks, once) | none | **thin** |
 | 10 refit, barrier, world intercept | tune +€1,203 | hold +€683, worst week 91.3% | partly confirmed |
-| 11 six-hour look, board pairs | tune +€1,900 | no clean pair on hold or wide | **in sample only** |
+| 11 six-hour look | tune +€1,900 | no clean pair on hold or wide | **in sample only** until section 4 |
+| 11 board pairs | tune +€895 | hold +€1,215, one hold week unranked at the target of then (95%) | confirmed, at a cost in on-time |
 | 12 pickup-side signs, 97% | tune +€1,144 | wide −€39 with +0.9 point on time; hold +€281 with +1.8 points | **margin: tune only**; on time: confirmed |
 | 13 the week's events | replay +€202 (se 66) on 24 weeks | the 4 weeks probed after the design: +€19; played +€335 on wide (se 427) | replay only; it foretells unseen answers better (49 of 64 weeks) |
 | 14 the flu | 25 weeks: on time +0.38 (se 0.20), margin −€23 (se 232) | hold, 3 samples: on time +0.30 (se 0.26), margin −€252 (se 209) | **under 2 se both times** |
@@ -123,9 +132,47 @@ The orders are the ones our own policy chose and paid, so a sign the policy acts
 | world and day only | −585.6 | −117.4 | 5.4 | 64 |
 | one fixed level | −1,445.0 | −976.8 | 41.9 | 64 |
 
+The same replay with each fitted number of `prior.py` moved both ways (`--numbers`) says the numbers sit where unseen weeks want them: speed × 0.5 −5.6 and × 1.5 −0.4; trust × 0.5 −6.4 and × 1.5 −10.4; the level −0.05 −1.9 and +0.05 +0.5; the lane spread × 0.5 −7.4 and × 2 −2.4; **the place table × 0.5 −3.6 and × 1.5 −4.7** (se 0.5: its 60 numbers have the right size on weeks they never saw); the day, world, from and to spreads within 3 either way. One exception: the slope a quarter steeper is better in 56 of 64 weeks (+2.6, se 0.3), a fifth flatter worse in 64 (−6.2). The tool printed this table from the tree of 404f62a (`research/skeptic-switches`), which still has the dealer and pickup-today parts.
+
 ## 4. Ablations on untouched weeks (halal-65..96)
 
-*(running; table follows)*
+Weeks halal-65..96 had never been played. Baseline = `main`'s default; one part is removed at a time through a research switch (`research/skeptic-switches`, 404f62a: with every switch at its default the 32 weeks reproduce `main`'s to the cent). A sample is the same seed at one stride (14, 13, and 12 and 15 for the close calls); a variant is set against the baseline's samples of the same strides, the samples of a week are averaged, and the standard error is over the 32 weeks. Minus = the part earns that much. Where a sign of the on-time model is removed, the intercept is moved so that the model's mean chance on the weeks of the fit stays (`known` is set to its end value; the model before idea 12 is the one of that commit). "Margin at equal on time" pays the variant's on-time difference at the price the target sets on these weeks, so a part that only trades on-time for margin shows about zero there. A row with × 1 is a first reading: one sample moves by about ±€250.
+
+<!-- ABLATIONS -->
+Baseline `skeptic-base`: 32 weeks, 64 samples: margin EUR 15,208 a week, on time 96.3% (worst sample 92.8%), 412 orders, 15.4 late a week.
+
+| Without | weeks × samples | margin (se) | on time, points (se) | late orders a week (se) | orders | worst sample | samples < 93.5% | not ranked |
+|---|---|---|---|---|---|---|---|---|
+| **The dealer side** | | | | | | | | |
+| the place table of the prior (60 numbers, all zero) (`places0`) | 32×1 | -122 (259) | +0.09 (0.12) | -0.8 (0.6) | -7 | 94.5% | 0 | 0 |
+| the lane part of the level (`nolane`) | 32×1 | -385 (238) | -0.01 (0.11) | +0.1 (0.5) | +1 | 94.1% | 0 | 0 |
+| the pickup-today part (`nofromtoday`) | 32×1 | -28 (209) | +0.17 (0.15) | -0.7 (0.6) | +1 | 94.3% | 0 | 0 |
+| the dealer part (`nodealer`) | 32×1 | -98 (166) | +0.23 (0.11) | -1.0 (0.5) | -1 | 94.1% | 0 | 0 |
+| the weighting of the week's events (idea 13) (`nosurprises`) | 32×1 | -295 (201) | +0.07 (0.14) | +0.1 (0.6) | +4 | 93.6% | 0 | 0 |
+| quoting every option (one option only) (`oneoption`) | 32×1 | -369 (263) | +0.19 (0.13) | -0.8 (0.6) | +0 | 94.3% | 0 | 0 |
+| **The driver side: the on-time model** | | | | | | | | |
+| the pickup-side signs (the model before idea 12, target still 97%) (`pre12`) | 32×1 | -1,702 (298) | -0.31 (0.23) | -2.3 (0.9) | -83 | 93.6% | 0 | 0 |
+| idea 12 whole (the model before it, target 96%) (`pre12t96`) | 32×1 | -592 (249) | -1.58 (0.22) | +5.2 (1.0) | -26 | 92.6% | 7 | 0 |
+| the flu sign (idea 14) (`noflu`) | 32×1 | +220 (253) | -0.19 (0.20) | +1.0 (0.9) | +5 | 92.7% | 1 | 0 |
+| `known` (the week's first hundred bookings) (`noknown`) | 32×1 | +200 (232) | +0.20 (0.15) | -0.6 (0.7) | +6 | 94.1% | 0 | 0 |
+| `waited` (an hour in the app) (`nowaited`) | 32×1 | +405 (274) | -0.30 (0.15) | +2.1 (0.7) | +20 | 93.0% | 1 | 0 |
+| `known` and `waited` (`noknownwaited`) | 32×1 | +410 (269) | +0.09 (0.18) | +0.2 (0.8) | +16 | 94.5% | 0 | 0 |
+| the week's learned intercept (`noworld`) | 32×1 | -505 (228) | +1.16 (0.15) | -6.1 (0.7) | -48 | 96.0% | 0 | 0 |
+| the harm to the cars that wait (`noharm`) | 32×1 | -2,967 (403) | -0.32 (0.20) | +4.2 (0.9) | +73 | 92.8% | 1 | 0 |
+| the barrier (a flat EUR 300 a late order) (`flat300`) | 32×1 | +1,498 (232) | -0.96 (0.30) | +4.7 (1.3) | +16 | 90.3% | 4 | 0 |
+| the barrier (a flat EUR 100) (`flat100`) | 32×1 | +398 (261) | -7.91 (0.44) | +41.5 (2.3) | +76 | 82.0% | 32 | 24 |
+| **The driver side: the rule for the fee** | | | | | | | | |
+| the six-hour look (`nolook`) | 32×1 | -1,394 (278) | +0.02 (0.17) | -3.3 (0.6) | -88 | 93.7% | 0 | 0 |
+| the look when a gig's last day begins (`nolastday`) | 32×1 | -403 (181) | -0.01 (0.14) | -0.8 (0.6) | -19 | 93.6% | 0 | 0 |
+| **Pairs and notes** | | | | | | | | |
+| two-car gigs (`nopairs`) | 32×1 | -1,444 (286) | +0.65 (0.13) | -3.8 (0.6) | -33 | 94.7% | 0 | 0 |
+| pairs with a car that sits in the app (new pairs stay) (`noboard`) | 32×1 | -672 (221) | +0.19 (0.18) | -1.0 (0.8) | -9 | 93.7% | 0 | 0 |
+| the note grammar (the kit's keyword reader instead) (`kitnotes`) | 32×1 | -998 (235) | -0.19 (0.14) | +0.1 (0.5) | -17 | 93.3% | 1 | 0 |
+| **A deliberately small system, and back up** | | | | | | | | |
+| the same with the model choosing the fee once (`small`) | 32×1 | -11,322 (453) | -10.50 (0.76) | -0.8 (1.0) | -299 | 78.7% | 32 | 28 |
+<!-- /ABLATIONS -->
+
+*(reading of the table follows with the second samples)*
 
 ## 5. The simplest system that is as good
 
