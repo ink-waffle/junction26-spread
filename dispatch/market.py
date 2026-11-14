@@ -40,7 +40,7 @@ class MarketPolicy:
     level: float = prior.LEVEL  # the log price level of an average world
     spread: dict = field(default_factory=lambda: dict(prior.SPREAD))  # the parts of a level, and how far each strays from its prior (sd)
     surprises: bool = True  # False leaves the war day and the outage day to the day and place parts: the market before idea 13, which tools/surprises.py replays
-    explore: Optional[tuple[float, float]] = None  # draw each multiple of the list price from this range: the random weeks that prior.py is fitted on
+    explore: Optional[tuple[float, float]] = None  # draw each multiple of the list price from this range: how the random weeks behind prior.py (explore1) were played
     seed: str = ""  # of those draws
 
 
@@ -54,8 +54,8 @@ class Market:
         self.policy, self.books, self.fleet = policy, books, fleet
         self.places = prior.PLACES if places is None else places  # tools/winmodel.py fits this table through here
         self.beliefs: dict[tuple, tuple[float, float]] = {}  # part -> mean and variance of its share of the log level
-        atlas = fleet.atlas if fleet and policy.surprises else None
-        self.regions = {town: frozenset(place for place in atlas.places if atlas.crow_km(town, place) <= REACH) for town in sorted(atlas.places)} if atlas else {}  # town -> the places an outage around it reaches; none when the events are not weighed
+        atlas = fleet.atlas if fleet and policy.surprises else None  # without a map the events are not weighed
+        self.regions = {town: frozenset(place for place in atlas.places if atlas.crow_km(town, place) <= REACH) for town in sorted(atlas.places)} if atlas else {}  # town -> the places an outage around it reaches
         self.heard: dict[int, dict[str, float]] = {}  # day -> event ("war", or the town an outage is around) -> log-likelihood of the day's answers against a calm day
         self.cars: dict[str, int] = defaultdict(int)  # pickup place -> answers so far: how busy its dealers are
 

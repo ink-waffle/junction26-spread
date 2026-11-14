@@ -42,6 +42,7 @@ def resolve(host, port, *args, **kwargs):
 
 
 def remember(host: str, addresses: list[str]) -> None:
+    """Keeps a host's addresses, also on disk for a desk that starts while the resolver is down."""
     if addresses != kept[host]:
         kept[host] = addresses
         try:

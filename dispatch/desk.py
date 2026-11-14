@@ -19,6 +19,7 @@ from .pairs import Pairs, PairsPolicy
 
 @dataclass
 class Policy:
+    """Every knob of an experiment, by the part that reads it."""
     market: MarketPolicy = field(default_factory=MarketPolicy)
     fleet: FleetPolicy = field(default_factory=FleetPolicy)
     pairs: PairsPolicy = field(default_factory=PairsPolicy)
