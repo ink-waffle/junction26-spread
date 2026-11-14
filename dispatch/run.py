@@ -65,15 +65,15 @@ def play_live(world: World, desk: Desk, now: Callable[[], int], on_day: Optional
         hour = books.now // HOUR
         burst = waiting(stream, QUIET if desk.alarm() > ends_at else QUIET / 4)  # an alarm is due at a minute: look at the clock more often
         started = time.monotonic()
-        if burst:
-            minute = heard = burst[-1]["at"]
-        else:
-            minute = now()
-            if minute - heard >= SILENCE:  # the clock moved and the stream said nothing: read the log, and open a new stream if it had news
-                heard, burst = minute, world.events(after=books.seq)
+        minute = burst[-1]["at"] if burst else now()
+        if not burst and minute - heard >= SILENCE:  # the clock moved and the stream said nothing
+            heard, burst = minute, waiting(stream, 0)  # unless it spoke while we read the clock
+            if not burst:  # then the log knows: with news in it the stream is dead, and we open a new one
+                burst = world.events(after=books.seq)
                 if burst:
                     stream.close()
                     stream = world.stream(after=burst[-1]["seq"], idle=GAP)
+        heard = burst[-1]["at"] if burst else heard
         turn(desk, burst, minute)
         send(world, desk)
         slowest = max(slowest, time.monotonic() - started)
@@ -120,19 +120,17 @@ def send(world: World, desk: Desk) -> None:
 
 
 def act(world: World, actions: list[Action]) -> list[ActionResult]:
-    """Batches of 50, the quotes in their own: they must not wait for the tokens of forty posts.
+    """One request for a turn's actions, as long as they are 50 at most: on a slow network every request costs a quote its time.
     A batch that the server cannot read goes again one action at a time, so a bad action costs only itself."""
     results: list[ActionResult] = []
-    quotes = sum(action["type"] == "quote" for action in actions)  # the desk put them first
-    for part in (actions[:quotes], actions[quotes:]):
-        for i in range(0, len(part), ACTIONS_PER_CALL):
-            batch = part[i:i + ACTIONS_PER_CALL]
-            try:
-                results += world.act(batch)
-            except Unreachable:
-                raise
-            except SpreadError as error:
-                results += [{"ok": False, "reason": str(error)}] if len(batch) == 1 else [result for action in batch for result in act(world, [action])]
+    for i in range(0, len(actions), ACTIONS_PER_CALL):
+        batch = actions[i:i + ACTIONS_PER_CALL]
+        try:
+            results += world.act(batch)
+        except Unreachable:
+            raise
+        except SpreadError as error:
+            results += [{"ok": False, "reason": str(error)}] if len(batch) == 1 else [result for action in batch for result in act(world, [action])]
     return results
 
 
