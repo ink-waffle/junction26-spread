@@ -8,6 +8,7 @@ from typing import Optional
 from spread.types import DeskEvent, DriverProfile, FeeStep, Order, PostAction, PriceRequest, StopRef
 
 from . import notes
+from .atlas import DAY, HOUR
 
 
 @dataclass
@@ -79,6 +80,7 @@ class Books:
         self.ledger: dict[str, int] = defaultdict(int)  # kind of ledger line -> cents so far
         self.refunded: set[str] = set()  # orders that paid a late refund or were not delivered
         self.snow: list[tuple[int, int, set[str]]] = []  # forecasts: from, to, the places
+        self.nights: dict[int, list[int]] = {}  # day -> the bookings held when it began for a car to collect that day, and how many came back in its first hour
         self.dirty: set[str] = set()  # orders whose gigs may no longer match the plan
 
     def gig_posted(self, action: PostAction, gig_id: str, posted_at: Optional[int] = None) -> None:
@@ -108,6 +110,8 @@ class Books:
         if event["seq"] <= self.seq:
             return False
         self.seq, self.now = event["seq"], max(self.now, event["at"])
+        if event["at"] // DAY not in self.nights:  # the day's first event
+            self.nights[event["at"] // DAY] = [sum(1 for gig in self.gigs.values() if gig.status == "booked" and self.promised(gig, event["at"])), 0]
         handler = getattr(self, f"_{event['kind']}", None)
         if handler:
             handler(event)
@@ -160,9 +164,14 @@ class Books:
             if order_id in self.orders:
                 self.orders[order_id].gig_of[leg] = gig.id
 
+    def promised(self, gig: GigState, at: int) -> bool:
+        """True when the gig carries a car whose last day to be collected in time is the day of this minute."""
+        return any(o in self.orders and self.orders[o].order["lastPickupAt"] // DAY == at // DAY for o, _ in gig.legs)
+
     def _gig_dropped(self, e) -> None:
         gig = self.gigs.get(e["gigId"])
         if gig:
+            self.nights[e["at"] // DAY][1] += e["at"] % DAY < HOUR and gig.status == "booked" and self.promised(gig, e["at"])
             gig.status, gig.driver = "open", None
             for order_id, _ in gig.legs:
                 if order_id in self.orders:

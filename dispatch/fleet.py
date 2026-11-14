@@ -20,9 +20,10 @@ NEAR_KM = 30  # the app notifies drivers who live this close to the pickup (RULE
 # What tools/fleet_fit.py measures on our own weeks. ON_TIME: logistic weights of "the car arrives on time".
 # "fee" weighs a gig's fee against the fees of our other open gigs, "level" the fee that our open gigs pay together: drivers choose among our gigs.
 # "supply" is the week's drivers near a place, "pay" the typical fee as a share of the list price: the typical fee has a noise of its own, and our fee is a multiple of it.
-# The five signs of the second row come from `fleet_fit --add` on weeks of the merged system, with the rest held and the model's mean chance kept.
-ON_TIME = {"one": -5.80, "fee": 3.96, "level": 0.88, "slack": 1.13, "short": -1.85, "long": -0.44, "trade_in": -3.35, "backlog": -0.58, "known": 0.25, "waited": -0.75,
-           "supply_pickup": 0.75, "supply_delivery": 0.71, "private_delivery": -0.75, "premium": -0.82, "pay": 1.97}
+# The signs of the second row come from `fleet_fit --add` on weeks of the merged system, with the rest held and the model's mean chance kept.
+# "flu" is how much likelier than one working day in five the car's last day is the day of the week's flu (-1.40 on the tune weeks, -1.64 on the wide ones).
+ON_TIME = {"one": -5.75, "fee": 3.96, "level": 0.88, "slack": 1.13, "short": -1.85, "long": -0.44, "trade_in": -3.35, "backlog": -0.58, "known": 0.25, "waited": -0.75,
+           "supply_pickup": 0.75, "supply_delivery": 0.71, "private_delivery": -0.75, "premium": -0.82, "pay": 1.97, "flu": -2.6}
 BOOKED_LATE = 0.030  # the share of cars with a driver that still arrive late: drops and slow drives
 REFUND = 0.54  # what a late order pays back on average, as a share of its list price
 DOUBT = 4.0  # how firmly we hold, before a week's own outcomes speak, that its world is the model's: the prior's weight, in outcomes
@@ -30,6 +31,7 @@ GRIP = 4  # how steeply the price of a late order rises once we expect more of t
 CALM = 20  # orders: a week's first orders say little about its share of late ones
 LAST_DAY = DAY  # before its last pickup: of the gigs still open then, one in four reaches the deadline warning and ends late (tools/late_study.py)
 KNOWN = 100  # bookings after which the drivers know that our fees stay as posted
+SICK, WELL = 0.33, 0.03  # the share of the bookings held for a day that come back in its first hour: on the night of the week's flu, on any other (tools/night_study.py)
 
 
 @dataclass
@@ -142,6 +144,14 @@ class Fleet:
         outbid = (ON_TIME["fee"] - ON_TIME["level"]) * math.log(queue.level(multiple) / queue.going) if queue.backlog else 0.0
         return self.policy.crowding * (queue.refunds + queue.swing * late_price) * (outbid - ON_TIME["backlog"] / (1 + queue.backlog))
 
+    def flu(self, day: int) -> float:
+        """How much likelier than one working day in five this day is the day of the week's flu, when a third of the drivers stay at home.
+        It shows in a day's first hour, when they give back what they held for it: each night seen so far weighs every day it could be. Monday has no night."""
+        def weight(d: int) -> float:
+            held, back = self.books.nights.get(d, (0, 0))
+            return math.exp(back * math.log(SICK / WELL) + (held - back) * math.log((1 - SICK) / (1 - WELL)))
+        return max(0.0, weight(day) / sum(weight(d) for d in range(5)) - 0.2) if 0 <= day < 5 else 0.0
+
     def chances(self, state: OrderState) -> list[Span]:
         """When an order's first car can still be collected, from now on, and arrive on time."""
         leg, facts = state.order["legs"][0], self.facts(state, 0)
@@ -152,9 +162,11 @@ class Fleet:
         """What we know at minute `at` about how easily this request finds a driver in time, given when its car can be collected and since when it has waited."""
         leg = request["legs"][0]
         km = self.atlas.km[(leg["pickup"]["placeId"], leg["delivery"]["placeId"])]
-        slack = math.log1p(max(0, max((b for _, b in spans), default=at) - at) / HOUR)
+        last = max((b for _, b in spans), default=at)
+        slack = math.log1p(max(0, last - at) / HOUR)
         return {
             "one": 1.0,
+            "flu": self.flu(last // DAY),  # on the car's last day: a booking for it comes back that night, and the day has fewer drivers
             "slack": slack,
             "short": float(km < 40),
             "long": min(max(km, 100), 800) / 100 - 1,
