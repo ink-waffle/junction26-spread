@@ -14,7 +14,7 @@ The saved weeks are in `runs/skeptic-*` (tags as in the table's last column of n
 
 ## 0. Report for the orchestrator
 
-**State at 21:40.** The audit is done (sections 1–3). Every part has a sample on halal-65..96, the deciding rows two to four (section 4). The simplified system is clean code at the head of this branch and has its proofs (section 5).
+**State at 22:30: finished.** The audit is done (sections 1–3). Every part has a sample on halal-65..96, the close calls two, the candidates two to four (section 4). The simplified system is clean code at the head of this branch and has its proofs (section 5). The branch has `main` 1ece2d5 merged in, so `main` can be fast-forwarded to it. (A report file under `runs/reports/` was asked for; my tools refuse to write one, so this section is the report.)
 
 **Recommendation: play the simplified system, `research/skeptic` with `dispatch/` as of commit af4fd92** (later commits on the branch touch documents and tools only). It is `main` with four things deleted (the week's learned intercept of the on-time model, the `known` sign, the dealer part and the pickup-today part of the level: 1,948 → 1,900 lines, 16 → 15 weights, 7 → 5 parts, 3 hand-set numbers fewer) and two numbers changed (the on-time model's intercept, set where 64 weeks the fit never saw put it; the target, 97% → 97.5%).
 
