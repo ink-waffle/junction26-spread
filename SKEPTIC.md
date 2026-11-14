@@ -224,10 +224,21 @@ Monday can be bought back, and it is only worth buying without the learner. With
 |---|---|---|---|---|---|---|---|
 | halal-65..96, four samples a side (strides 12–15; 128 plays each) | **+€959 (166)** | −0.27 (0.09) | +2.6 (0.4) | +40 | 92.7% (main 92.8%) | 1 | 0 |
 | halal-97..128, played once, the confirmation (stride 14) | **+€678 (267)** | −0.28 (0.20) | +3.0 (0.9) | +47 | 92.2% (main 94.5%) | 1 | 0 |
+| the 24 tune and wide weeks, once (stride 14, against `orch-base-s14`) | +€707 (297) | −0.36 (0.25) | +3.7 (1.0) | +49 | 94.2% (main 93.4%) | 0 | 0 |
+| the 8 hold weeks, four samples a side (strides 12–15) | +€805 (421) | **−0.79 (0.27)** | +5.7 (1.1) | +64 | 93.2% (main 93.2%) | 1 (main 1) | 0 |
+
+96 different weeks in all, 216 plays of B, none unranked, the worst 92.2%.
 
 - By thirds of the weeks of 65..96, from the hardest drivers to the easiest (the week's own intercept, measured with hindsight on `main`'s play): margin +€1,419 / +€1,186 / +€385, on time −0.36 / −0.30 / −0.18 point. The week whose level is most wrong for B (halal-71, 1.16 logits under what B assumes) goes from 94.7% to 94.1% on time over four samples and gains €1,069.
 - Orders by weekday on 97..128: 73 / 94 / 89 / 98 / 80 → 95 / 104 / 95 / 104 / 86; Monday's sales +€1,984 (se 311); the fastest option 54% → 55% of the orders with a choice.
-- What B costs: a quarter point of on-time (16 → 19 late orders a week) and a floor that sits about half a point lower (worst of 160 plays 92.2%; `main`'s worst of 176 saved plays 92.8%). The 90% minimum is two points under B's worst play.
+- The known hard week (halal-09, the flu on a Friday in the capital region) is where it was: 96.0 / 93.8 / 93.2 / 95.4% on `main` and 95.0 / 95.1 / 93.9 / 94.4% on B over the four strides (mean 94.6% both). The hold week that B hurts is halal-10, the poorest world of the set (€9,180 a week on `main`): 96.8% → 94.4%, €961 less; there the right level for the average week is too hopeful.
+- What B costs: a quarter to a third of a point of on-time on the untouched weeks (16 → 19 late orders a week), 0.8 point on the hold weeks, and a floor about half a point lower (worst of 216 plays 92.2%; `main`'s worst of 176 saved plays 92.8%). The 90% minimum is two points under B's worst play. Through the target the same margin would cost about three times the on-time (the night log's bracket: 0.5 point of target buys €470 for 0.6 point), so B is not the target turned by another name.
 - What B was *not* fitted on: the +0.88 is a measurement (the free intercept of the model on weeks it never saw), not the best of a search; the same number comes out of three disjoint sets of weeks. It was chosen before its neighbours (+0.5, +0.7 without the learner) were played; they are in the table for scale.
 
-**Proofs of the candidate.** *(filled in as they finish)*
+**Proofs of the candidate** (the tree of commit dce27f9; later commits on the branch change documents and tools only, `git diff dce27f9 -- dispatch` is empty).
+
+- **Restart = replay:** `python -m tools.restart_test --seed halal-02 --restarts 8 --baseline skeptic-cleanBns-x-s0`: 8 of 8 restarts rebuilt the same desk; €22,034.37, 95.4% on time and 547 orders with restarts and without: the same week to the cent. (The fleet now has no memory of its own to rebuild.)
+- **Python 3.9:** `ast.parse(source, feature_version=(3, 9))` passes for every file of `dispatch/`, and `dispatch.run` imports under `/usr/bin/python3` 3.9.6 with `PYTHONPATH=kit/python`.
+- **The clean code is the measured thing:** the clean tree and the switch combination of `research/skeptic-switches` (`{"fleet": {"weights": {"known": 0, "one": -3.72}, "world": false}, "market": {"spread": {day, from, lane, to, world}}}`) play the 32 weeks of halal-65..96 at stride 14 to the cent (32 of 32), so every sample of the combination is a sample of the clean code. The same holds for A alone (32 of 32).
+- **No leftover:** nothing in `dispatch/` or `tools/` refers to `learned`, `outcome`, `forecast`, `gig_posted` of the fleet, `Queue.world`, `Queue.known`, `KNOWN` or `DOUBT`; `tools/fleet_fit.py`, `control_study.py`, `crisis_study.py` and `winmodel.py` follow the code.
+- **If it is merged, the documents that still describe `main`:** `PRESENTATION.md` (slide 1: 1,948 lines; slide 3: 16 weights; the parts of the level; "What we do not know": the two weights without support, of which `known` is now out and `waited` measured), `SPEAKER_NOTES.md` (lines 25 and 52: 1,948 lines, 16 weights, "one number per week mends it"), `OPEN_NUMBERS.md` (row "1,948 lines, eleven modules, 16 weights"), `RUNBOOK.md` nothing. `README.md` and `NIGHT_LOG.md` (idea 15) are updated on this branch.
