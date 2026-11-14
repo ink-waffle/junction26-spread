@@ -54,7 +54,7 @@ class Desk:
 
     def alarm(self) -> int:
         """The minute the desk next wants a turn at when no event comes first: both loops give it one then. A plan that waits says so here."""
-        return self.pairs.alarm()
+        return min(self.pairs.alarm(), self.fleet.alarm())
 
     def take(self) -> list[Action]:
         """Empties the outbox, quotes first: a dealer waits 15 minutes for a price, and no longer.
@@ -115,7 +115,7 @@ class Desk:
                     gig.schedule = wanted
                     self.outbox.append({"type": "reprice", "gigId": gig.id, "schedule": wanted})
             legs = [leg for leg in state.unposted() if (order_id, leg) not in self.pending]
-            if legs and state.refusals < 4 and not self.pairs.holds(state):
+            if legs and state.refusals < 4 and not self.pairs.holds(state) and not self.fleet.keeps(state):
                 for plan in self.fleet.plan(state, legs):
                     self.pending.update((order_id, leg) for leg in plan.legs)
                     self.outbox.append({"type": "post", "stops": plan.stops, "audience": plan.audience, "schedule": plan.schedule})
