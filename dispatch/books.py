@@ -38,6 +38,7 @@ class OrderState:
     failed: dict[int, tuple[str, int]] = field(default_factory=dict)  # leg -> (reason, minute) of its last failed visit
     released: dict[int, int] = field(default_factory=dict)  # leg -> minute the dealer released the car
     urgent: bool = False  # the deadline warning came and no driver holds the order
+    alarm_at: int = 0  # the last minute the order lost its driver or got its deadline warning
     late: bool = False  # a gig expired or a window ended: the car can only go late, without windows
     changed: bool = False  # the dealer changed the order after we posted it
     refusals: int = 0
@@ -156,7 +157,10 @@ class Books:
         gig = self.gigs.get(e["gigId"])
         if gig:
             gig.status, gig.driver, gig.fee = "open", None, None
-            self.dirty.update(order_id for order_id, _ in gig.legs)
+            for order_id, _ in gig.legs:
+                if order_id in self.orders:
+                    self.orders[order_id].alarm_at = e["at"]
+                    self.dirty.add(order_id)
 
     _no_show = _gig_dropped
 
@@ -176,7 +180,7 @@ class Books:
     def _deadline_close(self, e) -> None:
         state = self.orders.get(e["orderId"])
         if state:
-            state.urgent = True
+            state.urgent, state.alarm_at = True, e["at"]
             state.order["lastPickupAt"] = e["lastPickupAt"]
             self.dirty.add(state.id)
 
