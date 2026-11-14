@@ -34,8 +34,8 @@ def traced(quote):
                 continue
             typical, refund = request["referenceFeeCents"], REFUND * option["listPriceCents"]
             car = fleet.car(request, spans, request["respondBy"])
-            multiple, late = fleet.fee(car, typical, refund, late_price, queue)
-            calm = fleet.fee(car, typical, refund, 0.0, queue)
+            multiple, late = fleet.cheapest_fee(car, typical, refund, late_price, queue)
+            calm = fleet.cheapest_fee(car, typical, refund, 0.0, queue)
             TRACE.append({"id": request["id"], "at": books.now, "option": option["kind"], "list": option["listPriceCents"], "typical": typical, "room": math.expm1(car["slack"]),
                           "multiple": multiple, "late": late, "late_price": late_price, "backlog": queue.backlog, "queue_late": queue.late, "world": queue.world,
                           "harm": fleet.harm(multiple, queue, late_price), "refund": refund, "cost": fleet.cost(request, option), "level": self.level(request, option)[0],

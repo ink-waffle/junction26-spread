@@ -18,7 +18,7 @@ import pandas as pd
 from dispatch import notes
 from dispatch.atlas import DAY, HOUR
 from dispatch.books import Books
-from dispatch.fleet import ON_TIME, Fleet, FleetPolicy, Queue
+from dispatch.fleet import ON_TIME, Fleet, FleetPolicy
 from tools.study import ROOT, atlas, runs
 
 LOOK = 6 * HOUR  # how often a waiting car gives the model another row
@@ -110,8 +110,8 @@ def rows(run: dict, tag: str = "") -> list[dict]:
             look, queue = event["at"] + LOOK, fleet.queue()
             for state in [s for s in books.orders.values() if s.id in out and fleet.waits(s) and fleet.posted(s) and not s.urgent]:  # after the warning the fee is no longer the one we chose
                 multiple = fleet.posted(state)
-                others = Queue(queue.backlog - 1, (queue.going * queue.backlog - multiple) / max(1, queue.backlog - 1), queue.known)
-                car = fleet.car(state.request, fleet.chances(state), books.now, state.won_at)
+                others = queue.without(multiple)
+                car = fleet.car(state.request, fleet.chances_left(state), books.now, state.won_at)
                 looks.append(dict(fleet.signs(car, multiple, others), queue=others.backlog, going=others.going, bookings=queue.known, list=out[state.id]["list"], seed=run["seed"], tag=tag, id=state.id,
                                   option=state.order["option"], multiple=multiple, on_time=out[state.id]["on_time"], refund=out[state.id]["refund"], won_at=state.won_at, look=1))
     return [dict(row, look=0) for row in out.values()] + [row for row in looks if row["id"] in out]

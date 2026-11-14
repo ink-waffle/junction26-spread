@@ -37,12 +37,11 @@ class Desk:
 
     def __init__(self, atlas: Atlas, roster: list[DriverProfile], policy: Policy, journal: Optional[str] = None, verbose: bool = False):
         self.books = Books(roster)
-        self.fleet = Fleet(policy.fleet, self.books, atlas)
+        self.fleet = Fleet(policy.fleet, self.books, atlas, held=lambda state: self.pairs.holds(state))  # its queue leaves out the cars that wait for a partner
         self.market = Market(policy.market, self.books, self.fleet)
         self.outbox: list[Action] = []
         self.pending: set[tuple[str, int]] = set()  # legs whose post is in the outbox or on its way
         self.pairs = Pairs(policy.pairs, self.books, self.fleet, atlas, self.pending)
-        self.fleet.held = self.pairs.holds  # the fleet's queue leaves out the cars that wait for a partner
         self.journal, self.verbose = journal, verbose
         self.careful = False  # the final sets it: an event that the desk cannot read is logged and passed over, not fatal
 

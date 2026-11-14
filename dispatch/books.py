@@ -58,12 +58,6 @@ class OrderState:
         return [leg for leg in self.undelivered() if leg not in self.gig_of]
 
 
-@dataclass
-class DriverState:
-    """A driver of the week's roster. The books learn nothing more of a driver: the fleet counts who lives where."""
-    profile: DriverProfile
-
-
 class Books:
     """State is a pure function of the event log, the gigs we posted and the quotes we sent."""
 
@@ -75,7 +69,7 @@ class Books:
         self.outcomes: dict[str, Optional[str]] = {}  # request id -> the option won, None when lost
         self.orders: dict[str, OrderState] = {}
         self.gigs: dict[str, GigState] = {}
-        self.drivers: dict[str, DriverState] = {d["id"]: DriverState(d) for d in roster}
+        self.drivers: dict[str, DriverProfile] = {driver["id"]: driver for driver in roster}  # the week's roster: the fleet counts who lives where
         self.trust: dict[str, int] = defaultdict(int)  # dealer id -> its trust count (RULES.md, level 8)
         self.ledger: dict[str, int] = defaultdict(int)  # kind of ledger line -> cents so far
         self.refunded: set[str] = set()  # orders that paid a late refund or were not delivered
