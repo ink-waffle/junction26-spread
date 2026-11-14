@@ -57,9 +57,14 @@ class Desk:
         return self.pairs.alarm()
 
     def take(self) -> list[Action]:
-        """Empties the outbox, quotes first: a dealer waits 15 minutes for a price, and no longer."""
-        actions, self.outbox = sorted(self.outbox, key=lambda action: action["type"] != "quote"), []
-        return actions
+        """Empties the outbox, quotes first: a dealer waits 15 minutes for a price, and no longer.
+        After a gap, the stream brings requests that ran out long ago: their quotes would only keep the open ones waiting."""
+        books = self.books
+        actions = [action for action in self.outbox if action["type"] != "quote" or books.requests.get(action["requestId"], {}).get("respondBy", books.now + 1) > books.now]
+        if self.verbose and len(actions) < len(self.outbox):
+            print(f"{clock(books.now)} {len(self.outbox) - len(actions)} requests ran out before we saw them", file=sys.stderr, flush=True)
+        self.outbox = []
+        return sorted(actions, key=lambda action: action["type"] != "quote")
 
     def handle(self, event: DeskEvent) -> None:
         """Folds one event into the books and answers what only this event can trigger."""
