@@ -38,7 +38,7 @@ class FleetPolicy:
     on_time: float = 0.96  # the share of orders we want on time: the delivery minimum with room for a bad week (unseen weeks end up to 5 points under it)
     late_price: float = 300.0  # euros that a late order costs us beyond its refund while we are within that share
     crowding: float = 1.0  # research: how much of the harm to the waiting cars we charge
-    early_look: float = 0.0  # hours in the app after which a gig without a taker gets its fee chosen again, one step up at least; 0: only on its last day
+    early_look: float = 6.0  # hours in the app after which a gig without a taker gets its fee chosen again, one step up at least; 0: only on its last day
     explore: Optional[tuple[float, ...]] = None  # research: draw each order's fee multiple from these
     seed: str = ""
 
