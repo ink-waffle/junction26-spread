@@ -30,8 +30,6 @@ def real(hours: Optional[OpeningHours], opens: Optional[int], closes: Optional[i
 def arrive_by(delivery: StopPlace, facts: NoteFacts, deadline: int) -> Optional[int]:
     """The last minute at which the car arrives on time: by the note's deadline, with the delivery site really open."""
     due = deadline if facts.deadline is None else min(deadline, facts.deadline)
-    if delivery["privateAddress"]:  # the end of the booked hour plus 30 minutes (RULES.md rule 5): a trade-in's deadline is its old car's
-        due = min(due, delivery["window"]["to"] + 30)
     return max((b for _, b in open_spans(real(delivery["hours"], facts.delivery_opens, facts.delivery_closes), delivery["window"]["from"], due)), default=None)
 
 
