@@ -2,6 +2,7 @@
 BOOKED_LATE (late share of the cars that had a driver before their deadline warning) and REFUND (what a late order paid back, as a share of its list price).
 
     python -m tools.fleet_fit fleet-explore3 fleet-cap-L085-r0.0 main-m4-r0.15      # tags of saved runs
+    python -m tools.fleet_fit --calibrate main-m6                                   # the model as it stands against the outcomes of these weeks
 
 Each week is replayed through the books, so every sign is computed by the code that computes it in play, at the minute the request arrived.
 A gig's own fee and the fee level of the queue are told apart by weeks of two kinds: random fees inside a week, and one fee for a whole week."""
@@ -17,10 +18,11 @@ import pandas as pd
 from dispatch import notes
 from dispatch.atlas import DAY, HOUR
 from dispatch.books import Books
-from dispatch.fleet import ON_TIME, Fleet, FleetPolicy
+from dispatch.fleet import ON_TIME, Fleet, FleetPolicy, Queue
 from tools.study import ROOT, atlas, runs
 
-DEFAULT = ["fleet-explore3", "fleet-cap-L085-r0.0", "fleet-cap-L100-r0.0", "fleet-cap-L115-r0.0", "main-m4-r0.3", "main-m4-r0.15", "main-m4-r0.0"]
+LOOK = 6 * HOUR  # how often a waiting car gives the model another row
+DEFAULT = ["fleet-explore3", "fleet-cap-L085-r0.0", "fleet-cap-L100-r0.0", "fleet-cap-L115-r0.0", "main-m4-r0.3", "main-m4-r0.15", "main-m4-r0.0", "market-z-all", "fleet-v5", "main-m6-nopairs"]
 
 
 def first_fees(run: dict) -> dict[str, float]:
@@ -30,9 +32,10 @@ def first_fees(run: dict) -> dict[str, float]:
     viewed, out = {}, {}
     for view in sorted(run["reveal"]["views"], key=lambda v: -v["at"]):
         viewed[view["gigId"]] = view
+    paired = {stop["orderId"] for gig in run["gigs"] if len({stop["orderId"] for stop in gig["stops"]}) > 1 for stop in gig["stops"]}
     for gig in sorted(run["gigs"], key=lambda g: g["postedAt"]):
         order_id, step, view = gig["stops"][0]["orderId"], gig["schedule"][0], viewed.get(gig["id"])
-        if order_id in out:
+        if order_id in out or order_id in paired:  # a car that went with a second one tells nothing of a gig of its own
             continue
         cars = sum(1 for stop in gig["stops"] if stop["kind"] == "pickup")
         if policy.get("explore"):
@@ -57,7 +60,7 @@ def rows(run: dict, tag: str = "") -> list[dict]:
     fleet = Fleet(policy, books, atlas())
     waiting = sorted(run["gigs"], key=lambda g: g["postedAt"])
     order_of = {g["id"]: g["stops"][0]["orderId"] for g in waiting}
-    first_fee, signs, out, refund, posted = first_fees(run), {}, {}, {}, set()
+    first_fee, signs, out, refund, posted, looks, look = first_fees(run), {}, {}, {}, set(), [], 0
     paid = {e["line"]["orderId"] for e in run["events"] if e["kind"] == "ledger" and e["line"]["kind"] == "revenue"}
     for event in run["events"]:
         if event["kind"] == "ledger" and event["line"]["kind"] in ("late_refund", "undelivered_penalty"):
@@ -78,12 +81,14 @@ def rows(run: dict, tag: str = "") -> list[dict]:
             for option in request["options"]:
                 spans = notes.chances(request, option, facts, fleet.road(request["legs"][0]))
                 if spans:
-                    signs[(request["id"], option["kind"])] = (fleet.car(request, spans, request["respondBy"]), queue, option["listPriceCents"])
+                    signs[(request["id"], option["kind"])] = (fleet.car(request, spans, request["respondBy"]), queue, option["listPriceCents"], option is request["options"][0])
         elif kind == "order_won":
             order = event["order"]
             if (order["id"], order["option"]) in signs and order["id"] in first_fee:
-                car, queue, list_price = signs[(order["id"], order["option"])]
-                out[order["id"]] = dict(fleet.signs(car, first_fee[order["id"]], queue), queue=queue.backlog, going=queue.going, bookings=queue.known, list=list_price,
+                car, queue, list_price, fastest = signs[(order["id"], order["option"])]
+                leg = books.requests[order["id"]]["legs"][0]
+                out[order["id"]] = dict(fleet.signs(car, first_fee[order["id"]], queue), queue=queue.backlog, going=queue.going, bookings=queue.known, list=list_price, fastest=fastest,
+                                        km=atlas().km[(leg["pickup"]["placeId"], leg["delivery"]["placeId"])],
                                         seed=run["seed"], tag=tag, id=order["id"], option=order["option"], multiple=first_fee[order["id"]], booked=0, warned=0,
                                         on_time=int(order["id"] in paid and order["id"] not in refund), refund=refund.get(order["id"], 0), price=order["priceCents"],
                                         won_at=event["at"], wait=request_hours(event["at"], max(event["at"], order["lastPickupAt"])))
@@ -101,7 +106,15 @@ def rows(run: dict, tag: str = "") -> list[dict]:
         elif kind == "order_cancelled":
             out.pop(event["orderId"], None)
         books.observe(event)
-    return list(out.values())
+        if event["at"] >= look:  # every few hours, each car that still waits: the same question, asked of an older gig
+            look, queue = event["at"] + LOOK, fleet.queue()
+            for state in [s for s in books.orders.values() if s.id in out and fleet.waits(s) and fleet.posted(s) and not s.urgent]:  # after the warning the fee is no longer the one we chose
+                multiple = fleet.posted(state)
+                others = Queue(queue.backlog - 1, (queue.going * queue.backlog - multiple) / max(1, queue.backlog - 1), queue.known)
+                car = fleet.car(state.request, fleet.chances(state), books.now, state.won_at)
+                looks.append(dict(fleet.signs(car, multiple, others), queue=others.backlog, going=others.going, bookings=queue.known, list=out[state.id]["list"], seed=run["seed"], tag=tag, id=state.id,
+                                  option=state.order["option"], multiple=multiple, on_time=out[state.id]["on_time"], refund=out[state.id]["refund"], won_at=state.won_at, look=1))
+    return [dict(row, look=0) for row in out.values()] + [row for row in looks if row["id"] in out]
 
 
 def table(tags: list[str]) -> pd.DataFrame:
@@ -128,19 +141,43 @@ def held_out(t: pd.DataFrame, names: list[str]) -> float:
     return float(np.mean([log_likelihood(x[t.seed == seed], y[t.seed == seed], fit(x[t.seed != seed], y[t.seed != seed])) for seed in sorted(t.seed.unique())]))
 
 
+def calibrate(tags: list[str]) -> None:
+    """The model as it stands in dispatch/fleet.py against what happened in these weeks: predicted and realised share of late orders, cut several ways."""
+    t = table(tags)
+    t = t[t.look == 0].copy()
+    t["late"], t["predicted"] = 1 - t.on_time, 1 - 1 / (1 + np.exp(-t[list(ON_TIME)].values @ np.array(list(ON_TIME.values()))))
+    t["option"], t["room"], t["weekday"] = np.where(t.fastest, "fastest", "slower"), np.expm1(t.slack), t.won_at // DAY
+    cuts = {"all": t.one, "option": t.option, "hours of real room": pd.cut(t.room, [0, 8, 12, 24, 30, 48, 80, 400]), "lane km": pd.cut(t.km, [0, 40, 80, 150, 250, 400, 2000]), "weekday": t.weekday,
+            "first fee": t.multiple.round(2), "queue": pd.cut(t.queue, [-1, 5, 10, 20, 30, 50, 500]), "premium": t.premium, "trade-in": t.trade_in,
+            "option and room": [t.option, pd.cut(t.room, [0, 12, 24, 48, 80, 400])]}
+    print(f"{len(t)} orders of {', '.join(tags)}")
+    for name, by in cuts.items():
+        print(f"\nby {name}\n" + t.groupby(by, observed=True).agg(orders=("id", "size"), late=("late", "mean"), predicted=("predicted", "mean"), fee=("multiple", "mean")).round(3).to_string())
+
+
 def main() -> None:
+    if sys.argv[1:2] == ["--calibrate"]:
+        return calibrate(sys.argv[2:])
     t = table(sys.argv[1:] or DEFAULT)
     t.to_pickle(os.path.join(ROOT, "runs", "fleet_fit.pkl"))
-    names = list(ON_TIME)
-    x, y = t[names].values, t.on_time.values
+    names = [name for name in ON_TIME if name != "waited"]
+    won, looks = t[t.look == 0].copy(), t[t.look == 1].copy()
+    x, y = won[names].values, won.on_time.values
     w = fit(x, y)
-    t["p"] = 1 / (1 + np.exp(-x @ w))
-    print(f"{len(t)} orders, {y.mean():.1%} on time; log-likelihood {log_likelihood(x, y, w):.4f}, on held-out seeds {held_out(t, names):.4f}")
-    print(t.groupby(pd.cut(t.p, [0, .5, .7, .8, .85, .9, .93, .95, .97, 1]), observed=True).agg(orders=("id", "size"), predicted=("p", "mean"), on_time=("on_time", "mean"), booked=("booked", "mean"), wait=("wait", "mean")).round(3))
-    print(t.groupby("tag").agg(orders=("id", "size"), fee=("multiple", "mean"), going=("going", "mean"), queue=("queue", "mean"), predicted=("p", "mean"), on_time=("on_time", "mean"), wait=("wait", "mean")).round(3))
-    print("ON_TIME = {" + ", ".join(f'"{name}": {value:.2f}' for name, value in zip(names, w)) + "}")
-    late = t[t.on_time == 0]
-    print(f"BOOKED_LATE = {1 - t[t.booked == 1].on_time.mean():.3f}\nREFUND = {(late.refund / late.list).mean():.2f}")
+    won["p"] = 1 / (1 + np.exp(-x @ w))
+    print(f"{len(won)} orders, {y.mean():.1%} on time; log-likelihood {log_likelihood(x, y, w):.4f}, on held-out seeds {held_out(won, names):.4f}")
+    print(won.groupby(pd.cut(won.p, [0, .5, .7, .8, .85, .9, .93, .95, .97, 1]), observed=True).agg(orders=("id", "size"), predicted=("p", "mean"), on_time=("on_time", "mean"), booked=("booked", "mean"), wait=("wait", "mean")).round(3))
+    print(won.groupby("tag").agg(orders=("id", "size"), fee=("multiple", "mean"), going=("going", "mean"), queue=("queue", "mean"), predicted=("p", "mean"), on_time=("on_time", "mean"), wait=("wait", "mean")).round(3))
+    waited, base = 0.0, looks[names].values @ w  # what an hour without a taker says: one weight, fitted on the later looks with the rest of the model held
+    for _ in range(30):
+        p = 1 / (1 + np.exp(-base - waited * looks.waited.values))
+        waited += float((looks.waited.values * (looks.on_time.values - p)).sum() / ((looks.waited.values ** 2 * p * (1 - p)).sum() + 1e-9))
+    looks["before"], looks["p"], looks["hours"] = 1 / (1 + np.exp(-base)), 1 / (1 + np.exp(-base - waited * looks.waited.values)), (looks.won_at * 0 + 1)
+    print(f"{len(looks)} later looks at waiting cars, {looks.on_time.mean():.1%} on time in the end; the model for a new gig says {looks.before.mean():.1%}, with the hour they waited {looks.p.mean():.1%}")
+    print(looks.groupby(pd.cut(looks.p, [0, .5, .7, .8, .9, .95, 1]), observed=True).agg(looks=("id", "size"), as_new=("before", "mean"), predicted=("p", "mean"), on_time=("on_time", "mean")).round(3))
+    print("ON_TIME = {" + ", ".join(f'"{name}": {value:.2f}' for name, value in zip(names + ["waited"], list(w) + [waited])) + "}")
+    late = won[won.on_time == 0]
+    print(f"BOOKED_LATE = {1 - won[won.booked == 1].on_time.mean():.3f}\nREFUND = {(late.refund / late.list).mean():.2f}")
 
 
 if __name__ == "__main__":

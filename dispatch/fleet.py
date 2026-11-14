@@ -19,9 +19,10 @@ RETRY = 2 * HOUR  # after a failed visit whose cause no note gave: how far to mo
 NEAR_KM = 30  # the app notifies drivers who live this close to the pickup (RULES.md)
 # What tools/fleet_fit.py measures on our own weeks. ON_TIME: logistic weights of "the car arrives on time".
 # "fee" weighs a gig's fee against the fees of our other open gigs, "level" the fee that our open gigs pay together: drivers choose among our gigs.
-ON_TIME = {"one": -1.36, "fee": 3.72, "level": 1.01, "slack": 1.11, "short": -1.50, "long": -0.54, "premium": -1.27, "trade_in": -3.20, "drivers_delivery": 0.27, "backlog": -0.56, "known": 0.22}
-BOOKED_LATE = 0.037  # the share of cars with a driver that still arrive late: drops and slow drives
-REFUND = 0.55  # what a late order pays back on average, as a share of its list price
+ON_TIME = {"one": -1.21, "fee": 3.96, "level": 0.88, "slack": 1.13, "short": -1.85, "long": -0.44, "premium": -0.92, "trade_in": -3.35,
+           "drivers_delivery": 0.28, "backlog": -0.58, "known": 0.25, "waited": -0.75}
+BOOKED_LATE = 0.030  # the share of cars with a driver that still arrive late: drops and slow drives
+REFUND = 0.54  # what a late order pays back on average, as a share of its list price
 DOUBT = 4.0  # how firmly we hold, before a week's own outcomes speak, that its world is the model's: the prior's weight, in outcomes
 GRIP = 4  # how steeply the price of a late order rises once we expect more of them than we allow ourselves
 CALM = 20  # orders: a week's first orders say little about its share of late ones
@@ -33,9 +34,11 @@ KNOWN = 100  # bookings after which the drivers know that our fees stay as poste
 class FleetPolicy:
     fees: tuple[float, ...] = (0.85, 1.0, 1.15, 1.3, 1.5)  # the fees a gig may open at, as multiples of the typical fee
     urgent_fee: float = 1.6  # after the deadline warning
-    on_time: float = 0.94  # the share of orders we want on time: the delivery minimum with room to spare
+    late_fee: float = 1.3  # once the car can only arrive late: enough for the drivers who saw it at less, or it is never delivered
+    on_time: float = 0.95  # the share of orders we want on time: the delivery minimum with room to spare
     late_price: float = 300.0  # euros that a late order costs us beyond its refund while we are within that share
     crowding: float = 1.0  # research: how much of the harm to the waiting cars we charge
+    early_look: float = 0.0  # research: hours in the app after which a gig without a taker gets its fee chosen again; 0: never
     explore: Optional[tuple[float, ...]] = None  # research: draw each order's fee multiple from these
     seed: str = ""
 
@@ -55,7 +58,8 @@ class Queue:
     going: float = 1.0  # the fee their gigs show, as a mean multiple of the typical fee
     known: int = 0  # the bookings of the week so far: what the drivers have seen of us
     late: float = 0.0  # how many of them we expect to arrive late
-    stake: float = 0.0  # what a step of one logit in all their chances is worth, in cents
+    swing: float = 0.0  # how many more of them arrive on time when all their chances rise by one logit
+    refunds: float = 0.0  # the cents of refund that this saves
 
     def level(self, multiple: float) -> float:
         """The going fee once a gig at this multiple joins the queue."""
@@ -78,14 +82,14 @@ class Fleet:
             return None
         queue = self.queue()
         typical, refund, late_price = request["referenceFeeCents"], REFUND * option["listPriceCents"], self.late_price(queue)
-        multiple, late = self.fee(self.car(request, spans, request["respondBy"]), typical, refund + late_price, queue)
-        risk = late * refund + (late - (1 - self.policy.on_time)) * late_price + self.harm(multiple, queue)
+        multiple, late = self.fee(self.car(request, spans, request["respondBy"]), typical, refund, late_price, queue)
+        risk = late * refund + (late - (1 - self.policy.on_time)) * late_price + self.harm(multiple, queue, late_price)
         return int(typical * multiple + max(0.0, risk))
 
     def queue(self, but: Optional[OrderState] = None) -> Queue:
         """The orders that wait for a driver now, but for one: how many, at what fee, with what chances."""
         books, policy = self.books, self.policy
-        waiting = [(state, self.posted(state) or 1.0, self.car(state.request, self.chances(state), books.now)) for state in books.orders.values() if state is not but and self.waits(state)]
+        waiting = [(state, self.posted(state) or 1.0, self.car(state.request, self.chances(state), books.now, state.won_at)) for state in books.orders.values() if state is not but and self.waits(state)]
         queue = Queue(len(waiting), sum(multiple for _, multiple, _ in waiting) / max(1, len(waiting)), sum(1 for gig in books.gigs.values() if gig.driver))
         logits = {}
         for state, multiple, car in waiting:
@@ -95,7 +99,8 @@ class Fleet:
         for state, _, _ in waiting:
             on_time = 1 / (1 + math.exp(-logits[state.id] - self.world))
             queue.late += 1 - on_time
-            queue.stake += on_time * (1 - on_time) * (REFUND * self.list_price(state) + policy.late_price * 100)
+            queue.swing += on_time * (1 - on_time)
+            queue.refunds += on_time * (1 - on_time) * REFUND * self.list_price(state)
         return queue
 
     def waits(self, state: OrderState) -> bool:
@@ -123,17 +128,17 @@ class Fleet:
         return any(leg not in state.gig_of or self.books.gigs[state.gig_of[leg]].status == "open" for leg in state.undelivered())
 
     def late_price(self, queue: Queue) -> float:
-        """The shadow price, in cents, of one late order: it rises steeply once the books expect more late orders than we allow ourselves."""
-        books, late = self.books, queue.late - BOOKED_LATE * queue.backlog
+        """The shadow price, in cents, of one late order: next to nothing while the books expect far fewer late orders than we allow ourselves, steep as they come near that share and past it."""
+        books, allowed, late = self.books, 1 - self.policy.on_time, queue.late - BOOKED_LATE * queue.backlog
         for state in books.orders.values():
             late += (1.0 if state.late else BOOKED_LATE) if state.undelivered() else state.id in books.refunded
-        share = late / (CALM + len(books.orders))
-        return self.policy.late_price * 100 * min(2.0, max(1.0, share / (1 - self.policy.on_time))) ** GRIP
+        used = late / (CALM + len(books.orders)) / allowed
+        return self.policy.late_price * 100 * min(2.0, used) ** GRIP
 
-    def harm(self, multiple: float, queue: Queue) -> float:
+    def harm(self, multiple: float, queue: Queue, late_price: float) -> float:
         """What one more gig at this fee costs the cars that wait, in cents: it lengthens the queue, and a fee above theirs draws their drivers."""
         outbid = (ON_TIME["fee"] - ON_TIME["level"]) * math.log(queue.level(multiple) / queue.going) if queue.backlog else 0.0
-        return self.policy.crowding * queue.stake * (outbid - ON_TIME["backlog"] / (1 + queue.backlog))
+        return self.policy.crowding * (queue.refunds + queue.swing * late_price) * (outbid - ON_TIME["backlog"] / (1 + queue.backlog))
 
     def chances(self, state: OrderState) -> list[Span]:
         """When an order's first car can still be collected, from now on, and arrive on time."""
@@ -141,18 +146,20 @@ class Fleet:
         arrive = notes.arrive_by(leg["delivery"], facts, state.order["deadline"])
         return [] if arrive is None else notes.collect_spans(leg["pickup"], facts, self.books.now, min(arrive - self.road(leg), leg["pickup"]["window"]["to"]))
 
-    def car(self, request: PriceRequest, spans: list[Span], at: int) -> dict[str, float]:
-        """What we know at minute `at` about how easily this request finds a driver in time, given when its car can be collected."""
+    def car(self, request: PriceRequest, spans: list[Span], at: int, since: Optional[int] = None) -> dict[str, float]:
+        """What we know at minute `at` about how easily this request finds a driver in time, given when its car can be collected and since when it has waited."""
         leg = request["legs"][0]
         km = self.atlas.km[(leg["pickup"]["placeId"], leg["delivery"]["placeId"])]
+        slack = math.log1p(max(0, max((b for _, b in spans), default=at) - at) / HOUR)
         return {
             "one": 1.0,
-            "slack": math.log1p(max(0, max((b for _, b in spans), default=at) - at) / HOUR),
+            "slack": slack,
             "short": float(km < 40),
-            "long": min(max(km, 250), 800) / 100 - 2.5,
-            "premium": float(any(l["car"]["premium"] for l in request["legs"])),
+            "long": min(max(km, 100), 800) / 100 - 1,
+            "premium": any(l["car"]["premium"] for l in request["legs"]) * max(0.0, math.log1p(3 * DAY / HOUR) - slack),  # one driver in fourteen may take it: it needs room
             "trade_in": float(len(request["legs"]) > 1),
             "drivers_delivery": math.log1p(self.drivers_near[leg["delivery"]["placeId"]]),
+            "waited": min(1.0, max(0, at - (at if since is None else since)) / HOUR),  # a gig that is an hour in the app did not pay the drivers who saw it
         }
 
     def signs(self, car: dict[str, float], multiple: float, queue: Queue) -> dict[str, float]:
@@ -169,10 +176,10 @@ class Fleet:
         """The chance that the car arrives on time: the model's, moved by what this week's world has shown."""
         return 1 / (1 + math.exp(-self.logit(car, multiple, queue) - self.world))
 
-    def fee(self, car: dict[str, float], typical: float, late_cost: float, queue: Queue, floor: float = 0.0) -> tuple[float, float]:
+    def fee(self, car: dict[str, float], typical: float, refund: float, late_price: float, queue: Queue, floor: float = 0.0) -> tuple[float, float]:
         """The fee multiple that costs least in all: the fee, the expected cost of a late car, and the harm to the cars that wait. With it, the chance of a late car."""
         def total(multiple: float) -> float:
-            return multiple * typical + (1 - self.on_time(car, multiple, queue)) * late_cost + self.harm(multiple, queue)
+            return multiple * typical + (1 - self.on_time(car, multiple, queue)) * (refund + late_price) + self.harm(multiple, queue, late_price)
         multiple = min((m for m in self.policy.fees if m >= floor), key=total, default=floor)
         return multiple, 1 - self.on_time(car, multiple, queue)
 
@@ -228,26 +235,30 @@ class Fleet:
         """One fee for as long as a gig waits, so drivers never learn to wait. It is chosen when the order needs a driver, and again only
         when it loses one, when its deadline warning comes, and once when the gig has waited into the last day before its last pickup."""
         policy, books, gig = self.policy, self.books, self.open_gig(state, legs[0])
-        posted, look = gig.schedule[-1]["feeCents"] / typical if gig else 0.0, state.order["lastPickupAt"] - LAST_DAY
-        if gig and gig.schedule[-1]["at"] >= max(state.alarm_at, look if look <= books.now else 0):
+        posted = gig.schedule[-1]["feeCents"] / typical if gig else 0.0
+        if state.late:
+            return policy.late_fee
+        if gig and self.looked(state, gig):
             return posted
-        if state.urgent and not state.late:
+        if state.urgent:
             return max(posted, policy.urgent_fee)
-        queue, leg = self.queue(but=state), state.order["legs"][0]
-        if state.late:  # the same choice, with the next step of the refund ladder as the deadline: missing it takes about a quarter of the price more
-            collect, _ = self.step(leg, leg["pickup"]["window"]["from"], state.order["deadline"])
-            return self.fee(self.car(state.request, [(books.now, collect or books.now + DAY)], books.now), typical, 0.25 * state.order["priceCents"], queue)[0]
+        queue = self.queue(but=state)
         floor = posted if not gig or gig.schedule[-1]["at"] < state.alarm_at else min((m for m in policy.fees if m > posted), default=posted)  # a gig that waited that long did not pay the drivers who saw it
-        late_cost, car = REFUND * self.list_price(state) + self.late_price(queue), self.car(state.request, self.chances(state), books.now)
-        multiple = random.Random(f"{policy.seed}:{state.id}").choice(policy.explore) if policy.explore and not posted else self.fee(car, typical, late_cost, queue, floor)[0]
+        car = self.car(state.request, self.chances(state), books.now, state.won_at)
+        chosen = self.fee(car, typical, REFUND * self.list_price(state), self.late_price(queue), queue, floor)[0]
+        multiple = random.Random(f"{policy.seed}:{state.id}").choice(policy.explore) if policy.explore and not posted else chosen
         self.forecast.setdefault(state.id, self.logit(car, multiple, queue))
         return multiple
 
+    def looked(self, state: OrderState, gig: GigState) -> bool:
+        """True when the gig's fee was chosen after everything that asks for a new choice: a lost driver, the deadline warning, the last day before its last pickup."""
+        marks = [gig.posted_at + int(self.policy.early_look * HOUR)] * bool(self.policy.early_look) + [state.order["lastPickupAt"] - LAST_DAY]
+        return gig.schedule[-1]["at"] >= max([state.alarm_at] + [mark for mark in marks if mark <= self.books.now])
+
     def due(self) -> set[str]:
-        """The orders whose gig has waited into the last day before its last pickup at the fee it opened with: their fee is chosen again."""
-        now = self.books.now
+        """The orders whose gig has waited past such a moment at the fee it had: their fee is chosen again."""
         return {state.id for state in self.books.orders.values() if state.undelivered() and not state.urgent and not state.late
-                and (gig := self.open_gig(state, state.undelivered()[0])) and gig.schedule[-1]["at"] < state.order["lastPickupAt"] - LAST_DAY <= now}
+                and (gig := self.open_gig(state, state.undelivered()[0])) and not self.looked(state, gig)}
 
     def schedule(self, state: OrderState, legs: list[int]) -> list[FeeStep]:
         typical = state.request["referenceFeeCents"] * len(legs) / len(state.order["legs"])
