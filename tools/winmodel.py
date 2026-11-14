@@ -81,7 +81,7 @@ def fit(t: pd.DataFrame) -> dict:
     days = part("run-day")
     worlds = days.groupby(days.index.str.rsplit("|", n=1).str[0])
     calm = 1.4826 * (days - worlds.transform("median")).abs().median()  # a day without an event: the market weighs the war and the outage apart, so the middle of the days, not their sd
-    spread = {"world": worlds.mean().std(), "day": calm, "dealer": part("dealer").std()}
+    spread = {"world": worlds.mean().std(), "day": calm}  # dealers differ by 0.022: the fit holds them apart, the market does not learn them (SKEPTIC.md)
     return {"SLOPE": round(float(slope), 2), "SPEED": round(float(-effect[("skip", "")]), 4), "TRUST": round(float(effect[("trust", "")]), 4),
             "LEVEL": round(float(worlds.mean().mean()), 3),
             "SPREAD": {**baked.SPREAD, **{name: round(float(sd), 3) for name, sd in spread.items()}},

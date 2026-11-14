@@ -40,21 +40,19 @@ class MarketPolicy:
     level: float = prior.LEVEL  # the log price level of an average world
     spread: dict = field(default_factory=lambda: dict(prior.SPREAD))  # the parts of a level, and how far each strays from its prior (sd)
     surprises: bool = True  # False leaves the war day and the outage day to the day and place parts: the market before idea 13, which tools/surprises.py replays
-    places: bool = True  # research/skeptic: False starts every place part at zero
-    menu: bool = True  # research/skeptic: False quotes the one best option only
     explore: Optional[tuple[float, float]] = None  # draw each multiple of the list price from this range: how the random weeks behind prior.py (explore1) were played
     seed: str = ""  # of those draws
 
 
 class Market:
     """Believes that a dealer says yes with a chance that is logistic in log price, around a level that is a sum of parts:
-    the world, the day, the dealer, the two places, their lane, the pickup place today. Each answer moves every part it touched (one Kalman step).
+    the world, the day, the two places, their lane. Each answer moves every part it touched (one Kalman step).
     A week also has one price war day and one outage day and region: each answer weighs every such week, and today's level is the mix they leave.
     The day part has two beliefs, one if today is the war day and one if not: a war and a low calm day differ only in what they ask of it."""
 
     def __init__(self, policy: MarketPolicy, books: Books, fleet: Fleet, places: Optional[dict] = None):
         self.policy, self.books, self.fleet = policy, books, fleet
-        self.places = (prior.PLACES if policy.places else {}) if places is None else places  # tools/winmodel.py fits this table through here
+        self.places = prior.PLACES if places is None else places  # tools/winmodel.py fits this table through here
         self.beliefs: dict[tuple, tuple[float, float]] = {}  # part -> mean and variance of its share of the log level
         atlas = fleet.atlas if fleet and policy.surprises else None  # without a map the events are not weighed
         self.regions = {town: frozenset(place for place in atlas.places if atlas.crow_km(town, place) <= REACH) for town in sorted(atlas.places)} if atlas else {}  # town -> the places an outage around it reaches
@@ -77,8 +75,6 @@ class Market:
         if best is None or offers[best][0] <= 0:
             return decline(request)
         margin = offers[best][1] - costs[best]
-        if not self.policy.menu:
-            return {best: offers[best][1]}
         return {kind: euros(cost + margin) for kind, cost in costs.items()}  # the dealer chooses its speed, and we earn the same whichever it takes
 
     def learn(self, request_id: str, won: Optional[str]) -> None:
@@ -122,7 +118,7 @@ class Market:
         """The parts of the level that this request touches, of those the policy gives a spread. With `war`, the day part is its belief for a war day."""
         leg, day = request["legs"][0], request["arrivedAt"] // DAY
         pickup, delivery = leg["pickup"]["placeId"], leg["delivery"]["placeId"]
-        keys = {"world": (), "day": (day, "war") if war else (day,), "dealer": (request["dealerId"],), "from": (pickup,), "to": (delivery,), "lane": (pickup, delivery), "from today": (pickup, day)}
+        keys = {"world": (), "day": (day, "war") if war else (day,), "from": (pickup,), "to": (delivery,), "lane": (pickup, delivery)}
         return [(name, *keys[name]) for name in self.policy.spread]
 
     def belief(self, part: tuple) -> tuple[float, float]:
