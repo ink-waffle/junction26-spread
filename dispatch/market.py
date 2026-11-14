@@ -41,6 +41,8 @@ class MarketPolicy:
     spread: dict = field(default_factory=lambda: dict(prior.SPREAD))  # the parts of a level, and how far each strays from its prior (sd)
     surprises: bool = True  # False leaves the war day and the outage day to the day and place parts: the market before idea 13, which tools/surprises.py replays
     places: bool = True  # research/skeptic: False starts every place part at zero
+    invest: float = 0.0  # research/simple: the share of an order's worth in trust that the quote counts (1: all)
+    floor: bool = False  # research/simple: never quote under cost
     menu: bool = True  # research/skeptic: False quotes the one best option only
     explore: Optional[tuple[float, float]] = None  # draw each multiple of the list price from this range: how the random weeks behind prior.py (explore1) were played
     seed: str = ""  # of those draws
@@ -72,7 +74,9 @@ class Market:
                 kind, prices = option["kind"], (euros(option["listPriceCents"] * step) for step in STEPS)
                 costs[kind] = cost
                 yes = self.curve(request, option)
-                offers[kind] = max(((price - cost) * yes(price), price) for price in prices)
+                worth = self.worth(request) if self.policy.invest else (lambda price, chance: 0.0)
+                offers[kind] = max(((price - cost + self.policy.invest * worth(price, chance)) * chance, price) for price in prices for chance in [yes(price)]
+                                   if not self.policy.floor or price >= cost or price >= option["listPriceCents"] * STEPS[-1] - 100)
         best = max(offers, key=offers.get, default=None)
         if best is None or offers[best][0] <= 0:
             return decline(request)
@@ -80,6 +84,16 @@ class Market:
         if not self.policy.menu:
             return {best: offers[best][1]}
         return {kind: euros(cost + margin) for kind, cost in costs.items()}  # the dealer chooses its speed, and we earn the same whichever it takes
+
+    def worth(self, request: PriceRequest) -> Callable[[int, float], float]:
+        """What an order at this price is worth beyond its margin: the dealer accepts 1% more for each order delivered to it on time, up to 25 (the rules),
+        on every later request of the week. Those we expect from the requests it has sent so far; a dealer on its way to 25 gains the orders until then."""
+        books, dealer = self.books, request["dealerId"]
+        elapsed = min(WORKDAYS, books.now // DAY + min(1.0, max(0.0, (books.now % DAY - OPENS) / (CLOSES - OPENS))))
+        seen = sum(1 for other in books.requests.values() if other["dealerId"] == dealer)
+        coming = seen * (WORKDAYS - elapsed) / max(1.0, elapsed)  # the dealer's requests still to come this week, at its rate so far
+        counted = books.trust[dealer] + sum(1 for state in books.orders.values() if state.request["dealerId"] == dealer and state.undelivered() and not state.late)
+        return lambda price, chance: 0.01 * price * max(0.0, min(chance * coming, 25 - counted))
 
     def learn(self, request_id: str, won: Optional[str]) -> None:
         """The dealer's answer to our quote: the option it bought from us, or None. A pure function of the ordered history."""
