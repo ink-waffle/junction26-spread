@@ -74,7 +74,7 @@ HOUR_WORDS = {stem + case + teen: (hour + (10 if teen else 0), case == "lta") fo
 HOUR_WORDS.update({word: (i % 12 + 1, word == "noon") for names in ("ett tva tre fyra fem sex sju atta nio tio elva tolv", "one two three four five six seven eight nine ten eleven noon")
                    for i, word in enumerate(names.split())}, twelve=(12, False))
 ANCHORS = {"clock", "half", "from", "after", "before", "by", "not", "fix"}  # next to one of these, or to a day, a bare number is a clock time
-ABBREVIATION = re.compile(rf"\b(?:(viim|klo?|n|ca)\.|(ma|ti|ke|to|pe|la)\.(?=\s*(?:\d|klo|kello|puol|{'|'.join(HOURS)})))")  # a period that ends no sentence
+ABBREVIATION = re.compile(rf"\b(?:(viim|klo?|n|ca)\.|(ma|ti|ke|to|pe|la)\.(?=\s*(?:\d+[.:]\d|klo|kello|puol|{'|'.join(HOURS)})))")  # a period that ends no sentence
 CLAUSE_END = re.compile(r"[.!?;]+\s+|\s/\s|[,()]\s*|:\s+")
 WORD = re.compile(r"(?<!\d)(\d{1,2})(?:([.:])?(\d\d))?(?!\d)(?:\s?([ap])\.?m\b)?(:[a-z]+)?|[a-z]+(?:-[a-z]+)*|-")
 
