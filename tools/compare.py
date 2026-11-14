@@ -24,7 +24,8 @@ def results(tags: list[str]) -> dict[str, dict[str, dict]]:
 
 
 def main() -> None:
-    names = [name.split("+") for name in sys.argv[1:]]  # a+b joins the weeks of two tags into one version
+    each = "--weeks" in sys.argv  # also one line per version with every week: on time / orders / margin in thousands
+    names = [name.split("+") for name in sys.argv[1:] if name != "--weeks"]  # a+b joins the weeks of two tags into one version
     flat = [tag for name in names for tag in name]
     found = results(flat)
     versions = {"+".join(name): {seed: r for tag in name for seed, r in found[tag].items()} for name in names}
@@ -40,6 +41,8 @@ def main() -> None:
         worst = min(seeds, key=lambda s: weeks[s]["onTime"])
         print(f"{name:<34} {n:>5} {mean('margin'):>8,.0f} {mean('margin') - mean('margin', base):>+8,.0f} {mean('won'):>7.0f} {late:>8.1f} {1 - late / mean('won'):>8.1%} "
               f"{weeks[worst]['onTime']:>7.1%} {sum(weeks[s]['onTime'] < 0.935 for s in seeds):>10} {mean('fee'):>5.2f} {mean('drops'):>6.1f}  {worst}")
+        if each:
+            print("    " + "  ".join(f"{s[-2:]}: {weeks[s]['onTime'] * 100:.1f}/{weeks[s]['won']}/{weeks[s]['margin'] / 1000:.1f}" for s in seeds))
 
 
 if __name__ == "__main__":
