@@ -1,44 +1,115 @@
-"""The dealer side: what to quote for each option of a price request."""
+"""The dealer side: learns from every yes and no what each dealer will pay, and quotes the price that earns most."""
 from __future__ import annotations
 
+import math
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
-from spread.types import PriceRequest
+from spread.types import DeliveryOption, PriceRequest
 
+from .atlas import DAY
 from .books import Books
 from .fleet import Fleet
+from . import prior
 
 DECLINE = 4.0  # times the list price: a quote that never wins, and costs no goodwill
+STEPS = [1 + i / 100 for i in range(-20, 151)]  # the prices we consider, as multiples of the list price
 
 
 @dataclass
 class MarketPolicy:
-    price: float = 1.45  # quote, as a multiple of the list price
-    margin: float = 0.15  # never quote below our expected cost plus this share of it
+    reserve: float = 0.3  # the volume knob: what a driver's booking is worth elsewhere, as a share of the order's cost
+    slope: float = prior.SLOPE  # how fast a dealer's yes fades: logits per unit of log price (10% dearer is about one logit)
+    speed: float = prior.SPEED  # log price a dealer gives up for each faster option we do not offer
+    trust: float = prior.TRUST  # log price a dealer adds for each order we delivered to it on time
+    level: float = prior.LEVEL  # the log price level of an average world
+    spread: dict = field(default_factory=lambda: dict(prior.SPREAD))  # the parts of a level, and how far each strays from its prior (sd)
     explore: Optional[tuple[float, float]] = None  # research: draw each multiple from this range
-    options: str = "first"  # which options to quote: first, last, all, or random (research)
+    options: str = "best"  # which options to quote: best (the one that earns most), or first, last, all, random (research)
     seed: str = ""
 
 
 class Market:
-    def __init__(self, policy: MarketPolicy, books: Books, fleet: Fleet):
+    """Believes that a dealer says yes with a chance that is logistic in log price, around a level that is a sum of parts:
+    the world, the day, the dealer, the pickup place and the delivery place. Each answer moves every part it touched (one Kalman step)."""
+
+    def __init__(self, policy: MarketPolicy, books: Books, fleet: Fleet, places: Optional[dict] = None):
         self.policy, self.books, self.fleet = policy, books, fleet
+        self.places = prior.PLACES if places is None else places
+        self.beliefs: dict[tuple, tuple[float, float]] = {}  # part -> mean and variance of its share of the log level
 
     def quote(self, request: PriceRequest) -> dict[str, int]:
-        """A price in cents for each option we offer."""
-        policy, rng = self.policy, random.Random(f"{self.policy.seed}:{request['id']}")
-        options = request["options"]
+        """A price in cents for each option we offer: the one option, and the price, with the highest expected margin over the driver's worth."""
+        policy, options = self.policy, request["options"]
+        if policy.explore or policy.options != "best":
+            return self.research(request)
+        best, prices = 0.0, {options[0]["kind"]: int(options[0]["listPriceCents"] * DECLINE)}
+        for option in options:
+            cost = self.fleet.cost(request, option)
+            if cost is None:
+                continue
+            floor = cost * (1 + policy.reserve)
+            for step in STEPS:
+                price = int(option["listPriceCents"] * step / 100 + 0.5) * 100
+                gain = (price - floor) * self.chance(request, option, price)
+                if gain > best:
+                    best, prices = gain, {option["kind"]: price}
+        return prices
+
+    def parts(self, request: PriceRequest) -> list[tuple]:
+        """The parts of the level that this request touches, of those the policy gives a spread."""
+        leg, day, dealer = request["legs"][0], request["arrivedAt"] // DAY, request["dealerId"]
+        pickup, delivery = leg["pickup"]["placeId"], leg["delivery"]["placeId"]
+        keys = {"world": (), "day": (day,), "dealer": (dealer,), "from": (pickup,), "to": (delivery,),
+                "from today": (pickup, day), "to today": (delivery, day), "dealer today": (dealer, day)}
+        return [(name, *keys[name]) for name in self.policy.spread]
+
+    def belief(self, part: tuple) -> tuple[float, float]:
+        if part not in self.beliefs:
+            mean = self.policy.level if part[0] == "world" else self.places.get(part[0], {}).get(part[1], 0.0)
+            self.beliefs[part] = (mean, self.policy.spread[part[0]] ** 2)
+        return self.beliefs[part]
+
+    def level(self, request: PriceRequest, option: DeliveryOption) -> tuple[float, float]:
+        """Mean and variance of the log multiple of the list price at which this dealer buys this option half the time."""
+        policy, beliefs = self.policy, [self.belief(part) for part in self.parts(request)]
+        known = policy.trust * self.books.on_time[request["dealerId"]] - policy.speed * request["options"].index(option)
+        return known + sum(mean for mean, _ in beliefs), sum(variance for _, variance in beliefs)
+
+    def chance(self, request: PriceRequest, option: DeliveryOption, price: int) -> float:
+        """The chance that the dealer buys this option at this price, when it is the only one we offer."""
+        mean, variance = self.level(request, option)
+        logit = self.policy.slope * (mean - math.log(price / option["listPriceCents"]))
+        return 1 / (1 + math.exp(-logit / math.sqrt(1 + math.pi * self.policy.slope ** 2 * variance / 8)))
+
+    def learn(self, request_id: str, won: Optional[str]) -> None:
+        """The dealer's answer to our quote: the option it bought from us, or None. A pure function of the ordered history."""
+        request, prices = self.books.requests.get(request_id), self.books.quotes.get(request_id)
+        if not request or not prices:
+            return
+        option = self.weighed(request, prices, won)
+        slope, (mean, variance) = self.policy.slope, self.level(request, option)
+        p = 1 / (1 + math.exp(-slope * (mean - math.log(prices[option["kind"]] / option["listPriceCents"]))))
+        weight = slope * slope * p * (1 - p)
+        push, shrink = slope * ((won is not None) - p) / (1 + weight * variance), weight / (1 + weight * variance)
+        for part in self.parts(request):
+            m, v = self.belief(part)
+            self.beliefs[part] = (m + v * push, v - v * v * shrink)
+
+    def weighed(self, request: PriceRequest, prices: dict[str, int], won: Optional[str]) -> DeliveryOption:
+        """The option of our quote that the dealer set against the competitor: the one it bought, else our best offer in its eyes."""
+        offered = [option for option in request["options"] if option["kind"] in prices]
+        return next((o for o in offered if o["kind"] == won), None) or max(offered, key=lambda o: self.chance(request, o, prices[o["kind"]]))
+
+    def research(self, request: PriceRequest) -> dict[str, int]:
+        """Random or fixed multiples on a chosen subset of options, to measure dealers."""
+        policy, rng, options = self.policy, random.Random(f"{self.policy.seed}:{request['id']}"), request["options"]
         chosen = {"first": options[:1], "last": options[-1:], "all": options}.get(policy.options) or rng.choice([options[:1], options[-1:], options])
         prices = {}
         for option in chosen:
             cost = self.fleet.cost(request, option)
-            if cost is None:
-                continue
-            multiple = rng.uniform(*policy.explore) if policy.explore else policy.price
-            prices[option["kind"]] = int(max(option["listPriceCents"] * multiple, cost * (1 + policy.margin)) / 100 + 0.5) * 100
+            if cost is not None:
+                multiple = rng.uniform(*policy.explore) if policy.explore else 1.45
+                prices[option["kind"]] = int(max(option["listPriceCents"] * multiple, cost) / 100 + 0.5) * 100
         return prices or {options[0]["kind"]: int(options[0]["listPriceCents"] * DECLINE)}
-
-    def learn(self, request_id: str, option: Optional[str]) -> None:
-        """The dealer's answer to our quote: the option it bought from us, or None."""

@@ -5,3 +5,4 @@ reveal-*/
 runs/
 .slots/
 journal-*
+.claude/
