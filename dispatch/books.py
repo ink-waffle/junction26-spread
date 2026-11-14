@@ -75,7 +75,6 @@ class Books:
         self.refunded: set[str] = set()  # orders that paid a late refund or were not delivered
         self.snow: list[tuple[int, int, set[str]]] = []  # forecasts: from, to, the places
         self.nights: dict[int, list[int]] = {}  # day -> the bookings held when it began for a car to collect that day, and how many came back in its first hour
-        self.offers: dict[tuple[str, str], int] = {}  # (gig, driver) -> the minute we sent that driver a direct offer of the gig
         self.dirty: set[str] = set()  # orders whose gigs may no longer match the plan
 
     def gig_posted(self, action: PostAction, gig_id: str, posted_at: Optional[int] = None) -> None:
