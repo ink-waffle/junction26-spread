@@ -109,7 +109,7 @@ def week(seed: str, passes: int, overrides: dict) -> str:
             def recording(request):  # what the desk knew at the minute of its quote
                 options = request["options"]
                 state["asked"][request["id"]] = {"cost": [desk.fleet.cost(request, o) for o in options], "level": [desk.market.level(request, o) for o in options],
-                                                 "trust": desk.books.on_time[request["dealerId"]]}
+                                                 "trust": desk.books.trust[request["dealerId"]]}
                 quote(request)
 
             desk.quote = recording

@@ -74,7 +74,7 @@ class Books:
         self.orders: dict[str, OrderState] = {}
         self.gigs: dict[str, GigState] = {}
         self.drivers: dict[str, DriverState] = {d["id"]: DriverState(d) for d in roster}
-        self.on_time: dict[str, int] = defaultdict(int)  # dealer id -> its trust count (RULES.md, level 8)
+        self.trust: dict[str, int] = defaultdict(int)  # dealer id -> its trust count (RULES.md, level 8)
         self.ledger: dict[str, int] = defaultdict(int)
         self.refunded: set[str] = set()
         self.snow: list[tuple[int, int, set[str]]] = []
@@ -216,9 +216,9 @@ class Books:
         dealer = self.requests[order_id]["dealerId"] if order_id in self.requests else None
         if line["kind"] in ("late_refund", "undelivered_penalty") and dealer and order_id not in self.refunded:
             self.refunded.add(order_id)
-            self.on_time[dealer] = (self.on_time[dealer] - 1) // 2 if line["kind"] == "late_refund" else self.on_time[dealer] // 2
+            self.trust[dealer] = (self.trust[dealer] - 1) // 2 if line["kind"] == "late_refund" else self.trust[dealer] // 2
         elif line["kind"] == "revenue" and dealer:
-            self.on_time[dealer] = min(25, self.on_time[dealer] + 1)
+            self.trust[dealer] = min(25, self.trust[dealer] + 1)
 
     def _leg_done(self, order_id: str, leg: int) -> bool:
         state = self.orders.get(order_id)

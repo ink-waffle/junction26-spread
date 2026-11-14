@@ -143,7 +143,7 @@ def replay(t: pd.DataFrame, week: dict, make) -> pd.DataFrame:
     turns = sorted([(week["requests"][i]["arrivedAt"], 1, i) for i in known.index] + [(week["requests"][i]["respondBy"], 0, i) for i in known.index])
     for minute, asks, request_id in turns:  # at one minute the answers come before the new requests
         request, asked = week["requests"][request_id], week["asked"][request_id]
-        books.on_time[request["dealerId"]] = asked["trust"]
+        books.trust[request["dealerId"]] = asked["trust"]
         if asks:
             books.requests[request_id] = request
             books.quotes[request_id] = market.quote(request)

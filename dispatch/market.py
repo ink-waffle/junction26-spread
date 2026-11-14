@@ -111,7 +111,7 @@ class Market:
         """Mean and variance of the log multiple of the list price at which this dealer buys this option half the time, before today's event:
         with the day part as it is if today is the war day, or if it is not."""
         policy, beliefs = self.policy, [self.belief(part) for part in self.parts(request, war)]
-        known = policy.trust * self.books.on_time[request["dealerId"]] - policy.speed * request["options"].index(option)
+        known = policy.trust * self.books.trust[request["dealerId"]] - policy.speed * request["options"].index(option)
         return known + sum(mean for mean, _ in beliefs), sum(variance for _, variance in beliefs)
 
     def parts(self, request: PriceRequest, war: bool = False) -> list[tuple]:

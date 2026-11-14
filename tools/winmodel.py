@@ -47,7 +47,7 @@ def replay(run: dict, places: Optional[dict] = None, policy: Optional[MarketPoli
                 leg = request["legs"][0]
                 rows.append({"seed": run["seed"], "run": f"{run.get('tag', '')}|{run['seed']}", "id": request_id, "day": request["arrivedAt"] // DAY, "dealer": request["dealerId"],
                              "from": leg["pickup"]["placeId"], "to": leg["delivery"]["placeId"], "skip": request["options"].index(option), "offered": len(prices),
-                             "x": math.log(multiple), "won": float(won is not None), "trust": books.on_time[request["dealerId"]], "chance": chances[request_id]})
+                             "x": math.log(multiple), "won": float(won is not None), "trust": books.trust[request["dealerId"]], "chance": chances[request_id]})
             market.learn(request_id, won)
     return rows
 
