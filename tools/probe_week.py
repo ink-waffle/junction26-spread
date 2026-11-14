@@ -11,6 +11,7 @@ import json
 import math
 import os
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
@@ -25,6 +26,17 @@ from tools.probe_tuesday import decline, stride
 
 FOLDER = os.path.join(RUNS, "bisect")
 LAST, STEP, FINE = 18 * 60 + 30, 0.10, 0.008  # the last answers of a day come at 18:15; the first stride away from the guess; a bracket this narrow is known
+
+
+def copy(parent):
+    """A fork of the world, as soon as the team has room for one: the eight practice worlds are shared with every other run."""
+    for attempt in range(120):
+        try:
+            return parent.fork()
+        except SpreadError as error:
+            if error.status != 409 or attempt == 119:
+                raise
+            time.sleep(3)
 
 
 def guess(bracket: dict) -> Optional[float]:
@@ -56,7 +68,7 @@ def bisect(parent, desk: Desk, state: dict, day: int, passes: int) -> None:
         answers = {}
         for attempt in range(4):  # another harness that finds no free slot deletes worlds nobody holds, and can catch a copy before we hold it
             with Slot() as slot:
-                fork = parent.fork()
+                fork = copy(parent)
                 slot.hold(fork.id)
                 fork._last_seq = parent._last_seq  # the copy's log starts with the parent's: read only what is new
                 try:
@@ -97,7 +109,7 @@ def week(seed: str, passes: int, overrides: dict) -> str:
             def recording(request):  # what the desk knew at the minute of its quote
                 options = request["options"]
                 state["asked"][request["id"]] = {"cost": [desk.fleet.cost(request, o) for o in options], "level": [desk.market.level(request, o) for o in options],
-                                                 "trust": desk.books.on_time[request["dealerId"]]}
+                                                 "trust": desk.books.trust[request["dealerId"]]}
                 quote(request)
 
             desk.quote = recording

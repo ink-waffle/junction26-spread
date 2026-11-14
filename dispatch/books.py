@@ -10,8 +10,6 @@ from spread.types import DeskEvent, DriverProfile, FeeStep, Order, PostAction, P
 from . import notes
 from .atlas import DAY, HOUR
 
-LIVE = ("open", "booked", "working")
-
 
 @dataclass
 class GigState:
@@ -21,7 +19,6 @@ class GigState:
     posted_at: int
     status: str = "open"
     driver: Optional[str] = None
-    fee: Optional[int] = None
 
     @property
     def legs(self) -> list[tuple[str, int]]:
@@ -48,7 +45,7 @@ class OrderState:
     changed: bool = False  # the dealer changed the order after we posted it
     tried: bool = False  # the world has heard of a gig with this order: it does not wait for a partner again
     paired: bool = False  # the order has been in a two-car gig: it is not paired a second time
-    refusals: int = 0
+    refusals: int = 0  # posts of this order that the world refused: after the first it goes without windows, after four the desk stops
 
     @property
     def id(self) -> str:
@@ -63,12 +60,8 @@ class OrderState:
 
 @dataclass
 class DriverState:
+    """A driver of the week's roster. The books learn nothing more of a driver: the fleet counts who lives where."""
     profile: DriverProfile
-    last_seen: int = -1  # last minute the driver viewed, booked or answered
-    place: Optional[str] = None  # where our gig last left them
-    free_at: int = 0
-    gigs: int = 0
-    offers: dict[int, int] = field(default_factory=lambda: defaultdict(int))  # day -> offers sent
 
 
 class Books:
@@ -83,22 +76,22 @@ class Books:
         self.orders: dict[str, OrderState] = {}
         self.gigs: dict[str, GigState] = {}
         self.drivers: dict[str, DriverState] = {d["id"]: DriverState(d) for d in roster}
-        self.on_time: dict[str, int] = defaultdict(int)  # dealer id -> its trust count (RULES.md, level 8)
-        self.ledger: dict[str, int] = defaultdict(int)
-        self.refunded: set[str] = set()
-        self.snow: list[tuple[int, int, set[str]]] = []
+        self.trust: dict[str, int] = defaultdict(int)  # dealer id -> its trust count (RULES.md, level 8)
+        self.ledger: dict[str, int] = defaultdict(int)  # kind of ledger line -> cents so far
+        self.refunded: set[str] = set()  # orders that paid a late refund or were not delivered
+        self.snow: list[tuple[int, int, set[str]]] = []  # forecasts: from, to, the places
         self.nights: dict[int, list[int]] = {}  # day -> the bookings held when it began for a car to collect that day, and how many came back in its first hour
         self.dirty: set[str] = set()  # orders whose gigs may no longer match the plan
 
-    def gig_posted(self, action: PostAction, gig_id: str, schedule: Optional[list[FeeStep]] = None, status: str = "open", posted_at: Optional[int] = None) -> GigState:
-        gig = GigState(gig_id, action["stops"], schedule or action["schedule"], self.now if posted_at is None else posted_at, status)
+    def gig_posted(self, action: PostAction, gig_id: str, posted_at: Optional[int] = None) -> None:
+        """The world took a gig of ours: it carries its legs from now on. No event says so; the desk does, from the world's answer."""
+        gig = GigState(gig_id, action["stops"], action["schedule"], self.now if posted_at is None else posted_at)
         self.gigs[gig_id] = gig
         for order_id, leg in gig.legs:
             if order_id in self.orders:
                 self.orders[order_id].gig_of[leg] = gig_id
                 self.orders[order_id].tried = True
                 self.orders[order_id].paired |= gig.shared
-        return gig
 
     def gig_gone(self, gig_id: str) -> None:
         """A gig left the app without a driver: its cars need a new gig."""
@@ -124,6 +117,11 @@ class Books:
             handler(event)
         return True
 
+    def margin(self) -> int:
+        return sum(self.ledger.values())
+
+    # One handler per kind of event, named after it.
+
     def _price_request(self, e) -> None:
         self.requests[e["request"]["id"]] = e["request"]
 
@@ -146,7 +144,7 @@ class Books:
             self.dirty.add(state.id)
 
     def _order_cancelled(self, e) -> None:
-        state = self.orders.pop(e["orderId"], None)
+        self.orders.pop(e["orderId"], None)
         for item in e["gigs"]:
             gig = self.gigs.get(item["gigId"])
             if gig is None:
@@ -157,15 +155,11 @@ class Books:
                 gig.stops = [s for s in gig.stops if s["orderId"] != e["orderId"]]
         self.dirty.discard(e["orderId"])
 
-    def _gig_viewed(self, e) -> None:
-        self._seen(e["driverId"], e["at"])
-
     def _gig_booked(self, e) -> None:
         gig = self.gigs.get(e["gigId"])
-        self._seen(e["driverId"], e["at"])
         if gig is None:
             return
-        gig.status, gig.driver, gig.fee = "booked", e["driverId"], e["feeCents"]
+        gig.status, gig.driver = "booked", e["driverId"]
         for order_id, leg in gig.legs:  # also heals a gig we wrongly thought withdrawn
             if order_id in self.orders:
                 self.orders[order_id].gig_of[leg] = gig.id
@@ -178,7 +172,7 @@ class Books:
         gig = self.gigs.get(e["gigId"])
         if gig:
             self.nights[e["at"] // DAY][1] += e["at"] % DAY < HOUR and gig.status == "booked" and self.promised(gig, e["at"])
-            gig.status, gig.driver, gig.fee = "open", None, None
+            gig.status, gig.driver = "open", None
             for order_id, _ in gig.legs:
                 if order_id in self.orders:
                     self.orders[order_id].alarm_at = e["at"]
@@ -211,9 +205,6 @@ class Books:
         if state:
             state.released[e["leg"]] = e["at"]
 
-    def _picked_up(self, e) -> None:
-        self._at_place(e["gigId"], e["placeId"])
-
     def _visit_failed(self, e) -> None:
         state = self.orders.get(e["orderId"])
         if state:
@@ -222,7 +213,6 @@ class Books:
             self.dirty.add(state.id)
 
     def _delivered(self, e) -> None:
-        self._at_place(e["gigId"], e["placeId"])
         state = self.orders.get(e["orderId"])
         if state:
             state.order["deliveredAt"][e["leg"]] = e["at"]
@@ -230,9 +220,6 @@ class Books:
         gig = self.gigs.get(e["gigId"])
         if gig and all(self._leg_done(order_id, leg) for order_id, leg in gig.legs):
             gig.status = "done"
-            if gig.driver in self.drivers:
-                self.drivers[gig.driver].free_at = e["at"]
-                self.drivers[gig.driver].gigs += 1
 
     def _forecast(self, e) -> None:
         self.snow.append((e["from"], e["to"], set(e["placeIds"])))
@@ -242,31 +229,12 @@ class Books:
         self.ledger[line["kind"]] += line["cents"]
         order_id = line.get("orderId")
         dealer = self.requests[order_id]["dealerId"] if order_id in self.requests else None
-        if line["kind"] in ("late_refund", "undelivered_penalty") and dealer and order_id not in self.refunded:
+        if line["kind"] in ("late_refund", "undelivered_penalty") and dealer and order_id not in self.refunded:  # halves the dealer's count; a late order's revenue had raised it by one
             self.refunded.add(order_id)
-            self.on_time[dealer] = (self.on_time[dealer] - 1) // 2 if line["kind"] == "late_refund" else self.on_time[dealer] // 2
+            self.trust[dealer] = (self.trust[dealer] - 1) // 2 if line["kind"] == "late_refund" else self.trust[dealer] // 2
         elif line["kind"] == "revenue" and dealer:
-            self.on_time[dealer] = min(25, self.on_time[dealer] + 1)
-
-    def _offer_answered(self, e) -> None:
-        if e["answer"] != "expired":
-            self._seen(e["driverId"], e["at"])
-
-    def _seen(self, driver_id: str, at: int) -> None:
-        if driver_id in self.drivers:
-            self.drivers[driver_id].last_seen = at
-
-    def _at_place(self, gig_id: str, place: str) -> None:
-        gig = self.gigs.get(gig_id)
-        if gig and gig.driver in self.drivers:
-            self.drivers[gig.driver].place = place
+            self.trust[dealer] = min(25, self.trust[dealer] + 1)
 
     def _leg_done(self, order_id: str, leg: int) -> bool:
         state = self.orders.get(order_id)
         return state is None or state.order["deliveredAt"][leg] is not None or leg not in state.gig_of
-
-    def margin(self) -> int:
-        return sum(self.ledger.values())
-
-    def day(self) -> int:
-        return self.now // DAY

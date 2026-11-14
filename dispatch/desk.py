@@ -11,7 +11,7 @@ from typing import Optional
 from spread.types import Action, ActionResult, DeskEvent, DeskSnapshot, DriverProfile, PriceRequest
 
 from .atlas import Atlas, clock
-from .books import Books
+from .books import Books, OrderState
 from .fleet import Fleet, FleetPolicy
 from .market import Market, MarketPolicy
 from .pairs import Pairs, PairsPolicy
@@ -19,6 +19,7 @@ from .pairs import Pairs, PairsPolicy
 
 @dataclass
 class Policy:
+    """Every knob of an experiment, by the part that reads it."""
     market: MarketPolicy = field(default_factory=MarketPolicy)
     fleet: FleetPolicy = field(default_factory=FleetPolicy)
     pairs: PairsPolicy = field(default_factory=PairsPolicy)
@@ -26,14 +27,14 @@ class Policy:
     @staticmethod
     def of(overrides: Optional[dict] = None, seed: str = "") -> "Policy":
         """The default policy with `{"market": {...}, "fleet": {...}, "pairs": {...}}` overrides, for experiments."""
-        overrides = overrides or {}
-        def tuples(part: dict) -> dict:
-            return {k: tuple(v) if isinstance(v, list) else v for k, v in part.items()}
-        return Policy(MarketPolicy(seed=seed, **tuples(overrides.get("market", {}))), FleetPolicy(seed=seed, **tuples(overrides.get("fleet", {}))),
-                      PairsPolicy(**overrides.get("pairs", {})))
+        def part(name: str) -> dict:  # JSON has lists where a policy has tuples
+            return {key: tuple(value) if isinstance(value, list) else value for key, value in (overrides or {}).get(name, {}).items()}
+        return Policy(MarketPolicy(seed=seed, **part("market")), FleetPolicy(seed=seed, **part("fleet")), PairsPolicy(**part("pairs")))
 
 
 class Desk:
+    """One week's desk: the books, the three that decide (market, fleet, pairs), and the outbox of actions on their way to the world."""
+
     def __init__(self, atlas: Atlas, roster: list[DriverProfile], policy: Policy, journal: Optional[str] = None, verbose: bool = False):
         self.books = Books(roster)
         self.fleet = Fleet(policy.fleet, self.books, atlas)
@@ -41,7 +42,7 @@ class Desk:
         self.outbox: list[Action] = []
         self.pending: set[tuple[str, int]] = set()  # legs whose post is in the outbox or on its way
         self.pairs = Pairs(policy.pairs, self.books, self.fleet, atlas, self.pending)
-        self.fleet.held = self.pairs.holds
+        self.fleet.held = self.pairs.holds  # the fleet's queue leaves out the cars that wait for a partner
         self.journal, self.verbose = journal, verbose
         self.careful = False  # the final sets it: an event that the desk cannot read is logged and passed over, not fatal
 
@@ -90,48 +91,45 @@ class Desk:
         self.outbox.append({"type": "quote", "requestId": request["id"], "prices": self.market.quote(request)})
 
     def reconcile(self) -> None:
-        """Makes each touched order's gigs match the plan: post what is missing, reprice what is off."""
+        """Makes the world match the plan: first the pairs, then each touched order by itself."""
         books = self.books
         for action in self.pairs.match():
             self.pending.update((stop["orderId"], stop["leg"]) for stop in action.get("stops", []))
             self.outbox.append(action)
         dirty, books.dirty = books.dirty | self.fleet.due(), set()
         for order_id in sorted(dirty):
-            state = books.orders.get(order_id)
-            if state is None:
-                continue
-            open_gigs = [books.gigs[g] for g in dict.fromkeys(state.gig_of.values()) if books.gigs[g].status == "open"]
-            if state.changed:  # the dealer moved the car or its hours: an open gig carries the old windows
-                state.changed = False
-                for gig in open_gigs:
-                    self.outbox.append({"type": "withdraw", "gigId": gig.id})
-                    books.gig_gone(gig.id)
-                open_gigs = []
-            for gig in open_gigs:
-                if gig.shared:  # a two-car gig keeps its fee until the pairs take it out of the app
-                    continue
-                wanted = self.fleet.schedule(state, [leg for owner, leg in gig.legs if owner == order_id])
-                if [step["feeCents"] for step in wanted] != [step["feeCents"] for step in gig.schedule]:
-                    gig.schedule = wanted
-                    self.outbox.append({"type": "reprice", "gigId": gig.id, "schedule": wanted})
-            legs = [leg for leg in state.unposted() if (order_id, leg) not in self.pending]
-            if legs and state.refusals < 4 and not self.pairs.holds(state):
-                for plan in self.fleet.plan(state, legs):
-                    self.pending.update((order_id, leg) for leg in plan.legs)
-                    self.outbox.append({"type": "post", "stops": plan.stops, "audience": plan.audience, "schedule": plan.schedule})
+            if order_id in books.orders:
+                self.settle(books.orders[order_id])
         # an order that still needs a gig from us stays dirty: it waits for a partner, or its two-car gig went after its turn
         books.dirty = {o for o in books.dirty | dirty if o in books.orders and books.orders[o].refusals < 4 and any((o, leg) not in self.pending for leg in books.orders[o].unposted())}
+
+    def settle(self, state: OrderState) -> None:
+        """One order: withdraw the open gigs that a change of the order made wrong, reprice those whose fee is off, post the legs that have no gig."""
+        books, order_id = self.books, state.id
+        open_gigs = [books.gigs[g] for g in dict.fromkeys(state.gig_of.values()) if books.gigs[g].status == "open"]
+        if state.changed:  # the dealer moved the car or its hours: an open gig carries the old windows
+            state.changed = False
+            for gig in open_gigs:
+                self.outbox.append({"type": "withdraw", "gigId": gig.id})
+                books.gig_gone(gig.id)
+            open_gigs = []
+        for gig in open_gigs:
+            if gig.shared:  # a two-car gig keeps its fee until the pairs take it out of the app
+                continue
+            wanted = self.fleet.schedule(state, [leg for owner, leg in gig.legs if owner == order_id])
+            if [step["feeCents"] for step in wanted] != [step["feeCents"] for step in gig.schedule]:
+                gig.schedule = wanted
+                self.outbox.append({"type": "reprice", "gigId": gig.id, "schedule": wanted})
+        legs = [leg for leg in state.unposted() if (order_id, leg) not in self.pending]
+        if legs and state.refusals < 4 and not self.pairs.holds(state):
+            for plan in self.fleet.plan(state, legs):
+                self.pending.update((order_id, leg) for leg in plan.legs)
+                self.outbox.append({"type": "post", "stops": plan.stops, "audience": plan.audience, "schedule": plan.schedule})
 
     def sent(self, actions: list[Action], results: list[ActionResult]) -> None:
         """Reads the world's answer to each action, and keeps both in the journal: the world's log never repeats them."""
         books = self.books
-        if self.journal and actions:
-            try:
-                with open(self.journal, "a") as file:
-                    file.write(json.dumps({"seq": books.seq, "now": books.now, "actions": actions, "results": results}) + "\n")
-            except OSError as error:  # a journal that cannot be written costs the next restart its memory, not this week its desk
-                print(f"No journal from here on: {error}", file=sys.stderr, flush=True)
-                self.journal = None
+        self.record(actions, results)
         for action in actions:  # what planning this batch did to the books at once; a replay has planned nothing, so it happens here
             if action["type"] == "withdraw":
                 books.gig_gone(action["gigId"])
@@ -146,25 +144,36 @@ class Desk:
                 self.pending.difference_update(legs)
                 if result["ok"]:
                     books.gig_posted(action, result["id"])
-                    continue
-                for order_id, _ in legs:
-                    state = books.orders.get(order_id)
-                    if state and len({owner for owner, _ in legs}) > 1:  # a refused two-car gig sends its cars alone, and says nothing of their windows
-                        state.tried = state.paired = True
-                        books.dirty.add(order_id)
-                    elif state and "already in a live gig" not in result["reason"]:  # that one a driver booked before we could replace it: its booking puts it back in the books
-                        state.refusals += 1
-                        state.late = True  # the usual reason is a window that has ended: post without windows
-                        books.dirty.add(order_id)
-            if result["ok"] and action["type"] == "quote":  # a price is ours only once the world has it
+                else:
+                    self.refused(legs, result)
+            elif result["ok"] and action["type"] == "quote":  # a price is ours only once the world has it
                 books.quotes[action["requestId"]] = action["prices"]
-            elif result["ok"] and action["type"] == "withdraw":
-                books.gig_gone(action["gigId"])
-            elif result["ok"] and action["type"] == "reprice" and action["gigId"] in books.gigs:
-                books.gigs[action["gigId"]].schedule = action["schedule"]
             if not result["ok"] and self.verbose:
                 about = action.get("requestId") or action.get("gigId") or action["stops"][0]["orderId"]
                 print(f"{clock(books.now)} refused {action['type']} {about}: {result['reason']}", file=sys.stderr, flush=True)
+
+    def record(self, actions: list[Action], results: list[ActionResult]) -> None:
+        """One line of the journal: a batch, the world's answers, and the last event folded before it."""
+        if self.journal and actions:
+            try:
+                with open(self.journal, "a") as file:
+                    file.write(json.dumps({"seq": self.books.seq, "now": self.books.now, "actions": actions, "results": results}) + "\n")
+            except OSError as error:  # a journal that cannot be written costs the next restart its memory, not this week its desk
+                print(f"No journal from here on: {error}", file=sys.stderr, flush=True)
+                self.journal = None
+
+    def refused(self, legs: list[tuple[str, int]], result: ActionResult) -> None:
+        """The world did not take a gig: its orders need another, posted differently."""
+        books = self.books
+        for order_id, _ in legs:
+            state = books.orders.get(order_id)
+            if state and len({owner for owner, _ in legs}) > 1:  # a refused two-car gig sends its cars alone, and says nothing of their windows
+                state.tried = state.paired = True
+                books.dirty.add(order_id)
+            elif state and "already in a live gig" not in result["reason"]:  # that one a driver booked before we could replace it: its booking puts it back in the books
+                state.refusals += 1
+                state.late = True  # the usual reason is a window that has ended: post without windows
+                books.dirty.add(order_id)
 
     def rejoin(self, snapshot: DeskSnapshot, history: list[DeskEvent]) -> None:
         """Rebuilds a new desk in the middle of a week: the world's log and our journal, folded in the order they happened.

@@ -65,7 +65,7 @@ def tuesday(seed, kind, passes):
                 for rid, request in books.requests.items():
                     asked[request["dealerId"]] += 1
                     won[request["dealerId"]] += bool(books.outcomes.get(rid))
-                state["monday"] = {d: {"requests": asked[d], "won": won[d], "trust": books.on_time[d]} for d in asked}
+                state["monday"] = {d: {"requests": asked[d], "won": won[d], "trust": books.trust[d]} for d in asked}
             else:
                 books = None
                 stride(parent, decline, FIRST, LAST)
@@ -93,7 +93,7 @@ def tuesday(seed, kind, passes):
                         if event["kind"] == "ledger":
                             shadow.observe(event)
                         elif event["kind"] == "price_request":
-                            state["trust"][event["request"]["id"]] = shadow.on_time[event["request"]["dealerId"]]
+                            state["trust"][event["request"]["id"]] = shadow.trust[event["request"]["dealerId"]]
 
                 with Slot() as slot:
                     fork = parent.fork()

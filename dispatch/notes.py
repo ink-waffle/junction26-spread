@@ -27,9 +27,9 @@ class NoteFacts:
     delivery_opens: Optional[int] = None  # real weekday hours of the delivery site
     delivery_closes: Optional[int] = None
     deadline: Optional[int] = None  # the car must arrive by this minute
-    manual: bool = False
-    plates: bool = False
-    summer_tyres: bool = False
+    manual: bool = False  # the driver needs a licence for a manual gearbox
+    plates: bool = False  # the car has no plates: the driver brings transfer plates
+    summer_tyres: bool = False  # the car is not collected while it snows
 
 
 # The vocabulary: cue -> words, after lowercasing and dropping accents. "valmi-" is a stem, "klar" a whole word.
@@ -124,6 +124,7 @@ class Word:
 
 
 def words(part: str) -> list[Word]:
+    """The words of one part of a note, each with its cues and the clock time it can be."""
     out = []
     for match in WORD.finditer(part):
         text, (hour, separator, minute, meridiem, ending) = match[0], match.groups()

@@ -57,6 +57,7 @@ class Atlas:
         return self.minutes[(a, b)]
 
     def crow_km(self, a: str, b: str) -> float:
+        """Straight-line km between two places: what the app and the rules measure nearness in."""
         p, q = self.places[a], self.places[b]
         lat1, lat2 = math.radians(p["lat"]), math.radians(q["lat"])
         dlat, dlon = lat2 - lat1, math.radians(q["lon"] - p["lon"])
