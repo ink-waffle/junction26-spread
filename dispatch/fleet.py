@@ -21,7 +21,7 @@ NEAR_KM = 30  # the app notifies drivers who live this close to the pickup (RULE
 # "fee" weighs a gig's fee against the fees of our other open gigs, "level" the fee that our open gigs pay together: drivers choose among our gigs.
 # "supply" is the week's drivers near a place, "pay" the typical fee as a share of the list price: the typical fee has a noise of its own, and our fee is a multiple of it.
 # The five signs of the second row come from `fleet_fit --add` on weeks of the merged system, with the rest held and the model's mean chance kept.
-ON_TIME = {"one": -5.80, "fee": 3.96, "level": 0.88, "slack": 1.13, "short": -1.85, "long": -0.44, "trade_in": -3.35, "backlog": -0.58, "known": 0.25, "waited": -0.75,
+ON_TIME = {"flu": -1.5, "one": -5.80, "fee": 3.96, "level": 0.88, "slack": 1.13, "short": -1.85, "long": -0.44, "trade_in": -3.35, "backlog": -0.58, "known": 0.25, "waited": -0.75,
            "supply_pickup": 0.75, "supply_delivery": 0.71, "private_delivery": -0.75, "premium": -0.82, "pay": 1.97}
 BOOKED_LATE = 0.030  # the share of cars with a driver that still arrive late: drops and slow drives
 REFUND = 0.54  # what a late order pays back on average, as a share of its list price
@@ -30,6 +30,7 @@ GRIP = 4  # how steeply the price of a late order rises once we expect more of t
 CALM = 20  # orders: a week's first orders say little about its share of late ones
 LAST_DAY = DAY  # before its last pickup: of the gigs still open then, one in four reaches the deadline warning and ends late (tools/late_study.py)
 KNOWN = 100  # bookings after which the drivers know that our fees stay as posted
+FLU, CALM = 0.35, 0.03  # the share of the bookings held for a day that come back in its first hour: on the week's one night of the flu, on the others (tools/night_study.py)
 MORNING = 7 * HOUR  # no driver reads a notification before it (HANDBOOK.md), and by then each knows whether they work that day
 
 
@@ -77,7 +78,7 @@ class Fleet:
         self.policy, self.books, self.atlas = policy, books, atlas
         homes = [driver.profile["homePlaceId"] for driver in books.drivers.values()]
         self.supply = {place: math.log1p(sum((1 + atlas.crow_km(home, place) / NEAR_KM) ** -2 for home in homes)) for place in atlas.places}  # the week's drivers, each counted by how near they live: a quarter at the app's 30 km
-        self.forecast: dict[str, float] = {}  # order -> the model's logit when the world took its gig: what this week's outcomes are measured against
+        self.forecast: dict[str, tuple[float, int]] = {}  # order -> the model's logit when the world took its gig, the flu apart, and the car's last day: what this week's outcomes are measured against
         self.held = lambda state: False  # the desk's pairs say which orders we keep out of the app ourselves: no driver has turned those down
 
     def cost(self, request: PriceRequest, option: DeliveryOption) -> Optional[int]:
@@ -133,13 +134,13 @@ class Fleet:
     def learned(self, waiting: dict[str, float]) -> float:
         """The intercept that best explains this week's own orders against what the model said when we posted each: this world's drivers, as far as they have shown themselves.
         An order with a driver counts as almost on time, a waiting one as the model sees it now, a late or delivered one as it ended."""
-        books, seen = self.books, []
-        for order_id, logit in self.forecast.items():
+        books, seen, flu = self.books, [], [ON_TIME["flu"] * self.flu(day) for day in range(5)]  # the flu as the nights have shown it since: it is not the world's hardness
+        for order_id, (logit, day) in self.forecast.items():
             state = books.orders.get(order_id)
             if state is None or state.undelivered() and not state.late and self.needs_driver(state) and order_id not in waiting:
                 continue
             outcome = 0.0 if state.late else 1 / (1 + math.exp(-waiting[order_id])) if order_id in waiting else 1 - BOOKED_LATE if state.undelivered() else float(order_id not in books.refunded)
-            seen.append((logit, outcome))
+            seen.append((logit + (flu[day] if day < 5 else 0.0), outcome))
         shift = 0.0
         for _ in range(4):  # Newton's method on one number, from a prior that the world is the model's
             chances = [1 / (1 + math.exp(-logit - shift)) for logit, _ in seen]
@@ -162,6 +163,14 @@ class Fleet:
         outbid = (ON_TIME["fee"] - ON_TIME["level"]) * math.log(queue.level(multiple) / queue.going) if queue.backlog else 0.0
         return self.policy.crowding * (queue.refunds + queue.swing * late_price) * (outbid - ON_TIME["backlog"] / (1 + queue.backlog))
 
+    def flu(self, day: int) -> float:
+        """How much likelier than one working day in five it is that the week's flu falls on this day. The flu shows in a day's first hour, when a third
+        of the drivers give back what they held for it: each night seen so far weighs every working day it could be. Monday has no night to show it."""
+        def weight(d: int) -> float:
+            held, back = self.books.nights.get(d, (0, 0))
+            return math.exp(back * math.log(FLU / CALM) + (held - back) * math.log((1 - FLU) / (1 - CALM)))
+        return weight(day) / sum(weight(d) for d in range(5)) - 0.2 if 0 <= day < 5 else 0.0
+
     def chances(self, state: OrderState) -> list[Span]:
         """When an order's first car can still be collected, from now on, and arrive on time."""
         leg, facts = state.order["legs"][0], self.facts(state, 0)
@@ -172,9 +181,11 @@ class Fleet:
         """What we know at minute `at` about how easily this request finds a driver in time, given when its car can be collected and since when it has waited."""
         leg = request["legs"][0]
         km = self.atlas.km[(leg["pickup"]["placeId"], leg["delivery"]["placeId"])]
-        slack = math.log1p(max(0, max((b for _, b in spans), default=at) - at) / HOUR)
+        last = max((b for _, b in spans), default=at)
+        slack = math.log1p(max(0, last - at) / HOUR)
         return {
             "one": 1.0,
+            "flu": self.flu(last // DAY),  # of the car's last day: a booking for it comes back that night, and the day has fewer drivers
             "slack": slack,
             "short": float(km < 40),
             "long": min(max(km, 100), 800) / 100 - 1,
@@ -284,7 +295,7 @@ class Fleet:
         paid = action["schedule"][0]["feeCents"] / (state.request["referenceFeeCents"] * cars / len(state.order["legs"]))
         multiple = min(self.policy.fees + (self.policy.explore or ()), key=lambda m: abs(m - paid))  # the fee as we chose it, before it became whole cents
         car = self.car(state.request, self.chances(state), self.books.now, self.meets(state))
-        self.forecast[state.id] = self.logit(car, multiple, self.queue(but=state))
+        self.forecast[state.id] = self.logit(dict(car, flu=0.0), multiple, self.queue(but=state)), max((b for _, b in self.chances(state)), default=self.books.now) // DAY
 
     def looked(self, state: OrderState, gig: GigState) -> bool:
         """True when the gig's fee was chosen after everything that asks for a new choice: a lost driver, the deadline warning, its hours in the app if we look early, the last day before its last pickup."""
