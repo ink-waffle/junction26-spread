@@ -55,7 +55,7 @@ Not fixed (not this branch's files to rewrite; for whoever owns them):
 
 Every commit leaves the decisions as they were: `tools.harness` on halal-02 and halal-05 gives €21,071.78 and €24,033.59, 517 and 594 orders, as on `944f656`; `tools.restart_test --seed halal-02 --restarts 8` rebuilds the same desk 8 times of 8 and plays the same week to the cent. For `market.py` also a replay of both weeks through the old and the new market: every quote, level and belief equal, bit for bit.
 
-- `books.py`: dead fields and handlers gone (33 lines: what the dropped direct offers needed); `on_time` → `trust`; the fold first, then one handler per event.
+- `books.py`: dead fields and handlers gone (33 lines: what the dropped direct offers needed); `on_time` → `trust`; what the desk calls first, then one handler per event.
 - `market.py`: two research switches gone (`reserve`, `options`) and two parts of the level that no prior had; `learn` in three named steps; one order of definitions; a docstring for every method.
 - `desk.py`: `reconcile` → `reconcile` + `settle`; `sent` → `sent` + `record` + `refused`.
 - `pairs.py`: `match` → `match` + `dissolve` + `gig`; the public methods first.
