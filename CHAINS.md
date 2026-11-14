@@ -5,7 +5,7 @@ default: the default policy plays 8ae61c5 to the cent (halal-01, stride 14: EUR 
 
 ## 0. Verdict
 
-**No. Play `main` 8ae61c5.** (First verdict, Sunday 01:45; section 3 has every run. No candidate for the 03:00 round.)
+**No. Play `main` 8ae61c5.** (Final, Sunday 01:50; section 3 has every run. No candidate for the 03:00 round; halal-161..192 not played, nothing reached the bar; no restart test, since the default policy is main.)
 
 - Longer chains, longer holds, longer two-car gigs and a fee by the planned hour were each played against main on the same 24 weeks
   (tune + wide, stride 14; the best also at stride 13). None is ahead of main by more than its standard error, and every one that moves
@@ -70,3 +70,11 @@ about EUR +200 a week and 10-25 more orders for 0.3-0.4 point of on-time. At equ
 
 Shared gigs by planned hours in `chains-d12r22-s14` (EUR 22 an hour): to 3 h 57% booked, cars at 0.91 x in the end; 3-5 h 68%, 0.90 x; 5-7 h 59%, 0.95 x,
 3.5% late; 7-9 h 45%, 1.02 x, 6.2% late; 9-12 h 25%, 1.10 x, 7.3% late. Gigs over 5 h that end within 60 km of their start: 2.2 a week, 79% booked, 0.94 x.
+
+## 4. Not tried, for a successor
+
+- At equal on-time every variant above is below main's own frontier (the on-time target buys the same orders cheaper), so a chain lever that works
+  has to book better, not only hold more cars: the booking of a shared gig follows its fee per planned hour, Friday, a pickup today and one yard (section 1).
+- The handbook says a driver learns "the booked fee over the first fee viewed for the order". A car that sat alone and is then booked in a two-car
+  gig may teach its viewers a rise of 1.7 x. Not measured.
+- Shared gigs over 5 h only when they end near their start (79% booked): 2 a week, too few to judge in a night.
