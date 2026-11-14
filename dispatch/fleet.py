@@ -52,6 +52,10 @@ class FleetPolicy:
     flat_late: float = 0.0  # euros: a late order costs this much whatever the week's share (0: the barrier)
     warm: bool = True  # False: the `known` sign is at its end value from the first booking
     last_day: bool = True  # False: no new choice of the fee when a gig's last day begins
+    calm: float = CALM  # research/simple
+    doubt: float = DOUBT  # research/simple
+    clamp: float = 1.0  # research/simple
+    start: float = 0.0  # research/simple: the prior mean of the week's intercept
     kit_notes: bool = False  # True: the kit starter's keyword reader reads the notes
 
 
@@ -277,12 +281,12 @@ class Fleet:
         """The intercept that best explains this week's own orders against what the model said when we posted each: this world's drivers,
         as far as they have shown themselves. A week moves the model by one logit at most."""
         seen = [(logit, outcome) for order_id, logit in self.forecast.items() for outcome in [self.outcome(order_id, waiting)] if outcome is not None]
-        shift = 0.0
+        shift = self.policy.start
         for _ in range(4):  # Newton's method on one number, from a prior that the world is the model's
             chances = [1 / (1 + math.exp(-logit - shift)) for logit, _ in seen]
-            surprise = sum(outcome - chance for (_, outcome), chance in zip(seen, chances)) - DOUBT * shift
-            shift += surprise / (sum(chance * (1 - chance) for chance in chances) + DOUBT)
-        return max(-1.0, min(1.0, shift))
+            surprise = sum(outcome - chance for (_, outcome), chance in zip(seen, chances)) - self.policy.doubt * (shift - self.policy.start)
+            shift += surprise / (sum(chance * (1 - chance) for chance in chances) + self.policy.doubt)
+        return max(self.policy.start - self.policy.clamp, min(self.policy.start + self.policy.clamp, shift))
 
     def outcome(self, order_id: str, waiting: dict[str, float]) -> Optional[float]:
         """How an order of the week stands, as a chance of on time: late 0, delivered 1 unless it paid a refund, with a driver almost 1,
@@ -306,7 +310,7 @@ class Fleet:
         books, allowed, late = self.books, 1 - self.policy.on_time, queue.late - BOOKED_LATE * queue.backlog
         for state in books.orders.values():
             late += (1.0 if state.late else BOOKED_LATE) if state.undelivered() else state.id in books.refunded
-        used = late / (CALM + len(books.orders)) / allowed
+        used = late / (self.policy.calm + len(books.orders)) / allowed
         # capped at twice the allowed share (EUR 4,800 a late order): past it even the safest car would be refused, and a week does not mend by winning nothing
         return self.policy.late_price * 100 * min(2.0, used) ** GRIP
 
