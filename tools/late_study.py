@@ -69,9 +69,19 @@ def waiting(t: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows).pivot(index="hours since won", columns="hours left", values=["orders", "late %"])
 
 
+def last_day(t: pd.DataFrame) -> str:
+    """The orders that begin the last day before their last pickup without a driver: how many, and how they end. The reason for the fleet's look at that moment."""
+    mark = t.last_pickup - DAY
+    open_then = t[(t.won_at < mark) & (t.first_booked_at.fillna(np.inf) > mark)]
+    weeks = t.groupby(["tag", "seed"]).ngroups
+    return (f"{len(open_then) / weeks:.1f} orders a week begin their last day without a driver: {open_then.warned.mean():.0%} of them reach the deadline warning, "
+            f"{open_then.late_order.mean():.0%} end late (all orders: {t.late_order.mean():.1%})")
+
+
 def main() -> None:
     t = orders(sys.argv[1:])
     pd.set_option("display.width", 250, "display.max_columns", 40)
+    print(last_day(t) + "\n")
     print(weeks(t).round(3).to_string())
     print()
     print(classes(t).round(1).to_string())

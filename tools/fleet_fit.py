@@ -121,11 +121,11 @@ def table(tags: list[str]) -> pd.DataFrame:
     return pd.DataFrame([row for tag in tags for run in runs(tag) if run.get("gigs") for row in rows(run, tag)])
 
 
-def fit(x: np.ndarray, y: np.ndarray, ridge: float = 1e-2) -> np.ndarray:
-    """Logistic regression by Newton's method."""
+def fit(x: np.ndarray, y: np.ndarray, ridge: float = 1e-2, offset: float | np.ndarray = 0.0) -> np.ndarray:
+    """Logistic regression by Newton's method; `offset` is a part of the logit that is held."""
     w = np.zeros(x.shape[1])
     for _ in range(50):
-        p = 1 / (1 + np.exp(-x @ w))
+        p = 1 / (1 + np.exp(-offset - x @ w))
         w -= np.linalg.solve((x * (p * (1 - p))[:, None]).T @ x + ridge * np.eye(x.shape[1]), x.T @ (p - y) + ridge * w)
     return w
 
@@ -177,7 +177,8 @@ def add(names: list[str], tags: list[str]) -> None:
     chance = lambda logit: np.clip(1 / (1 + np.exp(-logit)), 1e-6, 1 - 1e-6)
     score = lambda logit: float(np.mean(y * np.log(chance(logit)) + (1 - y) * np.log(1 - chance(logit))))
     print(f"{len(t)} orders of {', '.join(tags)}: {1 - y.mean():.1%} late, the model as it stands says {1 - before:.1%}")
-    print(f"log-likelihood as it stands {score(logit):.4f}, with these signs fitted {score(base + extra + shift):.4f}, and with the intercept free {score(base + x @ w):.4f}")
+    level = fit(np.ones((len(t), 1)), y, offset=logit)[0]  # the model as it stands with nothing but its intercept fitted: what the signs are measured against
+    print(f"log-likelihood as it stands {score(logit):.4f}; with the intercept free: as it stands {score(logit + level):.4f}, with these signs fitted {score(base + x @ w):.4f}")
     print("ON_TIME: " + ", ".join(f'"{name}": {weight:.2f}' for name, weight in zip(names, w[1:])) + f', "one": {shift:.2f}  (fitted freely the intercept would be {w[0]:.2f})')
 
 
