@@ -177,7 +177,8 @@ A point of on-time costs EUR 512 of margin through the target (`skeptic-t965`: +
 | `known` (the week's first hundred bookings) (`noknown`) | 32×1 | +200 (232) | +0.20 (0.15) | +300 (241) | -0.6 (0.7) | +6 | 94.1% | 0 | 0 |
 | `waited` (an hour in the app) (`nowaited`) | 32×1 | +405 (274) | -0.30 (0.15) | +249 (282) | +2.1 (0.7) | +20 | 93.0% | 1 | 0 |
 | `known` and `waited` (`noknownwaited`) | 32×1 | +410 (269) | +0.09 (0.18) | +454 (279) | +0.2 (0.8) | +16 | 94.5% | 0 | 0 |
-| the two supply signs (drivers near pickup and delivery) (`nosupply`) | 10×1 | -1,524 (406) | -1.65 (0.45) | -2,368 (441) | +1.9 (1.6) | -82 | 91.7% | 2 | 0 |
+| the two supply signs (drivers near pickup and delivery) (`nosupply`) | 32×1 | -1,607 (248) | -1.07 (0.25) | -2,155 (281) | +1.1 (1.0) | -67 | 91.7% | 4 | 0 |
+| `long` (lane length) (`nolong`) | 32×1 | -3,133 (319) | -1.78 (0.29) | -4,046 (390) | +1.4 (0.8) | -97 | 89.1% | 8 | 1 |
 | the week's learned intercept (`noworld`) | 32×1 | -505 (228) | +1.16 (0.15) | +90 (243) | -6.1 (0.7) | -48 | 96.0% | 0 | 0 |
 | the harm to the cars that wait (`noharm`) | 32×1 | -2,967 (403) | -0.32 (0.20) | -3,131 (436) | +4.2 (0.9) | +73 | 92.8% | 1 | 0 |
 | the barrier (a flat EUR 300 a late order) (`flat300`) | 32×1 | +1,498 (232) | -0.96 (0.30) | +1,004 (261) | +4.7 (1.3) | +16 | 90.3% | 4 | 0 |
@@ -185,6 +186,7 @@ A point of on-time costs EUR 512 of margin through the target (`skeptic-t965`: +
 | **The driver side: the rule for the fee** | | | | | | | | | |
 | the six-hour look (`nolook`) | 32×1 | -1,394 (278) | +0.02 (0.17) | -1,382 (301) | -3.3 (0.6) | -88 | 93.7% | 0 | 0 |
 | the look when a gig's last day begins (`nolastday`) | 32×1 | -403 (181) | -0.01 (0.14) | -410 (198) | -0.8 (0.6) | -19 | 93.6% | 0 | 0 |
+| the choice of the fee (every gig at 1.0 x typical) (`onefee`) | 32×1 | -3,005 (521) | -0.44 (0.24) | -3,228 (598) | -3.7 (0.7) | -119 | 91.7% | 2 | 0 |
 | **Pairs and notes** | | | | | | | | | |
 | two-car gigs (`nopairs`) | 32×1 | -1,444 (286) | +0.65 (0.13) | -1,110 (301) | -3.8 (0.6) | -33 | 94.7% | 0 | 0 |
 | pairs with a car that sits in the app (new pairs stay) (`noboard`) | 32×1 | -672 (221) | +0.19 (0.18) | -573 (244) | -1.0 (0.8) | -9 | 93.7% | 0 | 0 |
@@ -193,13 +195,17 @@ A point of on-time costs EUR 512 of margin through the target (`skeptic-t965`: +
 | target 96.5% instead of 97% (`t965`) | 32×1 | +200 (251) | -0.48 (0.14) | -47 (258) | +2.7 (0.7) | +15 | 93.5% | 1 | 0 |
 | target 97.5% (`t975`) | 32×1 | -546 (258) | +0.97 (0.10) | -47 (269) | -4.7 (0.5) | -24 | 95.1% | 0 | 0 |
 | **A deliberately small system, and back up** | | | | | | | | | |
+| small: model of fee, room, queue only; level = world + day; one fee of 1.0 x, never chosen again; no pairs (`small1`) | 32×1 | -9,153 (440) | -6.51 (0.74) | -12,485 (649) | +1.8 (1.1) | -225 | 77.3% | 27 | 15 |
 | the same with the model choosing the fee once (`small`) | 32×1 | -11,322 (453) | -10.50 (0.76) | -16,698 (577) | -0.8 (1.0) | -299 | 78.7% | 32 | 28 |
+| + the whole on-time model (`smallM`) | 32×1 | -5,517 (428) | -0.85 (0.21) | -5,953 (455) | -4.6 (0.7) | -170 | 91.3% | 2 | 0 |
+| + the looks (six hours, last day) (`smallML`) | 32×1 | -2,411 (356) | +0.66 (0.11) | -2,072 (363) | -4.0 (0.5) | -40 | 94.1% | 0 | 0 |
+| + pairs (what is still missing: places, lane and events in the level) (`smallMLP`) | 32×1 | -1,388 (244) | +0.17 (0.16) | -1,303 (248) | -1.2 (0.8) | -15 | 94.5% | 0 | 0 |
 | **The start of the week (rows that ADD something to main)** | | | | | | | | | |
 | WITH the baked intercept moved by +0.88, the learner as it is (`cal`) | 32×1 | +227 (294) | -0.54 (0.15) | -51 (321) | +4.1 (0.7) | +44 | 93.2% | 1 | 0 |
 | WITH the intercept +0.88 and no learned intercept (`calnw`) | 32×2 | +778 (187) | -0.20 (0.11) | +675 (206) | +2.2 (0.5) | +37 | 93.8% | 0 | 0 |
 | WITH the learned intercept starting at +0.88 (its limits as they are) (`start88`) | 32×1 | +445 (236) | -0.38 (0.13) | +250 (245) | +2.9 (0.6) | +33 | 94.1% | 0 | 0 |
 | WITH the intercept +0.5 and no learned intercept (`cal05nw`) | 32×1 | +483 (228) | +0.30 (0.14) | +639 (243) | -1.2 (0.6) | +2 | 94.8% | 0 | 0 |
-| WITH the intercept +0.7 and no learned intercept (`cal07nw`) | 29×1 | +483 (204) | -0.09 (0.18) | +434 (216) | +1.1 (0.8) | +20 | 94.2% | 0 | 0 |
+| WITH the intercept +0.7 and no learned intercept (`cal07nw`) | 32×1 | +493 (194) | -0.04 (0.16) | +475 (206) | +0.8 (0.8) | +21 | 94.2% | 0 | 0 |
 | **Candidates (section 5)** | | | | | | | | | |
 | A: without `known`, the dealer part and the pickup-today part (`candA`) | 32×1 | -109 (267) | +0.24 (0.14) | +15 (273) | -0.9 (0.6) | +0 | 94.8% | 0 | 0 |
 | **B: A, without the learned intercept, with the model's level moved by +0.88** (dce27f9 plays the same weeks to the cent) (`candAcalnw`) | 32×4 | +959 (166) | -0.27 (0.09) | +819 (180) | +2.6 (0.4) | +40 | 92.7% | 1 | 0 |
@@ -212,7 +218,19 @@ A point of on-time costs EUR 512 of margin through the target (`skeptic-t965`: +
 - **The barrier is what keeps the floor, not what earns the margin.** A flat €300 a late order earns €1,498 *more* and loses a point of on-time, with one week at 90.3% and four under 93.5%; a flat €100 leaves 24 of 32 weeks unranked. No flat price is safe in every week; the barrier finds each week's price.
 - **Parts that trade on-time for margin, as the target does:** the week's learned intercept (without it −€505 and +1.16 points: the model stays as cautious all week as it is on Monday), the flu sign (without it +€220, −0.19 point), `waited` (+€405, −0.30 point). At the price the target sets on these weeks (€512 for a point of on-time) removing each is +€90 (se 243), +€124 (se 287) and +€249 (se 282) at equal on-time: none of the three can be told from turning the target.
 - **Nothing measurable in play:** the place table (−€122, se 259), the dealer part (−€98, se 166), the pickup-today part (−€28, se 209), `known` (+€200, se 232: the system earns more without it, 6 more orders on Monday). The lane part (−€385, se 238), the events (−€295, se 201) and the menu of options (−€369, se 263) are each under two standard errors alone; the lane part and the events have the replay of section 3 behind them (63 and 55 of 64 weeks), so they stay; the menu has the team's two earlier measurements (+€784 tune, +€1,375 hold).
-- **A deliberately small system does not rank.** On-time model with fee, room and queue only, level = world + day, no looks, no pairs: €4,037 a week, on time 85.7%, 28 of 32 weeks under the minimum. The machinery is not decoration: the on-time model's car signs, the looks and the pairs are what make a ranked week.
+- **A deliberately small system does not rank, and the way back up says what each part is for** (one sample each, halal-65..96):
+
+| System | margin a week | on time | weeks ranked |
+|---|---|---|---|
+| small: on-time model of fee, room and queue only; level = world + day; every gig at 1.0 × the typical fee, never chosen again; no pairs | €6,206 | 89.7% | 17 of 32 |
+| the same, with that small model choosing the fee once | €4,037 | 85.7% | 4 of 32 |
+| + the whole on-time model (lane length, supply, pay, premium, private delivery, trade-in, flu, waited) | €9,842 | 95.3% | 32 of 32 |
+| + the looks (six hours, the last day) | €12,948 | 96.9% | 32 |
+| + two-car gigs | €13,971 | 96.4% | 32 |
+| + the places, the lane and the events in the level = `main` (the same stride) | €15,359 | 96.2% | 32 |
+| − the learner, `known`, two parts; the level and the target set on unseen weeks = the head of this branch (the same stride) | €15,914 | 96.8% | 32 |
+
+  The on-time model's car signs are what turns an unranked system into a ranked one (+€5,800 and ten points of on-time); a model without them does worse when it is allowed to choose the fee than when it is not. The looks are worth €3,100, the pairs €1,000, the dealer side's parts together €1,390 (se 244), though no one of them alone passes two standard errors. The two supply signs alone carry €1,607 (se 248) and a point of on-time (their weights are twice what unseen weeks give them, and still the system is far worse without them); choosing the fee at all, against every gig at 1.0 ×, carries €3,005 (se 521).
 
 ### The start of the week (asked by the orchestrator at 20:10, after Monday and Tuesday of the 20:00 test final)
 
