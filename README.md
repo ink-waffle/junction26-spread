@@ -10,7 +10,7 @@ Result, level 8: `[FINAL: € … margin, … % on time, place … of …]`. In 
 
 ## The modules
 
-`dispatch/` is 1,785 lines of Python. It uses the standard library and the kit's client, nothing else.
+`dispatch/` is 1,863 lines of Python in ten modules. It uses the standard library and the kit's client, nothing else.
 
 | Module | Job | Why it exists |
 |---|---|---|
@@ -18,12 +18,12 @@ Result, level 8: `[FINAL: € … margin, … % on time, place … of …]`. In 
 | `market.py` | `quote(request)`: a price for each option. `learn(...)`: one Kalman step per yes or no, which also weighs on which day the price war is and on which day and where the outage. | The competitor's price is never shown. A dealer's yes and no are the only signal. |
 | `fleet.py` | `cost(request, option)`: what the car costs us. `plan(order, legs)`: the gig, its stops, its one fee. | A car booked before its deadline warning is on time 96% of the time, otherwise 25%. So a car's cost is its fee plus its risk. |
 | `pairs.py` | Puts two cars in one gig when the second starts where the first ends. Keeps no state. | The typical fee of a trade-in is half of two single typical fees: the trip home is half a driver's cost. |
-| `notes.py` | `read(note)`: the facts of a dealer's note. Then when the car can really be collected, and the stop windows a gig needs. | The world acts on a note whether we read it or not. |
+| `notes.py` | `read(note, arrived_at)`: the facts of a dealer's note. Then when the car can really be collected, and the stop windows a gig needs. | The world acts on a note whether we read it or not. |
 | `desk.py` | One turn: fold the events, move the clock, issue the actions that make the world match the plan. `sent` reads the world's answers and writes the journal. `rejoin` rebuilds a desk mid-week. | One control loop, and the same path after a restart. |
 | `run.py` | The practice loop (we advance the clock), the live loop of the final (the clock runs by itself), the command line. | The two loops differ only in transport; both call `Desk.step`. |
 | `names.py` | The server's address when the system's resolver has none. | On Saturday the laptop's resolver refused the server's name for hours while the server answered. |
 | `prior.py` | What dealers pay as far as it holds in every world: slope, trust, speed, a level per place. Generated, not edited. | The first requests of a week must be priced before the week has taught anything. |
-| `atlas.py` | Road minutes between places, and when a site is open. | Shared by `fleet`, `notes` and `pairs`. |
+| `atlas.py` | Road minutes between places, and when a site is open. | Shared by `fleet`, `market`, `notes` and `pairs`. |
 
 ## The rules it follows
 
@@ -31,9 +31,9 @@ Result, level 8: `[FINAL: € … margin, … % on time, place … of …]`. In 
 2. **Cost = fee + risk.** `Fleet.cost` is the fee, the expected refund of a late car, the car's use of the room under the delivery minimum, and its harm to the cars that already wait. There is no list of forbidden cars.
 3. **Quote = argmax (price − cost) × P(yes).** Every other option of the request is quoted at the same margin over its own cost, so the dealer chooses its speed.
 4. **State = a fold of events and acknowledged actions.** A module may remember only what follows from the world's log and the journal of `Desk.sent`. `tools/restart_test.py` checks it object by object.
-5. **Every tunable is a field of `Policy`** (`MarketPolicy`, `FleetPolicy`, `PairsPolicy`). An experiment is a JSON override, never an edit.
+5. **Every knob of an experiment is a field of `Policy`** (`MarketPolicy`, `FleetPolicy`, `PairsPolicy`). An experiment is a JSON override, never an edit. What is not a knob is a named constant at the top of its module, with its reason on the line: a number of the rules, a fitted weight, or one of the few set by hand (`fleet.GRIP`, `DOUBT`, `CALM`, `KNOWN`; `market.SURE`; `notes.MIN_SPAN`).
 6. **A constant learned offline comes from a script** in `tools/` that regenerates it from saved weeks (table below).
-7. **Fit on `halal-01..08`, confirm on `halal-09..16`.** No constant was fitted on the second set. One number was chosen after looking at it: the on-time target of 96%.
+7. **Fit on `halal-01..08`, confirm on `halal-09..16`.** No constant was fitted on the second set. One number was chosen after looking at it: the on-time target, 96% at that time (idea 11); idea 12 set it to 97% on the tune and wide weeks.
 
 ## Run it
 
@@ -41,13 +41,13 @@ Result, level 8: `[FINAL: € … margin, … % on time, place … of …]`. In 
 python3 -m venv .venv && .venv/bin/pip install kit/spread-0.1.0-py3-none-any.whl pandas numpy   # pandas and numpy are for tools/ only
 export SPREAD_URL=https://spread.bahnexpress.com SPREAD_KEY=<team key>
 
-.venv/bin/python -m dispatch --level 8 --seed halal-01 --policy '{"fleet": {"early_look": 6}}'    # one practice week, about two minutes
-.venv/bin/python -m tools.harness --tag my-run --seeds tune --policy '{"fleet": {"early_look": 6}}'  # 8 weeks in parallel, saved to runs/my-run/
-.venv/bin/python -m tools.study my-run                                                            # saved weeks -> one row per request
-./final.sh --policy '{"fleet": {"early_look": 6}}'                                                # the final: waits for it, plays it, restarts itself
+.venv/bin/python -m dispatch --level 8 --seed halal-01           # one practice week, about two minutes
+.venv/bin/python -m tools.harness --tag my-run --seeds tune      # 8 weeks in parallel, saved to runs/my-run/
+.venv/bin/python -m tools.study my-run                           # saved weeks -> one row per request
+./final.sh                                                       # the final: waits for it, plays it, restarts itself
 ```
 
-`{"fleet": {"early_look": 6}}` turns on the second look after six hours; the code's default is off `[UPDATE: drop the override here if it becomes the default]`.
+The default policy is the one the final plays. An experiment overrides it, for example `--policy '{"fleet": {"on_time": 0.96}, "pairs": {"hold": 0}}'`.
 `RUNBOOK.md` is the procedure for a final: where to run it, how to tell that it is healthy, what to do if it dies.
 
 ## Where the evidence is
@@ -65,7 +65,7 @@ The saved weeks themselves (`runs/`, 468 MB) are not in the repository. With a t
 | Baked-in number | Where | Regenerated by |
 |---|---|---|
 | Dealers: slope, trust, speed, level, a level per place | `dispatch/prior.py` | `python -m tools.winmodel fit explore1 market-r30 market-r15 main-m4-r0.15 market-z0` |
-| Drivers: the 12 weights of the on-time model, the late share of booked cars, the average refund | `fleet.ON_TIME`, `BOOKED_LATE`, `REFUND` | `python -m tools.fleet_fit <tags>`; `--calibrate <tags>` compares it with outcomes |
+| Drivers: the 15 weights of the on-time model, the late share of booked cars, the average refund | `fleet.ON_TIME`, `BOOKED_LATE`, `REFUND` | `python -m tools.fleet_fit <tags>`; `--calibrate <tags>` compares it with outcomes |
 | A real drive against the map's minutes | `notes.SLOW_DRIVE` | `python -m tools.drive_times base1,explore1` |
 | The note reader's score | `dispatch/notes.py` | `python -m tools.label` (labels a world), `python -m tools.notes_eval` |
 | Two-car gigs: fees, the 5-hour limit, the 60 minutes of patience | `pairs.PairsPolicy` | `python -m tools.offers_study shared offers-x3`, `… board offers-mx3` |
