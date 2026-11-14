@@ -95,7 +95,7 @@ class Desk:
         for action in self.pairs.match():
             self.pending.update((stop["orderId"], stop["leg"]) for stop in action.get("stops", []))
             self.outbox.append(action)
-        dirty, books.dirty = books.dirty, set()
+        dirty, books.dirty = books.dirty | self.fleet.due(), set()
         for order_id in sorted(dirty):
             state = books.orders.get(order_id)
             if state is None:

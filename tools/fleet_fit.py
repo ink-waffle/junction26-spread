@@ -78,11 +78,13 @@ def rows(run: dict, tag: str = "") -> list[dict]:
             for option in request["options"]:
                 spans = notes.chances(request, option, facts, fleet.road(request["legs"][0]))
                 if spans:
-                    signs[(request["id"], option["kind"])] = dict(fleet.signs(request, spans, request["respondBy"], queue.backlog), queue=queue.backlog, going=queue.going, list=option["listPriceCents"])
+                    signs[(request["id"], option["kind"])] = (fleet.car(request, spans, request["respondBy"]), queue, option["listPriceCents"])
         elif kind == "order_won":
             order = event["order"]
             if (order["id"], order["option"]) in signs and order["id"] in first_fee:
-                out[order["id"]] = dict(signs[(order["id"], order["option"])], seed=run["seed"], tag=tag, id=order["id"], option=order["option"], multiple=first_fee[order["id"]], booked=0, warned=0,
+                car, queue, list_price = signs[(order["id"], order["option"])]
+                out[order["id"]] = dict(fleet.signs(car, first_fee[order["id"]], queue), queue=queue.backlog, going=queue.going, bookings=queue.known, list=list_price,
+                                        seed=run["seed"], tag=tag, id=order["id"], option=order["option"], multiple=first_fee[order["id"]], booked=0, warned=0,
                                         on_time=int(order["id"] in paid and order["id"] not in refund), refund=refund.get(order["id"], 0), price=order["priceCents"],
                                         won_at=event["at"], wait=request_hours(event["at"], max(event["at"], order["lastPickupAt"])))
         elif kind == "gig_booked" and order_of.get(event["gigId"]) in out:
@@ -103,9 +105,7 @@ def rows(run: dict, tag: str = "") -> list[dict]:
 
 
 def table(tags: list[str]) -> pd.DataFrame:
-    t = pd.DataFrame([row for tag in tags for run in runs(tag) if run.get("gigs") for row in rows(run, tag)])
-    level = (t.queue * t.going + t.multiple) / (t.queue + 1)  # the going fee once the gig is in the app: Queue.level
-    return t.assign(fee=np.log(t.multiple / level), level=np.log(level))
+    return pd.DataFrame([row for tag in tags for run in runs(tag) if run.get("gigs") for row in rows(run, tag)])
 
 
 def fit(x: np.ndarray, y: np.ndarray, ridge: float = 1e-2) -> np.ndarray:
