@@ -11,9 +11,9 @@ python -m tools.ablations skeptic-base skeptic-nolook ...                   # th
 
 ## 0. Report for the orchestrator
 
-**State at 20:10 (interim).** The audit is done (sections 1–3). The ablations have one sample of each part (section 4); second samples run after the pause for the 20:00 test final. The simplified candidate is written as clean code (bf20fcf) and **not yet proven**.
+**State at 21:06 (interim).** The audit is done (sections 1–3). Every part has one sample on halal-65..96 (section 4); the deciding rows have two to four. The simplified candidate B is clean code on this branch (section 5): against `main` +€959 a week (se 166) on halal-65..96 with four samples a side and +€678 (se 267) on halal-97..128 played once, for a quarter point of on-time; restart test 8 of 8, the same week to the cent; 3.9 `ast` check and import pass. **Still running: the hold weeks (with the known hard week), a pair without strides.**
 
-**Recommendation until this line changes: play `main` as frozen at 52aaf93.** Nothing in the audit says the frozen system is unsafe on an unseen week.
+**Recommendation until this line changes: play `main` as frozen at 52aaf93.** Nothing in the audit says the frozen system is unsafe on an unseen week. (If this file is never updated again: B at the head of `research/skeptic` has passed every proof named above, and the two open checks are about its floor, not its margin.)
 
 - The verdict in five lines: section 1. The inventory: 129 numbers and one vocabulary (section 3). The ablation table: section 4. What to delete and what it costs, the commit, the proofs: section 5.
 
@@ -139,7 +139,7 @@ The same replay with each fitted number of `prior.py` moved both ways (`--number
 Weeks halal-65..96 had never been played. Baseline = `main`'s default; one part is removed at a time through a research switch (`research/skeptic-switches`, 404f62a: with every switch at its default the 32 weeks reproduce `main`'s to the cent). A sample is the same seed at one stride (14, 13, and 12 and 15 for the close calls); a variant is set against the baseline's samples of the same strides, the samples of a week are averaged, and the standard error is over the 32 weeks. Minus = the part earns that much. Where a sign of the on-time model is removed, the intercept is moved so that the model's mean chance on the weeks of the fit stays (`known` is set to its end value; the model before idea 12 is the one of that commit). "Margin at equal on time" pays the variant's on-time difference at the price the target sets on these weeks, so a part that only trades on-time for margin shows about zero there. A row with × 1 is a first reading: one sample moves by about ±€250.
 
 <!-- ABLATIONS -->
-Baseline `skeptic-base`: 32 weeks, 64 samples: margin EUR 15,208 a week, on time 96.3% (worst sample 92.8%), 412 orders, 15.4 late a week.
+Baseline `skeptic-base`: 32 weeks, 128 samples: margin EUR 15,259 a week, on time 96.3% (worst sample 92.8%), 412 orders, 15.1 late a week.
 
 | Without | weeks × samples | margin (se) | on time, points (se) | late orders a week (se) | orders | worst sample | samples < 93.5% | not ranked |
 |---|---|---|---|---|---|---|---|---|
@@ -157,6 +157,7 @@ Baseline `skeptic-base`: 32 weeks, 64 samples: margin EUR 15,208 a week, on time
 | `known` (the week's first hundred bookings) (`noknown`) | 32×1 | +200 (232) | +0.20 (0.15) | -0.6 (0.7) | +6 | 94.1% | 0 | 0 |
 | `waited` (an hour in the app) (`nowaited`) | 32×1 | +405 (274) | -0.30 (0.15) | +2.1 (0.7) | +20 | 93.0% | 1 | 0 |
 | `known` and `waited` (`noknownwaited`) | 32×1 | +410 (269) | +0.09 (0.18) | +0.2 (0.8) | +16 | 94.5% | 0 | 0 |
+| the two supply signs (drivers near pickup and delivery) (`nosupply`) | 10×1 | -1,524 (406) | -1.65 (0.45) | +1.9 (1.6) | -82 | 91.7% | 2 | 0 |
 | the week's learned intercept (`noworld`) | 32×1 | -505 (228) | +1.16 (0.15) | -6.1 (0.7) | -48 | 96.0% | 0 | 0 |
 | the harm to the cars that wait (`noharm`) | 32×1 | -2,967 (403) | -0.32 (0.20) | +4.2 (0.9) | +73 | 92.8% | 1 | 0 |
 | the barrier (a flat EUR 300 a late order) (`flat300`) | 32×1 | +1,498 (232) | -0.96 (0.30) | +4.7 (1.3) | +16 | 90.3% | 4 | 0 |
@@ -170,6 +171,13 @@ Baseline `skeptic-base`: 32 weeks, 64 samples: margin EUR 15,208 a week, on time
 | the note grammar (the kit's keyword reader instead) (`kitnotes`) | 32×1 | -998 (235) | -0.19 (0.14) | +0.1 (0.5) | -17 | 93.3% | 1 | 0 |
 | **A deliberately small system, and back up** | | | | | | | | |
 | the same with the model choosing the fee once (`small`) | 32×1 | -11,322 (453) | -10.50 (0.76) | -0.8 (1.0) | -299 | 78.7% | 32 | 28 |
+| **The start of the week (rows that ADD something to main)** | | | | | | | | |
+| WITH the baked intercept moved by +0.88, the learner as it is (`cal`) | 32×1 | +227 (294) | -0.54 (0.15) | +4.1 (0.7) | +44 | 93.2% | 1 | 0 |
+| WITH the intercept +0.88 and no learned intercept (`calnw`) | 32×2 | +778 (187) | -0.20 (0.11) | +2.2 (0.5) | +37 | 93.8% | 0 | 0 |
+| WITH the learned intercept starting at +0.88 (its limits as they are) (`start88`) | 32×1 | +445 (236) | -0.38 (0.13) | +2.9 (0.6) | +33 | 94.1% | 0 | 0 |
+| **Candidates (section 5)** | | | | | | | | |
+| A: without `known`, the dealer part and the pickup-today part (`candA`) | 32×1 | -109 (267) | +0.24 (0.14) | -0.9 (0.6) | +0 | 94.8% | 0 | 0 |
+| **B: A, without the learned intercept, with the model's level moved by +0.88** (the clean code of this branch plays the same weeks to the cent) (`candAcalnw`) | 32×4 | +959 (166) | -0.27 (0.09) | +2.6 (0.4) | +40 | 92.7% | 1 | 0 |
 <!-- /ABLATIONS -->
 
 **How to read it** (numbers of the first sample; the table above is regenerated as samples come in, and since 20:26 a week takes ten times as long to play as before 20:00, so most rows will stay at one sample).
@@ -182,8 +190,44 @@ Baseline `skeptic-base`: 32 weeks, 64 samples: margin EUR 15,208 a week, on time
 
 ### The start of the week (asked by the orchestrator at 20:10, after Monday and Tuesday of the 20:00 test final)
 
-On halal-65..96 the frozen system wins 72 / 89 / 89 / 92 / 74 orders from Monday to Friday (`python -m tools.weekdays skeptic-base ...`); Monday is the week's lowest day in 42% of plays, and its spread is wide (sd 28; a Monday of 49 orders or fewer in 22% of plays, so the test final's 49 + 99 is an ordinary start for us, 0.3 sd under the mean). Monday is not sold on slower options: 74% of Monday's orders with a choice go on the fastest option, 52% over the week. Why Monday is thin: the model's pessimism (it says 10% late where 5% are) meets the barrier while the week has few orders. Replaying 16 of the weeks through the fleet (`tools.control_study`): the learned intercept is +0.35 at Monday noon, +0.54 on Monday evening, +0.65 on Tuesday, +0.75 from Thursday (never the +0.88 that the week's end shows); the price of a late order averages €1,325 at Monday noon against €400–900 later, because every car won so far still waits and counts as a tenth of a late order. `known` adds a second Monday penalty of up to 1.15 logits on the first bookings. Ablations of this (the baked intercept moved by +0.88 with and without the learner, the learner started at +0.88, `known` out) are the rows of the last group of the table when they arrive.
+On halal-65..96 the frozen system wins 72 / 89 / 89 / 92 / 74 orders from Monday to Friday (`python -m tools.weekdays skeptic-base ...`); Monday is the week's lowest day in 42% of plays, and its spread is wide (sd 28; a Monday of 49 orders or fewer in 22% of plays, so the test final's 49 + 99 is an ordinary start for us, 0.3 sd under the mean). Monday is not sold on slower options: 74% of Monday's orders with a choice go on the fastest option, 52% over the week. Why Monday is thin: the model's pessimism (it says 10% late where 5% are) meets the barrier while the week has few orders. Replaying 16 of the weeks through the fleet (`tools.control_study`): the learned intercept is +0.35 at Monday noon, +0.54 on Monday evening, +0.65 on Tuesday, +0.75 from Thursday (never the +0.88 that the week's end shows); the price of a late order averages €1,325 at Monday noon against €400–900 later, because every car won so far still waits and counts as a tenth of a late order. `known` adds a second Monday penalty of up to 1.15 logits on the first bookings. The ablations of this are the rows "The start of the week" of the table. What they say:
+
+| On halal-65..96, against `main` | margin (se) | on time (se) | orders Mon / Tue / Wed / Thu / Fri | fastest option, week |
+|---|---|---|---|---|
+| `main` | | | 72 / 89 / 89 / 92 / 74 | 52% |
+| the intercept moved by +0.88, the learner as it is | +€227 (294) | −0.54 (0.15) | 91 / 101 / 94 / 97 / 80 | 56% |
+| the learner started at +0.88 | +€445 (236) | −0.38 (0.13) | | |
+| **the intercept moved by +0.88, no learner** (two samples) | **+€778 (187)** | −0.20 (0.11) | 87 / 97 / 93 / 96 / 80 | 53% |
+| no learner, intercept as fitted | −€505 (228) | +1.16 (0.15) | 67 / 76 / 80 / 81 / 65 | 49% |
+
+Monday can be bought back, and it is only worth buying without the learner. With the learner kept on top of a level that is already right, the week wins 44 more orders, earns nothing for them and loses half a point of on-time: the learner counts a booked car as nearly on time before it has arrived, so its number drifts upward (+0.35 by Monday noon on nothing but bookings), and added to a right level that drift is plain risk. The learner was the mend for a fit that said twice the lateness; with the level set right once it has no job left. A week's own outcomes pin its intercept to ±0.35 by Friday while weeks truly differ by 0.28 (64 weeks, the spread of the weekly intercepts less their sampling error), so there was never much to learn within one week.
 
 ## 5. The simplest system that is as good
 
-*(follows)*
+**Rule for a deletion:** on the untouched weeks its removal costs less than about one standard error of margin and no on-time; and where the replay of section 3 can judge the part, it agrees.
+
+| Part | In play (section 4) | On 64 unseen weeks offline (section 3) | Decision |
+|---|---|---|---|
+| the week's learned intercept (`Fleet.learned`, `outcome`, `forecast`, `gig_posted`, `DOUBT`, the clamp) | alone −€505 with +1.16 points; with the level set right once **+€778 (se 187)** at −0.20 point | the model is off by one intercept, +0.88, the same on the weeks of the fit (+0.86), the fresh weeks (+0.90) and the untouched ones (+0.87) | **out; `ON_TIME["one"]` moves by +0.88** |
+| `known`, `KNOWN`, `Queue.known` | +€200 (se 232), +0.20 point, 6 more orders on Monday | opposite sign (baked +0.25, unseen −0.17 ± 0.06) | **out** (its end value, 1.15, goes into the intercept) |
+| the dealer part of the level | −€98 (se 166), +0.23 point | −0.3 per mille (se 0.2) | **out** |
+| the pickup-today part | −€28 (se 209), +0.17 point | **+1.2** per mille without it (se 0.3) | **out** |
+| the place table (60 numbers) | −€122 (se 259) | −15.3 per mille (se 0.9), 64 of 64 weeks; its size is right (× 0.5 and × 1.5 both worse) | stays: play cannot see it, the replay can |
+| `waited` | +€405 (se 274) with −0.30 point | undecided | stays: it buys on-time at the target's price |
+| the flu sign | +€220 (se 253) with −0.19 point | −3.07 ± 0.65 (baked −2.6) | stays: the same +0.2 to +0.4 point on three sets of weeks now |
+| the events, the lane part, the menu | −€295, −€385, −€369 (each under 2 se) | events 55 of 64 weeks, lane 63 of 64 | stay |
+| everything else in the table | 2 to 7 standard errors | | stays |
+
+**The candidate (B)** is `main` with the four deletions of the table and one number changed. As clean code on this branch: `dispatch/` goes from 1,948 to 1,900 lines; the on-time model from 16 weights to 15; the level from 7 parts to 5; the numbers set by hand in `fleet.py` from 7 to 4 (`DOUBT`, `KNOWN` and the clamp are gone); the fleet remembers nothing that a restart must rebuild (`Fleet.forecast` and `gig_posted` are gone: its state is the books).
+
+| B against `main`, same weeks, paired per week | margin (se) | on time, points (se) | late orders a week | orders | worst play | plays under 93.5% | unranked |
+|---|---|---|---|---|---|---|---|
+| halal-65..96, four samples a side (strides 12–15; 128 plays each) | **+€959 (166)** | −0.27 (0.09) | +2.6 (0.4) | +40 | 92.7% (main 92.8%) | 1 | 0 |
+| halal-97..128, played once, the confirmation (stride 14) | **+€678 (267)** | −0.28 (0.20) | +3.0 (0.9) | +47 | 92.2% (main 94.5%) | 1 | 0 |
+
+- By thirds of the weeks of 65..96, from the hardest drivers to the easiest (the week's own intercept, measured with hindsight on `main`'s play): margin +€1,419 / +€1,186 / +€385, on time −0.36 / −0.30 / −0.18 point. The week whose level is most wrong for B (halal-71, 1.16 logits under what B assumes) goes from 94.7% to 94.1% on time over four samples and gains €1,069.
+- Orders by weekday on 97..128: 73 / 94 / 89 / 98 / 80 → 95 / 104 / 95 / 104 / 86; Monday's sales +€1,984 (se 311); the fastest option 54% → 55% of the orders with a choice.
+- What B costs: a quarter point of on-time (16 → 19 late orders a week) and a floor that sits about half a point lower (worst of 160 plays 92.2%; `main`'s worst of 176 saved plays 92.8%). The 90% minimum is two points under B's worst play.
+- What B was *not* fitted on: the +0.88 is a measurement (the free intercept of the model on weeks it never saw), not the best of a search; the same number comes out of three disjoint sets of weeks. It was chosen before its neighbours (+0.5, +0.7 without the learner) were played; they are in the table for scale.
+
+**Proofs of the candidate.** *(filled in as they finish)*
