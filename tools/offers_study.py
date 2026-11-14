@@ -5,6 +5,7 @@
     python -m tools.offers_study offers offers-x1   # answers to direct offers by fee multiple and driver class
     python -m tools.offers_study shared offers-x3   # two cars in one gig against the same two cars in two gigs
     python -m tools.offers_study partners offers-px1  # requests that could pair with a waiting car: win rate and margin by quoted price
+    python -m tools.offers_study paired offers-mp1    # a run with two-car gigs: cars paired, their fees and on-time share
 """
 from __future__ import annotations
 
@@ -266,5 +267,37 @@ def partners(tag: str) -> None:
     print(t.groupby("seed").apply(lambda d: pd.Series({"quoted": len(d), "partner": d.partner.mean(), "won": d.won.sum(), "in_pair": d[d.won].in_pair.mean()})).round(3))
 
 
+def paired(tag: str) -> None:
+    """What the two-car gigs of a run did: how many cars they carried, what they cost, and whether those cars were on time."""
+    gigs, cars = [], []
+    for run in runs(tag):
+        t = request_table(run)
+        won = t[t.won].set_index("id")
+        booked, dropped = {}, defaultdict(int)
+        for e in run["events"]:
+            if e["kind"] == "gig_booked":
+                booked.setdefault(e["gigId"], e["at"])
+            elif e["kind"] in ("gig_dropped", "no_show"):
+                dropped[e["gigId"]] += 1
+        tried = set()
+        for gig in run["gigs"]:
+            owners = list(dict.fromkeys(stop["orderId"] for stop in gig["stops"]))
+            if len(owners) > 1:
+                tried.update(owners)
+                typical = sum(won.typical.get(o, 0) for o in owners)
+                gigs.append({"seed": run["seed"], "booked": gig["id"] in booked, "wait": booked.get(gig["id"], float("nan")) - gig["postedAt"], "done": gig["status"] == "done",
+                             "drops": dropped[gig["id"]], "fee_over_typical": gig["schedule"][-1]["feeCents"] / 100 / typical if typical else float("nan")})
+        for i, row in won.iterrows():
+            cars.append({"seed": run["seed"], "car": "delivered in a two-car gig" if row.in_pair else "two-car gig tried, went alone" if i in tried else "never paired",
+                         "fees": row.fees, "typical": row.typical, "on_time": row.on_time, "margin": row.margin})
+    g, c = pd.DataFrame(gigs), pd.DataFrame(cars)
+    if len(g):
+        print("two-car gigs:", {"posted": len(g), "booked": round(g.booked.mean(), 2), "wait_median": g.wait.median(), "wait_p90": g.wait.quantile(.9), "done_as_posted": round(g.done.mean(), 2),
+                                "drops_per_gig": round(g.drops.mean(), 2), "fee_over_typical": round(g.fee_over_typical.mean(), 2)})
+    print(c.groupby("car").apply(lambda d: pd.Series({"cars": len(d), "share": len(d) / len(c), "fees_over_typical": d.fees.sum() / d.typical.sum(), "on_time": d.on_time.mean(), "margin_per_car": d.margin.mean()})).round(3).to_string())
+    print(c.groupby("seed").apply(lambda d: pd.Series({"cars": len(d), "in_two_car_gig": (d.car == "delivered in a two-car gig").mean(), "fees_over_typical": d.fees.sum() / d.typical.sum(), "on_time": d.on_time.mean()})).round(3).to_string())
+    print("all:", {"cars": len(c), "in_two_car_gig": round((c.car == "delivered in a two-car gig").mean(), 3), "fees_over_typical": round(c.fees.sum() / c.typical.sum(), 3), "on_time": round(c.on_time.mean(), 3)})
+
+
 if __name__ == "__main__":
-    {"bookers": bookers, "pairs": pairs, "offers": offers, "shared": shared, "partners": partners}[sys.argv[1]](sys.argv[2])
+    {"bookers": bookers, "pairs": pairs, "offers": offers, "shared": shared, "partners": partners, "paired": paired}[sys.argv[1]](sys.argv[2])

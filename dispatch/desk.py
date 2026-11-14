@@ -41,6 +41,7 @@ class Desk:
         self.outbox: list[Action] = []
         self.pending: set[tuple[str, int]] = set()  # legs whose post is in the outbox or on its way
         self.pairs = Pairs(policy.pairs, self.books, self.fleet, atlas, self.pending)
+        self.fleet.held = self.pairs.holds
         self.journal, self.verbose = journal, verbose
         self.careful = False  # the final sets it: an event that the desk cannot read is logged and passed over, not fatal
 

@@ -56,6 +56,7 @@ class Fleet:
         self.policy, self.books, self.atlas = policy, books, atlas
         homes = [driver.profile["homePlaceId"] for driver in books.drivers.values()]
         self.drivers_near = {place: sum(1 for home in homes if atlas.crow_km(home, place) <= NEAR_KM) for place in atlas.places}
+        self.held = lambda state: False  # the desk's pairs say which orders we keep out of the app ourselves: no driver has turned those down
 
     def cost(self, request: PriceRequest, option: DeliveryOption) -> Optional[int]:
         """What we expect to pay, in cents, to move this request by this option's deadline: the fee, the late car's refund, its use of the room under the delivery minimum, and the orders it makes late while it waits."""
@@ -92,7 +93,7 @@ class Fleet:
 
     def waiting(self) -> list[OrderState]:
         """The orders that wait for a driver now: what the drivers are not taking."""
-        return [state for state in self.books.orders.values() if not state.late and self.needs_driver(state)]
+        return [state for state in self.books.orders.values() if not state.late and self.needs_driver(state) and not self.held(state)]
 
     def signs(self, request: PriceRequest, last_pickup: int, at: int, backlog: int) -> dict[str, float]:
         """What we know at minute `at` about how easily this request finds a driver in time."""
@@ -140,7 +141,7 @@ class Fleet:
 
     def open_gig(self, state: OrderState, leg: int) -> Optional[GigState]:
         gig = self.books.gigs.get(state.gig_of.get(leg, ""))
-        return gig if gig and gig.status == "open" else None
+        return gig if gig and gig.status == "open" and not gig.shared else None  # a two-car gig's fee is not this order's own
 
     def posted(self, state: OrderState) -> float:
         """The multiple of its typical fee that the order's open gig shows in the app; 0 when it has none."""
