@@ -244,7 +244,7 @@ Monday can be bought back, and it is only worth buying without the learner. With
 | the events, the lane part, the menu | −€295, −€385, −€369 (each under 2 se) | events 55 of 64 weeks, lane 63 of 64 | stay |
 | everything else in the table | 2 to 7 standard errors | | stays |
 
-**The candidate (B)** is `main` with the four deletions of the table and one number changed. As clean code on this branch: `dispatch/` goes from 1,948 to 1,900 lines; the on-time model from 16 weights to 15; the level from 7 parts to 5; the numbers set by hand in `fleet.py` from 7 to 4 (`DOUBT`, `KNOWN` and the clamp are gone); the fleet remembers nothing that a restart must rebuild (`Fleet.forecast` and `gig_posted` are gone: its state is the books).
+**The candidate (B)** is `main` with the four deletions of the table and one number changed. As clean code on this branch: `dispatch/` goes from 1,948 to 1,900 lines; the on-time model from 16 weights to 15; the level from 7 parts to 5; the numbers set by hand in `fleet.py` from 7 to 4 (`DOUBT`, `KNOWN` and the clamp are gone); the inventory of section 3 from 129 numbers to 123; the fleet remembers nothing that a restart must rebuild (`Fleet.forecast` and `gig_posted` are gone: its state is the books).
 
 | B against `main`, same weeks, paired per week | margin (se) | on time, points (se) | late orders a week | orders | worst play | plays under 93.5% | unranked |
 |---|---|---|---|---|---|---|---|
