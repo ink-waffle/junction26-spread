@@ -105,15 +105,14 @@ def patient(call, tries: int = 30):
             time.sleep(10)
 
 
-def play_through(world, new_desk) -> Desk:
-    """Plays a practice world to its end. When the server stops answering, a new desk rejoins from the log and its journal, as in the final."""
-    desk, away = new_desk(), False
+def play_through(world, new_desk, away: bool = False, stride: int = 0) -> Desk:
+    """Plays a practice world to its end. When the server stops answering, or with `away`, a new desk rejoins from the log and its journal, as in the final."""
     for _ in range(30):
         try:
+            desk = new_desk()
             if away:
-                desk = new_desk()
                 desk.rejoin(world.snapshot(), world.events())
-            play_practice(world, desk)
+            play_practice(world, desk, stride=stride)
             return desk
         except Unreachable:
             away = True
@@ -121,7 +120,7 @@ def play_through(world, new_desk) -> Desk:
     raise Unreachable(0, f"world {world.id}: the server did not answer for 30 tries")
 
 
-def play(tag: str, seed: str, level: int, overrides: dict, save: bool) -> dict:
+def play(tag: str, seed: str, level: int, overrides: dict, save: bool, stride: int = 0) -> dict:
     client = Client()
     with Slot() as slot:
         world = patient(lambda: create(client, level, seed))
@@ -131,7 +130,7 @@ def play(tag: str, seed: str, level: int, overrides: dict, save: bool) -> dict:
         journal = os.path.join(RUNS, "journals", f"{world.id}.jsonl")
         try:
             roster, atlas = patient(world.roster), Atlas(patient(client.map))
-            desk = play_through(world, lambda: Desk(atlas, roster, Policy.of(overrides, seed=seed), journal=journal))
+            desk = play_through(world, lambda: Desk(atlas, roster, Policy.of(overrides, seed=seed), journal=journal), stride=stride)
             score = patient(world.score)
         except BaseException:
             try:
@@ -181,7 +180,7 @@ def line(s: dict) -> str:
 
 def play_each(args: argparse.Namespace, seeds: list[str], tries: int = 3):
     """Plays each seed in a process of its own, at most `workers` at once; a process that dies is started again."""
-    command = [sys.executable, "-m", "tools.harness", "--one", "--tag", args.tag, "--level", str(args.level), "--policy", args.policy] + ["--no-save"] * args.no_save
+    command = [sys.executable, "-m", "tools.harness", "--one", "--tag", args.tag, "--level", str(args.level), "--policy", args.policy, "--stride", str(args.stride)] + ["--no-save"] * args.no_save
     waiting, running = [(seed, 1) for seed in seeds], {}
     while waiting or running:
         while waiting and len(running) < args.workers:
@@ -210,6 +209,7 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--no-save", action="store_true")
     parser.add_argument("--clean", action="store_true", help="only delete orphaned practice worlds")
+    parser.add_argument("--stride", type=int, default=0, help="minutes the clock moves a turn while requests arrive (0: wake on every event); 14 plays a week in a quarter of the requests")
     parser.add_argument("--one", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.clean:
@@ -218,7 +218,7 @@ def main() -> None:
     seeds = SEEDS.get(args.seeds) or args.seeds.split(",")
     overrides = json.loads(args.policy)
     if args.one:
-        print(json.dumps(play(args.tag, seeds[0], args.level, overrides, not args.no_save)), flush=True)
+        print(json.dumps(play(args.tag, seeds[0], args.level, overrides, not args.no_save, args.stride)), flush=True)
         return
     results = list(play_each(args, seeds))
     if results:

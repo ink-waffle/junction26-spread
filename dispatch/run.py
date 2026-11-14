@@ -41,14 +41,19 @@ class Impatient(Client):
         return super()._send(method, path, payload, headers)
 
 
-def play_practice(world: World, desk: Desk, on_day: Optional[Callable[[int, Score], None]] = None, until: int = 10 ** 9) -> None:
+def play_practice(world: World, desk: Desk, on_day: Optional[Callable[[int, Score], None]] = None, until: int = 10 ** 9, stride: int = 0) -> None:
     """One request a turn: the advance carries the outbox, then moves the clock to the next event that can need an action, or to the next alarm.
-    With `until`, returns after the first turn that ends at that minute or later, the outbox unsent."""
+    With `until`, returns after the first turn that ends at that minute or later, the outbox unsent. With `stride`, the clock moves that many
+    minutes a turn while dealers send requests: a quarter of the requests, and every answer up to `stride` minutes later (a dealer waits 15)."""
     snapshot = world.snapshot()
     desk.books.now, ends_at = snapshot["now"], snapshot["endsAt"]
     while desk.books.now < min(until, ends_at):
-        day, actions = desk.books.now // DAY, desk.take()
-        step = world.advance(until=WAKE_ON, max=min(ends_at, (day + 1) * DAY, max(desk.alarm(), desk.books.now)), actions=actions)
+        now, actions = desk.books.now, desk.take()
+        day, limit = now // DAY, min(ends_at, (now // DAY + 1) * DAY, max(desk.alarm(), now))
+        if stride and day < 5 and 8 * HOUR <= now % DAY < 19 * HOUR + 30:
+            step = world.advance(to=min(limit, now + stride), actions=actions)
+        else:
+            step = world.advance(until=WAKE_ON, max=limit, actions=actions)
         desk.sent(actions, step["results"])
         desk.step(step["events"], step["now"])
         if on_day and desk.books.now // DAY > day:
