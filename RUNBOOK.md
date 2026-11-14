@@ -86,7 +86,7 @@ Thursday   margin €    222.48  revenue €     931.00    65 orders  100.0% on 
 - `slowest turn`: the longest time in that hour from a burst of events to the world's answer to our actions. From the cloud machine 15 to 60 ms, from the laptop 70 to 600 ms. Above 3,000 ms quotes start to miss their 4.5 s.
 - One line per world day with the server's own score. On time must stay at or above 90%.
 - `refused …`: an action the world refused, with its reason. `N requests ran out before we saw them`: we were away or slow, and did not send quotes that nobody would read.
-- `… A new desk rejoins in N s.`: a request failed, or the server restarted, and the desk rebuilt itself. After five tries in a row it says so once a minute: the server or our network is down, and the desk keeps trying for as long as it takes.
+- `… No desk for N min; a new one rejoins in N s.`: a request failed, or the server restarted, and the desk rebuilt itself. After five tries in a row it says so once a minute: the server or our network is down, and the desk keeps trying for as long as it takes.
 - A Python traceback followed by more hour lines: an event the desk could not answer was passed over. Note it; the desk goes on.
 
 ## If it dies

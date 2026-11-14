@@ -161,7 +161,7 @@ def next_final(client: Client) -> World:
 
 def live(client: Client, overrides: dict, world_id: Optional[str] = None) -> Score:
     """Plays the final, or a world whose clock someone else moves, to its end. Every failure leads to the same place: a new desk that rejoins."""
-    atlas, world, wait, failed_at, told = None, None, 0.0, 0.0, 0.0
+    atlas, world, wait, failed_at, lost_at, told = None, None, 0.0, 0.0, 0.0, 0.0
     while True:
         try:
             atlas = atlas or Atlas(client.map())
@@ -176,10 +176,11 @@ def live(client: Client, overrides: dict, world_id: Optional[str] = None) -> Sco
             if isinstance(error, SpreadError) and error.status in (403, 404):  # this world is not ours to play any more: ask again which one is
                 world = None
             wait = 0.0 if time.monotonic() - failed_at > 10 else min(5.0, wait * 2 or 0.5)  # a desk that lived ten seconds had recovered: try at once
+            lost_at = time.monotonic() if wait == 0.0 else lost_at
             if wait < 5.0 or time.monotonic() - told > 60:  # the first failures get a line each, a long outage one a minute
                 if not isinstance(error, Unreachable):
                     traceback.print_exc()
-                print(f"{error}. A new desk rejoins in {wait:.1f} s.", file=sys.stderr, flush=True)
+                print(f"{error}. No desk for {(time.monotonic() - lost_at) / 60:.0f} min; a new one rejoins in {wait:.1f} s.", file=sys.stderr, flush=True)
                 told = time.monotonic()
             time.sleep(wait)
             failed_at = time.monotonic()
