@@ -16,7 +16,7 @@ import time
 from collections import defaultdict
 import subprocess
 
-from spread.client import Client, SpreadError
+from spread.client import Client, SpreadError, Unreachable
 
 from dispatch.atlas import Atlas
 from dispatch.desk import Desk, Policy
@@ -94,31 +94,61 @@ def create(client: Client, level: int, seed: str):
     raise SystemExit("no practice slot became free")
 
 
+def patient(call, tries: int = 30):
+    """The answer to a request, asked again while the server does not answer."""
+    for attempt in range(tries):
+        try:
+            return call()
+        except Unreachable:
+            if attempt == tries - 1:
+                raise
+            time.sleep(10)
+
+
+def play_through(world, new_desk) -> Desk:
+    """Plays a practice world to its end. When the server stops answering, a new desk rejoins from the log and its journal, as in the final."""
+    desk, away = new_desk(), False
+    for _ in range(30):
+        try:
+            if away:
+                desk = new_desk()
+                desk.rejoin(world.snapshot(), world.events())
+            play_practice(world, desk)
+            return desk
+        except Unreachable:
+            away = True
+            time.sleep(10)
+    raise Unreachable(0, f"world {world.id}: the server did not answer for 30 tries")
+
+
 def play(tag: str, seed: str, level: int, overrides: dict, save: bool) -> dict:
     client = Client()
     with Slot() as slot:
-        world = create(client, level, seed)
+        world = patient(lambda: create(client, level, seed))
         slot.hold(world.id)
         started = time.time()
+        os.makedirs(os.path.join(RUNS, "journals"), exist_ok=True)
+        journal = os.path.join(RUNS, "journals", f"{world.id}.jsonl")
         try:
-            roster = world.roster()
-            desk = Desk(Atlas(client.map()), roster, Policy.of(overrides, seed=seed))
-            play_practice(world, desk)
-            score = world.score()
+            roster, atlas = patient(world.roster), Atlas(patient(client.map))
+            desk = play_through(world, lambda: Desk(atlas, roster, Policy.of(overrides, seed=seed), journal=journal))
+            score = patient(world.score)
         except BaseException:
             try:
                 world.delete()
             except SpreadError:
                 pass
             raise
-    events = world.events()
+    events = patient(world.events)
     summary = summarise(seed, world.id, score, desk, events, time.time() - started)
     if save:
         folder = os.path.join(RUNS, tag)
         os.makedirs(folder, exist_ok=True)
+        gigs, reveal = patient(world.snapshot)["gigs"], patient(world.reveal)
         with gzip.open(os.path.join(folder, f"{seed}.json.gz"), "wt") as file:
             json.dump({"seed": seed, "level": level, "worldId": world.id, "policy": overrides, "summary": summary, "score": score,
-                       "quotes": desk.books.quotes, "roster": roster, "events": events, "gigs": world.snapshot()["gigs"], "reveal": world.reveal()}, file)
+                       "quotes": desk.books.quotes, "roster": roster, "events": events, "gigs": gigs, "reveal": reveal}, file)
+    os.remove(journal) if os.path.exists(journal) else None
     return summary
 
 
