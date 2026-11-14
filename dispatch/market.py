@@ -13,20 +13,24 @@ from .books import Books
 from .fleet import Fleet
 from . import prior
 
-DECLINE = 4.0  # times the list price: a quote that never wins, and costs no goodwill
-STEPS = [1 + i / 100 for i in range(-20, 151)]  # the prices we consider, as multiples of the list price
+DECLINE = 10.0  # times the list price: a quote that never wins, and costs no goodwill
+STEPS = [i / 100 for i in range(80, 351)]  # the prices we consider, as multiples of the list price
+FULL_TRUST, DEALERS = 25, 40  # a dealer counts at most 25 orders on time (RULES.md); a world has about 40 dealers
 
 
 @dataclass
 class MarketPolicy:
-    reserve: float = 0.3  # the volume knob: what a driver's booking is worth elsewhere, as a share of the order's cost
+    reserve: float = 0.3  # the least a booking must earn above its cost, as a share of that cost
+    orders: Optional[float] = None  # the orders a day that drivers can carry: when we expect to win more, a booking must earn more
+    pace: float = 0.02  # how fast it then rises: its relative step per quote, per unit of chance above the target
+    invest: float = 0.0  # research: how much of the future worth of a dealer's trust the price counts (0 none, 1 all)
     slope: float = prior.SLOPE  # how fast a dealer's yes fades: logits per unit of log price (10% dearer is about one logit)
     speed: float = prior.SPEED  # log price a dealer gives up for each faster option we do not offer
     trust: float = prior.TRUST  # log price a dealer adds for each order we delivered to it on time
     level: float = prior.LEVEL  # the log price level of an average world
     spread: dict = field(default_factory=lambda: dict(prior.SPREAD))  # the parts of a level, and how far each strays from its prior (sd)
     explore: Optional[tuple[float, float]] = None  # research: draw each multiple from this range
-    options: str = "best"  # which options to quote: best (the one that earns most), or first, last, all, random (research)
+    options: str = "best"  # the options we consider: best (all, and we offer the one that earns most); research: first, last, random
     seed: str = ""
 
 
@@ -38,24 +42,32 @@ class Market:
         self.policy, self.books, self.fleet = policy, books, fleet
         self.places = prior.PLACES if places is None else places
         self.beliefs: dict[tuple, tuple[float, float]] = {}  # part -> mean and variance of its share of the log level
+        self.booking = policy.reserve  # what a booking must earn now: the shadow price of a driver, as a share of the order's cost
 
     def quote(self, request: PriceRequest) -> dict[str, int]:
-        """A price in cents for each option we offer: the one option, and the price, with the highest expected margin over the driver's worth."""
+        """A price in cents for the one option, and at the price, with the highest expected margin over what the booking is worth."""
         policy, options = self.policy, request["options"]
-        if policy.explore or policy.options != "best":
+        if policy.explore:
             return self.research(request)
-        best, prices = 0.0, {options[0]["kind"]: int(options[0]["listPriceCents"] * DECLINE)}
-        for option in options:
+        worth = 1 + policy.invest * policy.trust * self.lifted(request["dealerId"])  # a euro from a dealer whose trust still grows is worth more
+        offers = {}  # option -> the highest expected gain, and its price
+        for option in {"first": options[:1], "last": options[-1:]}.get(policy.options, options):
             cost = self.fleet.cost(request, option)
-            if cost is None:
-                continue
-            floor = cost * (1 + policy.reserve)
-            for step in STEPS:
-                price = int(option["listPriceCents"] * step / 100 + 0.5) * 100
-                gain = (price - floor) * self.chance(request, option, price)
-                if gain > best:
-                    best, prices = gain, {option["kind"]: price}
-        return prices
+            if cost is not None:
+                floor = cost * (1 + self.booking)
+                prices = [int(option["listPriceCents"] * step / 100 + 0.5) * 100 for step in STEPS]
+                offers[option["kind"]] = max(((price * worth - floor) * self.chance(request, option, price), price) for price in prices)
+        offers = {kind: price for kind, (gain, price) in offers.items() if gain > 0 and (policy.options == "each" or gain == max(offers.values())[0])}
+        return offers or {options[0]["kind"]: int(options[0]["listPriceCents"] * DECLINE)}
+
+    def lifted(self, dealer: str) -> float:
+        """How many of our coming orders one more on-time order to this dealer will lift by a trust step: those until its trust is full or the week ends."""
+        books = self.books
+        share = (sum(1 for r in books.requests.values() if r["dealerId"] == dealer) + 1) / (len(books.requests) + DEALERS)
+        rate = (sum(1 for won in books.outcomes.values() if won) + 3) / (len(books.outcomes) + 10)
+        left = prior.REQUESTS * max(0.0, 1 - (books.now // DAY * 600 + min(600, max(0, books.now % DAY - 480))) / 3000)
+        coming = sum(1 for state in books.orders.values() if state.request["dealerId"] == dealer and state.undelivered() and state.id not in books.refunded)
+        return max(0.0, min(FULL_TRUST - books.on_time[dealer] - coming, share * left * rate))
 
     def parts(self, request: PriceRequest) -> list[tuple]:
         """The parts of the level that this request touches, of those the policy gives a spread."""
@@ -89,6 +101,9 @@ class Market:
         if not request or not prices:
             return
         option = self.weighed(request, prices, won)
+        if self.policy.orders:  # dual ascent on the drivers' capacity: dearer while we expect more orders a day than they carry
+            excess = self.chance(request, option, prices[option["kind"]]) - self.policy.orders / (prior.REQUESTS / 5)
+            self.booking = max(self.policy.reserve, self.booking * math.exp(self.policy.pace * excess))
         slope, (mean, variance) = self.policy.slope, self.level(request, option)
         p = 1 / (1 + math.exp(-slope * (mean - math.log(prices[option["kind"]] / option["listPriceCents"]))))
         weight = slope * slope * p * (1 - p)
@@ -103,13 +118,8 @@ class Market:
         return next((o for o in offered if o["kind"] == won), None) or max(offered, key=lambda o: self.chance(request, o, prices[o["kind"]]))
 
     def research(self, request: PriceRequest) -> dict[str, int]:
-        """Random or fixed multiples on a chosen subset of options, to measure dealers."""
+        """Random multiples on a random subset of the options, to measure dealers."""
         policy, rng, options = self.policy, random.Random(f"{self.policy.seed}:{request['id']}"), request["options"]
-        chosen = {"first": options[:1], "last": options[-1:], "all": options}.get(policy.options) or rng.choice([options[:1], options[-1:], options])
-        prices = {}
-        for option in chosen:
-            cost = self.fleet.cost(request, option)
-            if cost is not None:
-                multiple = rng.uniform(*policy.explore) if policy.explore else 1.45
-                prices[option["kind"]] = int(max(option["listPriceCents"] * multiple, cost) / 100 + 0.5) * 100
+        chosen = {"first": options[:1], "last": options[-1:], "best": options}.get(policy.options) or rng.choice([options[:1], options[-1:], options])
+        prices = {o["kind"]: int(o["listPriceCents"] * rng.uniform(*policy.explore) / 100 + 0.5) * 100 for o in chosen if self.fleet.cost(request, o) is not None}
         return prices or {options[0]["kind"]: int(options[0]["listPriceCents"] * DECLINE)}

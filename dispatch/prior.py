@@ -3,6 +3,7 @@ SLOPE = 11.84
 SPEED = 0.0821
 TRUST = 0.0109
 LEVEL = 0.291
+REQUESTS = 1037
 SPREAD = {'world': 0.064, 'day': 0.131, 'dealer': 0.019, 'from': 0.04, 'to': 0.04}
 PLACES = {'from': {'espoo': 0.039,
           'hameenlinna': 0.014,
