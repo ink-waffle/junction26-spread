@@ -28,7 +28,7 @@ REFUND = 0.54  # what a late order pays back on average, as a share of its list 
 DOUBT = 4.0  # how firmly we hold, before a week's own outcomes speak, that its world is the model's: the prior's weight, in outcomes
 GRIP = 4  # how steeply the price of a late order rises once we expect more of them than we allow ourselves
 CALM = 20  # orders: a week's first orders say little about its share of late ones
-LAST_DAY = DAY  # before its last pickup: a gig still open then ends in a deadline warning two times in three (AUDIT.md)
+LAST_DAY = DAY  # before its last pickup: of the gigs still open then, one in four reaches the deadline warning and ends late (tools/late_study.py)
 KNOWN = 100  # bookings after which the drivers know that our fees stay as posted
 
 
@@ -37,7 +37,7 @@ class FleetPolicy:
     fees: tuple[float, ...] = (0.85, 1.0, 1.15, 1.3, 1.5)  # the fees a gig may open at, as multiples of the typical fee
     urgent_fee: float = 1.6  # after the deadline warning
     late_fee: float = 1.3  # once the car can only arrive late: enough for the drivers who saw it at less, or it is never delivered
-    on_time: float = 0.97  # the share of orders we want on time: the delivery minimum with room for a bad week (unseen weeks end up to 5 points under it)
+    on_time: float = 0.97  # the share of orders we want on time: the delivery minimum with room for a bad week (32 weeks end 0.9 points under it on average, the worst 6.3)
     late_price: float = 300.0  # euros that a late order costs us beyond its refund while we are within that share
     crowding: float = 1.0  # research: how much of the harm to the waiting cars we charge
     early_look: float = 6.0  # hours in the app after which a gig without a taker gets its fee chosen again, one step up at least; 0: only on its last day
