@@ -177,7 +177,7 @@ class Stage:
             yield event
 
 
-def rehearse(tag: str, seed: str, level: int, overrides: dict, speed: float, lag: float, trouble: list[str], down: float, until: int, process: str,
+def rehearse(tag: str, seed: str, level: int, overrides: dict, speed: float, lag: float, trouble: list[str], down: float, until: int, process: bool,
              start: int = 7 * HOUR, dark: float = 0) -> dict:
     folder = os.path.join(RUNS, tag)
     os.makedirs(os.path.join(folder, seed), exist_ok=True)
@@ -215,8 +215,6 @@ def rehearse(tag: str, seed: str, level: int, overrides: dict, speed: float, lag
                     time.sleep(down)
             if process:  # the real thing: the desk is its own process, started as for the final, and a kill is SIGKILL
                 command = [sys.executable, "-m", "dispatch", "--final", "--world", world.id, "--policy", json.dumps(overrides)]
-                if process != "local":  # a desk on another machine: `process` is the shell command that starts it there, {world} for the world's id
-                    command = ["/bin/sh", "-c", process.format(world=world.id)]
                 env = dict(os.environ, PYTHONPATH=os.path.dirname(os.path.dirname(os.path.abspath(run.__file__))))
                 kills = sorted(minute for minute, kind in schedule if kind == "kill")
                 desk = subprocess.Popen(command, env=env, stdout=sys.stdout, stderr=sys.stdout)
@@ -295,9 +293,9 @@ def main() -> None:
     parser.add_argument("--dark", type=float, default=60, help="real seconds that `dark` trouble leaves us without a route")
     parser.add_argument("--start", type=int, default=7 * HOUR, help="the world minute the rehearsal starts at; a test final starts at 4320, Thursday 00:00")
     parser.add_argument("--until", type=int, default=10 ** 9, help="rehearse to this world minute; the rest of the week plays at once")
-    parser.add_argument("--process", nargs="?", const="local", default="",
+    parser.add_argument("--process", action="store_true",
                         help="run the desk as its own process (python -m dispatch --final --world), so kill is SIGKILL; only kill trouble, no timing. "
-                             "With a value: the shell command that starts the desk on another machine, {world} for the world's id")
+                             "For a desk on another machine: tools.rehearse_remote")
     parser.add_argument("--baseline", default="live-practice", help="the tag of the practice-loop runs to compare with")
     parser.add_argument("--workers", type=int, default=2)
     parser.add_argument("--pace", help="only move the clock of this world, to its end or to --until: for a desk that someone else starts, on any machine")
