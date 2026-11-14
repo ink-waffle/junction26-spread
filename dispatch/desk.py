@@ -148,10 +148,6 @@ class Desk:
                     self.refused(legs, result)
             elif result["ok"] and action["type"] == "quote":  # a price is ours only once the world has it
                 books.quotes[action["requestId"]] = action["prices"]
-            elif result["ok"] and action["type"] == "withdraw":
-                books.gig_gone(action["gigId"])
-            elif result["ok"] and action["type"] == "reprice" and action["gigId"] in books.gigs:
-                books.gigs[action["gigId"]].schedule = action["schedule"]
             if not result["ok"] and self.verbose:
                 about = action.get("requestId") or action.get("gigId") or action["stops"][0]["orderId"]
                 print(f"{clock(books.now)} refused {action['type']} {about}: {result['reason']}", file=sys.stderr, flush=True)
