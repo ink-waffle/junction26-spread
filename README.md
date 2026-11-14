@@ -25,6 +25,16 @@ Result, level 8: `[FINAL: € … margin, … % on time, place … of …]`. In 
 | `prior.py` | What dealers pay as far as it holds in every world: slope, trust, speed, a level per place. Generated, not edited. | The first requests of a week must be priced before the week has taught anything. |
 | `atlas.py` | Road minutes between places, and when a site is open. | Shared by `fleet`, `market`, `notes` and `pairs`. |
 
+## One car through the code
+
+1. A request arrives. `Desk.step` folds the event into the books (`Books.observe`) and asks `Market.quote` for prices.
+2. For each option `Market.quote` asks `Fleet.cost`: the note is read (`notes.read`), the hours in which the car can be collected in time are found (`notes.chances`), the on-time model picks the fee that costs least in all (`Fleet.fee`), and the cost is that fee plus the risk. The market takes the price with the highest (price − cost) × P(yes) (`Market.curve`) and quotes every option at that margin.
+3. The dealer answers. `Market.learn` moves the parts of the level; a won order enters the books with the facts of its note.
+4. `Desk.reconcile` plans. `Pairs.match` may put the car into one gig with a second car; if none comes within 30 minutes, `Desk.settle` posts the gig that `Fleet.plan` builds: the stops and their windows (`Fleet.stops`, `notes.windows`), the audience, one fee (`Fleet.schedule`).
+5. The actions leave (`Desk.take`) and the world's answers come back (`Desk.sent`): a gig that the world took enters the books and the journal.
+6. A lost driver, a deadline warning, an expired gig, a failed visit or a change of the order marks the order dirty, and `Fleet.due` adds the orders whose gig has sat to a moment of rule 1. The next `reconcile` withdraws, reprices or posts again.
+7. After a restart `Desk.rejoin` folds the world's log and the journal through the same `fold` and `sent`.
+
 ## The rules it follows
 
 1. **One flat fee per gig.** A fee schedule has one step. The fee is chosen again only when the gig has sat six hours without a driver, on the last day before the last possible pickup, at the deadline warning, or when a driver is lost. Drivers learn from fees that rise.
