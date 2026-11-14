@@ -118,7 +118,7 @@ def play(tag: str, seed: str, level: int, overrides: dict, save: bool) -> dict:
         os.makedirs(folder, exist_ok=True)
         with gzip.open(os.path.join(folder, f"{seed}.json.gz"), "wt") as file:
             json.dump({"seed": seed, "level": level, "worldId": world.id, "policy": overrides, "summary": summary, "score": score,
-                       "quotes": desk.books.quotes, "roster": roster, "events": events, "gigs": world.snapshot()["gigs"], "reveal": world.reveal()}, file)
+                       "quotes": desk.books.quotes, "offers": desk.books.offers, "pairs": desk.books.pairs, "roster": roster, "events": events, "gigs": world.snapshot()["gigs"], "reveal": world.reveal()}, file)
     return summary
 
 

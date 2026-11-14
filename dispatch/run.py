@@ -15,7 +15,8 @@ from .desk import Desk, Policy
 
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 # The events that can need an action. Everything else arrives with the next of these.
-WAKE_ON: list[DeskEventKind] = ["price_request", "order_won", "order_changed", "order_cancelled", "visit_failed", "gig_expired", "deadline_close"]
+WAKE_ON: list[DeskEventKind] = ["price_request", "order_won", "order_changed", "order_cancelled", "visit_failed", "gig_expired", "deadline_close",
+                                 "gig_booked", "gig_dropped", "no_show", "offer_answered", "delivered"]
 
 
 def play_practice(world: World, desk: Desk, on_day: Optional[Callable[[int, Score], None]] = None) -> None:
@@ -25,7 +26,7 @@ def play_practice(world: World, desk: Desk, on_day: Optional[Callable[[int, Scor
     while desk.books.now < ends_at:
         day = desk.books.now // DAY
         actions, desk.outbox = desk.outbox, []
-        step = world.advance(until=WAKE_ON, max=min(ends_at, (day + 1) * DAY), actions=actions)
+        step = world.advance(until=WAKE_ON, max=min(ends_at, (day + 1) * DAY, max(desk.alarm(), desk.books.now)), actions=actions)
         desk.sent(actions, step["results"])
         for event in step["events"]:
             desk.handle(event)

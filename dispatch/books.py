@@ -27,6 +27,11 @@ class GigState:
     def legs(self) -> list[tuple[str, int]]:
         return [(s["orderId"], s["leg"]) for s in self.stops if s["kind"] == "pickup"]
 
+    @property
+    def shared(self) -> bool:
+        """The gig carries cars of more than one order."""
+        return len({s["orderId"] for s in self.stops}) > 1
+
 
 @dataclass
 class OrderState:
@@ -40,6 +45,7 @@ class OrderState:
     urgent: bool = False  # the deadline warning came and no driver holds the order
     late: bool = False  # a gig expired or a window ended: the car can only go late, without windows
     changed: bool = False  # the dealer changed the order after we posted it
+    posted: bool = False  # the order has had a gig in the app
     refusals: int = 0
 
     @property
@@ -79,6 +85,15 @@ class Books:
         self.refunded: set[str] = set()
         self.snow: list[tuple[int, int, set[str]]] = []
         self.dirty: set[str] = set()  # orders whose gigs may no longer match the plan
+        self.offers: list[dict] = []  # every direct offer we sent, with its answer
+        self.pairs: list[dict] = []  # every two cars we put in one gig
+        self.open_offers: dict[str, dict[str, dict]] = defaultdict(dict)  # gig -> driver -> the offer that waits for its answer
+
+    def offer_sent(self, offer: dict) -> None:
+        self.offers.append(offer)
+        self.open_offers[offer["gigId"]][offer["driverId"]] = offer
+        if offer["driverId"] in self.drivers:
+            self.drivers[offer["driverId"]].offers[self.day()] += 1
 
     def gig_posted(self, action: PostAction, gig_id: str, schedule: Optional[list[FeeStep]] = None, status: str = "open", posted_at: Optional[int] = None) -> GigState:
         gig = GigState(gig_id, action["stops"], schedule or action["schedule"], self.now if posted_at is None else posted_at, status)
@@ -86,6 +101,7 @@ class Books:
         for order_id, leg in gig.legs:
             if order_id in self.orders:
                 self.orders[order_id].gig_of[leg] = gig_id
+                self.orders[order_id].posted = True
         return gig
 
     def gig_gone(self, gig_id: str) -> None:
@@ -223,6 +239,9 @@ class Books:
             self.on_time[dealer] = min(25, self.on_time[dealer] + 1)
 
     def _offer_answered(self, e) -> None:
+        offer = self.open_offers[e["gigId"]].pop(e["driverId"], None)
+        if offer:
+            offer["answer"], offer["answeredAt"] = e["answer"], e["at"]
         if e["answer"] != "expired":
             self._seen(e["driverId"], e["at"])
 

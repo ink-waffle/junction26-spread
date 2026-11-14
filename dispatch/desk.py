@@ -13,12 +13,14 @@ from .atlas import Atlas, clock
 from .books import LIVE, Books
 from .fleet import Fleet, FleetPolicy
 from .market import Market, MarketPolicy
+from .offers import Offers, OffersPolicy
 
 
 @dataclass
 class Policy:
     market: MarketPolicy = field(default_factory=MarketPolicy)
     fleet: FleetPolicy = field(default_factory=FleetPolicy)
+    offers: OffersPolicy = field(default_factory=OffersPolicy)
 
     @staticmethod
     def of(overrides: Optional[dict] = None, seed: str = "") -> "Policy":
@@ -26,7 +28,8 @@ class Policy:
         overrides = overrides or {}
         def tuples(part: dict) -> dict:
             return {k: tuple(v) if isinstance(v, list) else v for k, v in part.items()}
-        return Policy(MarketPolicy(seed=seed, **tuples(overrides.get("market", {}))), FleetPolicy(seed=seed, **tuples(overrides.get("fleet", {}))))
+        return Policy(MarketPolicy(seed=seed, **tuples(overrides.get("market", {}))), FleetPolicy(seed=seed, **tuples(overrides.get("fleet", {}))),
+                      OffersPolicy(seed=seed, **tuples(overrides.get("offers", {}))))
 
 
 class Desk:
@@ -34,6 +37,7 @@ class Desk:
         self.books = Books(roster)
         self.fleet = Fleet(policy.fleet, self.books, atlas)
         self.market = Market(policy.market, self.books, self.fleet)
+        self.offers = Offers(policy.offers, self.books, self.fleet, atlas)
         self.outbox: list[Action] = []
         self.pending: set[tuple[str, int]] = set()  # legs whose post is in the outbox or on its way
         self.journal, self.verbose = journal, verbose
@@ -59,6 +63,9 @@ class Desk:
     def reconcile(self) -> None:
         """Makes each touched order's gigs match the plan: post what is missing, reprice what is off."""
         books = self.books
+        for action in self.offers.pairs():
+            self.pending.update((s["orderId"], s["leg"]) for s in action.get("stops", []))
+            self.outbox.append(action)
         dirty, books.dirty = books.dirty, set()
         for order_id in sorted(dirty):
             state = books.orders.get(order_id)
@@ -72,16 +79,23 @@ class Desk:
                     books.gig_gone(gig.id)
                 open_gigs = []
             for gig in open_gigs:
+                if gig.shared:  # its fee belongs to the pair, not to this order
+                    continue
                 wanted = self.fleet.schedule(state, [leg for owner, leg in gig.legs if owner == order_id])
-                if [step["feeCents"] for step in wanted] != [step["feeCents"] for step in gig.schedule]:
+                if wanted[-1]["feeCents"] != gig.schedule[-1]["feeCents"]:
                     gig.schedule = wanted
                     self.outbox.append({"type": "reprice", "gigId": gig.id, "schedule": wanted})
             legs = [leg for leg in state.unposted() if (order_id, leg) not in self.pending]
-            if legs and state.refusals < 4:
+            if legs and state.refusals < 4 and not self.offers.holds(state):
                 for plan in self.fleet.plan(state, legs):
                     self.pending.update((order_id, leg) for leg in plan.legs)
-                    self.outbox.append({"type": "post", "stops": plan.stops, "audience": plan.audience, "schedule": plan.schedule})
+                    self.outbox.append({"type": "post", "stops": plan.stops, "audience": plan.audience, "schedule": self.offers.opening(state, plan.schedule)})
         books.dirty -= dirty
+        self.outbox += self.offers.act()
+
+    def alarm(self) -> int:
+        """The minute the desk next wants to act at when no event comes first."""
+        return self.offers.alarm(posting=bool(self.pending))
 
     def sent(self, actions: list[Action], results: list[ActionResult]) -> None:
         """Reads the world's answer to each action: the id of a new gig, or why it refused."""
@@ -92,12 +106,17 @@ class Desk:
                 if result["ok"]:
                     self.books.gig_posted(action, result["id"])
                     continue
+                if len({order_id for order_id, _ in legs}) > 1:
+                    self.offers.refused([order_id for order_id, _ in legs])
+                    legs = []
                 for order_id, _ in legs:
                     state = self.books.orders.get(order_id)
                     if state:
                         state.refusals += 1
                         state.late = True  # the usual reason is a window that has ended: post without windows
                         self.books.dirty.add(order_id)
+            if action["type"] == "offer":
+                self.offers.sent(action, result)
             if not result["ok"] and self.verbose:
                 print(f"{clock(self.books.now)} refused {action['type']}: {result['reason']}", file=sys.stderr, flush=True)
 
