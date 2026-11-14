@@ -24,13 +24,15 @@ The saved weeks are in `runs/skeptic-*` (tags as in the table's last column of n
 | **the head**: halal-97..128, played once as the confirmation (stride 14) | **+€395 (264)** | **+0.21 (0.16)** | 93.2% (94.5%) | 0 of 32 |
 | **the head**: halal-97..128 without strides, as the final is played (`main` €15,829 → €16,266) | **+€437** | **+0.2** (96.2% → 96.4%) | 94.1% (94.3%) | 0 of 32 |
 | **the head**: the 8 hold weeks, four samples a side (7 of 8 weeks up; the known hard week halal-09 94.6% → 94.5%) | **+€694 (142)** | **+0.03 (0.16)** | 93.5% (93.2%) | 0 of 32 |
+| **the head**: the 24 tune and wide weeks, once (stride 14, against `orch-base-s14`) | **+€625 (331)** | **+0.43 (0.18)** | 94.5% (93.4%) | 0 of 24 |
+| **the head, all 96 weeks** (weeks as weights) | **about +€580** | **about +0.36** | 93.2% | 0 of 184 plays |
 | dce27f9 (the same system at 97%): halal-65..96, four samples a side | +€959 (166) | −0.27 (0.09) | 92.7% (92.8%) | 0 of 128 |
 | dce27f9: halal-97..128, once | +€678 (267) | −0.28 (0.20) | 92.2% (94.5%) | 0 of 32 |
 | dce27f9: the 8 hold weeks, four samples a side | +€805 (421) | −0.79 (0.27) | 93.2% (93.2%) | 0 of 32 |
 | dce27f9: the 24 tune and wide weeks, two samples | +€548 (248) | −0.53 (0.16) | 93.9% (93.4%) | 0 of 48 |
 
 - **Why the head and not dce27f9:** at 97.5% the simplified system earns more than `main` *and* is on time more often on both untouched sets; at 97% it earns about €280 more still and runs 0.3 to 0.8 point under `main`'s on-time. The first needs no judgement about risk; the second is there, fully proven, if the margin is wanted.
-- **What it costs if I am wrong:** the head has 96 plays on untouched weeks (and the hold and no-stride runs below) against more than three hundred saved plays of the frozen system; its worst week so far is 93.2%. `main` as frozen at 52aaf93 remains safe: nothing in the audit says otherwise (176 saved plays, worst 92.8%).
+- **What it costs if I am wrong:** the head has 184 plays (128 of them on the 64 untouched weeks) against more than three hundred saved plays of the frozen system, and it was built in one evening; its worst week so far is 93.2%. `main` as frozen at 52aaf93 remains safe: nothing in the audit says otherwise (176 saved plays, worst 92.8%).
 - **Proofs** (section 5): restart test 8 of 8 and the same week to the cent on both trees; Python 3.9 `ast` check and import; the clean code plays halal-65..96 to the cent like the switch combination it was measured as.
 - The verdict in five lines: section 1. The inventory: 129 numbers and one vocabulary (section 3). The ablation table: section 4. What was deleted and what it costs: section 5.
 
@@ -157,52 +159,58 @@ Weeks halal-65..96 had never been played. Baseline = `main`'s default; one part 
 
 <!-- ABLATIONS -->
 Baseline `skeptic-base`: 32 weeks, 128 samples: margin EUR 15,259 a week, on time 96.3% (worst sample 92.8%), 412 orders, 15.1 late a week.
+A point of on-time costs EUR 512 of margin through the target (`skeptic-t965`: +200 and -0.48 points; `skeptic-t975`: -546 and +0.97).
 
-| Without | weeks × samples | margin (se) | on time, points (se) | late orders a week (se) | orders | worst sample | samples < 93.5% | not ranked |
-|---|---|---|---|---|---|---|---|---|
-| **The dealer side** | | | | | | | | |
-| the place table of the prior (60 numbers, all zero) (`places0`) | 32×1 | -122 (259) | +0.09 (0.12) | -0.8 (0.6) | -7 | 94.5% | 0 | 0 |
-| the lane part of the level (`nolane`) | 32×1 | -385 (238) | -0.01 (0.11) | +0.1 (0.5) | +1 | 94.1% | 0 | 0 |
-| the pickup-today part (`nofromtoday`) | 32×1 | -28 (209) | +0.17 (0.15) | -0.7 (0.6) | +1 | 94.3% | 0 | 0 |
-| the dealer part (`nodealer`) | 32×1 | -98 (166) | +0.23 (0.11) | -1.0 (0.5) | -1 | 94.1% | 0 | 0 |
-| the weighting of the week's events (idea 13) (`nosurprises`) | 32×1 | -295 (201) | +0.07 (0.14) | +0.1 (0.6) | +4 | 93.6% | 0 | 0 |
-| quoting every option (one option only) (`oneoption`) | 32×1 | -369 (263) | +0.19 (0.13) | -0.8 (0.6) | +0 | 94.3% | 0 | 0 |
-| **The driver side: the on-time model** | | | | | | | | |
-| the pickup-side signs (the model before idea 12, target still 97%) (`pre12`) | 32×1 | -1,702 (298) | -0.31 (0.23) | -2.3 (0.9) | -83 | 93.6% | 0 | 0 |
-| idea 12 whole (the model before it, target 96%) (`pre12t96`) | 32×1 | -592 (249) | -1.58 (0.22) | +5.2 (1.0) | -26 | 92.6% | 7 | 0 |
-| the flu sign (idea 14) (`noflu`) | 32×1 | +220 (253) | -0.19 (0.20) | +1.0 (0.9) | +5 | 92.7% | 1 | 0 |
-| `known` (the week's first hundred bookings) (`noknown`) | 32×1 | +200 (232) | +0.20 (0.15) | -0.6 (0.7) | +6 | 94.1% | 0 | 0 |
-| `waited` (an hour in the app) (`nowaited`) | 32×1 | +405 (274) | -0.30 (0.15) | +2.1 (0.7) | +20 | 93.0% | 1 | 0 |
-| `known` and `waited` (`noknownwaited`) | 32×1 | +410 (269) | +0.09 (0.18) | +0.2 (0.8) | +16 | 94.5% | 0 | 0 |
-| the two supply signs (drivers near pickup and delivery) (`nosupply`) | 10×1 | -1,524 (406) | -1.65 (0.45) | +1.9 (1.6) | -82 | 91.7% | 2 | 0 |
-| the week's learned intercept (`noworld`) | 32×1 | -505 (228) | +1.16 (0.15) | -6.1 (0.7) | -48 | 96.0% | 0 | 0 |
-| the harm to the cars that wait (`noharm`) | 32×1 | -2,967 (403) | -0.32 (0.20) | +4.2 (0.9) | +73 | 92.8% | 1 | 0 |
-| the barrier (a flat EUR 300 a late order) (`flat300`) | 32×1 | +1,498 (232) | -0.96 (0.30) | +4.7 (1.3) | +16 | 90.3% | 4 | 0 |
-| the barrier (a flat EUR 100) (`flat100`) | 32×1 | +398 (261) | -7.91 (0.44) | +41.5 (2.3) | +76 | 82.0% | 32 | 24 |
-| **The driver side: the rule for the fee** | | | | | | | | |
-| the six-hour look (`nolook`) | 32×1 | -1,394 (278) | +0.02 (0.17) | -3.3 (0.6) | -88 | 93.7% | 0 | 0 |
-| the look when a gig's last day begins (`nolastday`) | 32×1 | -403 (181) | -0.01 (0.14) | -0.8 (0.6) | -19 | 93.6% | 0 | 0 |
-| **Pairs and notes** | | | | | | | | |
-| two-car gigs (`nopairs`) | 32×1 | -1,444 (286) | +0.65 (0.13) | -3.8 (0.6) | -33 | 94.7% | 0 | 0 |
-| pairs with a car that sits in the app (new pairs stay) (`noboard`) | 32×1 | -672 (221) | +0.19 (0.18) | -1.0 (0.8) | -9 | 93.7% | 0 | 0 |
-| the note grammar (the kit's keyword reader instead) (`kitnotes`) | 32×1 | -998 (235) | -0.19 (0.14) | +0.1 (0.5) | -17 | 93.3% | 1 | 0 |
-| **A deliberately small system, and back up** | | | | | | | | |
-| the same with the model choosing the fee once (`small`) | 32×1 | -11,322 (453) | -10.50 (0.76) | -0.8 (1.0) | -299 | 78.7% | 32 | 28 |
-| **The start of the week (rows that ADD something to main)** | | | | | | | | |
-| WITH the baked intercept moved by +0.88, the learner as it is (`cal`) | 32×1 | +227 (294) | -0.54 (0.15) | +4.1 (0.7) | +44 | 93.2% | 1 | 0 |
-| WITH the intercept +0.88 and no learned intercept (`calnw`) | 32×2 | +778 (187) | -0.20 (0.11) | +2.2 (0.5) | +37 | 93.8% | 0 | 0 |
-| WITH the learned intercept starting at +0.88 (its limits as they are) (`start88`) | 32×1 | +445 (236) | -0.38 (0.13) | +2.9 (0.6) | +33 | 94.1% | 0 | 0 |
-| **Candidates (section 5)** | | | | | | | | |
-| A: without `known`, the dealer part and the pickup-today part (`candA`) | 32×1 | -109 (267) | +0.24 (0.14) | -0.9 (0.6) | +0 | 94.8% | 0 | 0 |
-| **B: A, without the learned intercept, with the model's level moved by +0.88** (dce27f9 plays the same weeks to the cent) (`candAcalnw`) | 32×4 | +959 (166) | -0.27 (0.09) | +2.6 (0.4) | +40 | 92.7% | 1 | 0 |
-| **B at a target of 97.5%: the head of the branch** (af4fd92 plays the same weeks to the cent) (`B975`) | 32×2 | +679 (206) | +0.52 (0.11) | -1.6 (0.5) | +18 | 94.8% | 0 | 0 |
+| Without | weeks × samples | margin (se) | on time, points (se) | margin at equal on time (se) | late orders a week (se) | orders | worst sample | samples < 93.5% | not ranked |
+|---|---|---|---|---|---|---|---|---|---|
+| **The dealer side** | | | | | | | | | |
+| the place table of the prior (60 numbers, all zero) (`places0`) | 32×1 | -122 (259) | +0.09 (0.12) | -76 (242) | -0.8 (0.6) | -7 | 94.5% | 0 | 0 |
+| the lane part of the level (`nolane`) | 32×1 | -385 (238) | -0.01 (0.11) | -389 (238) | +0.1 (0.5) | +1 | 94.1% | 0 | 0 |
+| the pickup-today part (`nofromtoday`) | 32×1 | -28 (209) | +0.17 (0.15) | +58 (234) | -0.7 (0.6) | +1 | 94.3% | 0 | 0 |
+| the dealer part (`nodealer`) | 32×1 | -98 (166) | +0.23 (0.11) | +20 (184) | -1.0 (0.5) | -1 | 94.1% | 0 | 0 |
+| the weighting of the week's events (idea 13) (`nosurprises`) | 32×1 | -295 (201) | +0.07 (0.14) | -261 (215) | +0.1 (0.6) | +4 | 93.6% | 0 | 0 |
+| quoting every option (one option only) (`oneoption`) | 32×1 | -369 (263) | +0.19 (0.13) | -272 (262) | -0.8 (0.6) | +0 | 94.3% | 0 | 0 |
+| **The driver side: the on-time model** | | | | | | | | | |
+| the pickup-side signs (the model before idea 12, target still 97%) (`pre12`) | 32×1 | -1,702 (298) | -0.31 (0.23) | -1,862 (281) | -2.3 (0.9) | -83 | 93.6% | 0 | 0 |
+| idea 12 whole (the model before it, target 96%) (`pre12t96`) | 32×1 | -592 (249) | -1.58 (0.22) | -1,402 (284) | +5.2 (1.0) | -26 | 92.6% | 7 | 0 |
+| the flu sign (idea 14) (`noflu`) | 32×1 | +220 (253) | -0.19 (0.20) | +124 (287) | +1.0 (0.9) | +5 | 92.7% | 1 | 0 |
+| `known` (the week's first hundred bookings) (`noknown`) | 32×1 | +200 (232) | +0.20 (0.15) | +300 (241) | -0.6 (0.7) | +6 | 94.1% | 0 | 0 |
+| `waited` (an hour in the app) (`nowaited`) | 32×1 | +405 (274) | -0.30 (0.15) | +249 (282) | +2.1 (0.7) | +20 | 93.0% | 1 | 0 |
+| `known` and `waited` (`noknownwaited`) | 32×1 | +410 (269) | +0.09 (0.18) | +454 (279) | +0.2 (0.8) | +16 | 94.5% | 0 | 0 |
+| the two supply signs (drivers near pickup and delivery) (`nosupply`) | 10×1 | -1,524 (406) | -1.65 (0.45) | -2,368 (441) | +1.9 (1.6) | -82 | 91.7% | 2 | 0 |
+| the week's learned intercept (`noworld`) | 32×1 | -505 (228) | +1.16 (0.15) | +90 (243) | -6.1 (0.7) | -48 | 96.0% | 0 | 0 |
+| the harm to the cars that wait (`noharm`) | 32×1 | -2,967 (403) | -0.32 (0.20) | -3,131 (436) | +4.2 (0.9) | +73 | 92.8% | 1 | 0 |
+| the barrier (a flat EUR 300 a late order) (`flat300`) | 32×1 | +1,498 (232) | -0.96 (0.30) | +1,004 (261) | +4.7 (1.3) | +16 | 90.3% | 4 | 0 |
+| the barrier (a flat EUR 100) (`flat100`) | 32×1 | +398 (261) | -7.91 (0.44) | -3,648 (352) | +41.5 (2.3) | +76 | 82.0% | 32 | 24 |
+| **The driver side: the rule for the fee** | | | | | | | | | |
+| the six-hour look (`nolook`) | 32×1 | -1,394 (278) | +0.02 (0.17) | -1,382 (301) | -3.3 (0.6) | -88 | 93.7% | 0 | 0 |
+| the look when a gig's last day begins (`nolastday`) | 32×1 | -403 (181) | -0.01 (0.14) | -410 (198) | -0.8 (0.6) | -19 | 93.6% | 0 | 0 |
+| **Pairs and notes** | | | | | | | | | |
+| two-car gigs (`nopairs`) | 32×1 | -1,444 (286) | +0.65 (0.13) | -1,110 (301) | -3.8 (0.6) | -33 | 94.7% | 0 | 0 |
+| pairs with a car that sits in the app (new pairs stay) (`noboard`) | 32×1 | -672 (221) | +0.19 (0.18) | -573 (244) | -1.0 (0.8) | -9 | 93.7% | 0 | 0 |
+| the note grammar (the kit's keyword reader instead) (`kitnotes`) | 32×1 | -998 (235) | -0.19 (0.14) | -1,097 (253) | +0.1 (0.5) | -17 | 93.3% | 1 | 0 |
+| **The target, for scale (not a part)** | | | | | | | | | |
+| target 96.5% instead of 97% (`t965`) | 32×1 | +200 (251) | -0.48 (0.14) | -47 (258) | +2.7 (0.7) | +15 | 93.5% | 1 | 0 |
+| target 97.5% (`t975`) | 32×1 | -546 (258) | +0.97 (0.10) | -47 (269) | -4.7 (0.5) | -24 | 95.1% | 0 | 0 |
+| **A deliberately small system, and back up** | | | | | | | | | |
+| the same with the model choosing the fee once (`small`) | 32×1 | -11,322 (453) | -10.50 (0.76) | -16,698 (577) | -0.8 (1.0) | -299 | 78.7% | 32 | 28 |
+| **The start of the week (rows that ADD something to main)** | | | | | | | | | |
+| WITH the baked intercept moved by +0.88, the learner as it is (`cal`) | 32×1 | +227 (294) | -0.54 (0.15) | -51 (321) | +4.1 (0.7) | +44 | 93.2% | 1 | 0 |
+| WITH the intercept +0.88 and no learned intercept (`calnw`) | 32×2 | +778 (187) | -0.20 (0.11) | +675 (206) | +2.2 (0.5) | +37 | 93.8% | 0 | 0 |
+| WITH the learned intercept starting at +0.88 (its limits as they are) (`start88`) | 32×1 | +445 (236) | -0.38 (0.13) | +250 (245) | +2.9 (0.6) | +33 | 94.1% | 0 | 0 |
+| WITH the intercept +0.5 and no learned intercept (`cal05nw`) | 32×1 | +483 (228) | +0.30 (0.14) | +639 (243) | -1.2 (0.6) | +2 | 94.8% | 0 | 0 |
+| WITH the intercept +0.7 and no learned intercept (`cal07nw`) | 29×1 | +483 (204) | -0.09 (0.18) | +434 (216) | +1.1 (0.8) | +20 | 94.2% | 0 | 0 |
+| **Candidates (section 5)** | | | | | | | | | |
+| A: without `known`, the dealer part and the pickup-today part (`candA`) | 32×1 | -109 (267) | +0.24 (0.14) | +15 (273) | -0.9 (0.6) | +0 | 94.8% | 0 | 0 |
+| **B: A, without the learned intercept, with the model's level moved by +0.88** (dce27f9 plays the same weeks to the cent) (`candAcalnw`) | 32×4 | +959 (166) | -0.27 (0.09) | +819 (180) | +2.6 (0.4) | +40 | 92.7% | 1 | 0 |
+| **B at a target of 97.5%: the head of the branch** (af4fd92 plays the same weeks to the cent) (`B975`) | 32×2 | +679 (206) | +0.52 (0.11) | +946 (215) | -1.6 (0.5) | +18 | 94.8% | 0 | 0 |
 <!-- /ABLATIONS -->
 
 **How to read it** (numbers of the first sample; the table above is regenerated as samples come in, and since 20:26 a week takes ten times as long to play as before 20:00, so most rows will stay at one sample).
 
 - **Load-bearing, each beyond 2.5 standard errors on weeks it never saw:** the harm to the cars that wait (−€2,967), the pickup-side signs of idea 12 (−€1,702 at the same target; against the whole of idea 12 the old system is −€592 *and* −1.6 points of on-time, with 7 of 32 weeks under 93.5%), two-car gigs (−€1,444, though they cost 0.65 point of on-time), the six-hour look (−€1,394), the note grammar against the kit's keyword reader (−€998), pairs with a car that sits (−€672), the look when the last day begins (−€403, 2.2 se).
 - **The barrier is what keeps the floor, not what earns the margin.** A flat €300 a late order earns €1,498 *more* and loses a point of on-time, with one week at 90.3% and four under 93.5%; a flat €100 leaves 24 of 32 weeks unranked. No flat price is safe in every week; the barrier finds each week's price.
-- **Parts that trade on-time for margin, as the target does:** the week's learned intercept (without it −€505 and +1.16 points: the model stays as cautious all week as it is on Monday), the flu sign (without it +€220, −0.19 point), `waited` (+€405, −0.30 point). Whether each is better than turning the target is the column "at equal on time" once the two target rows are in.
+- **Parts that trade on-time for margin, as the target does:** the week's learned intercept (without it −€505 and +1.16 points: the model stays as cautious all week as it is on Monday), the flu sign (without it +€220, −0.19 point), `waited` (+€405, −0.30 point). At the price the target sets on these weeks (€512 for a point of on-time) removing each is +€90 (se 243), +€124 (se 287) and +€249 (se 282) at equal on-time: none of the three can be told from turning the target.
 - **Nothing measurable in play:** the place table (−€122, se 259), the dealer part (−€98, se 166), the pickup-today part (−€28, se 209), `known` (+€200, se 232: the system earns more without it, 6 more orders on Monday). The lane part (−€385, se 238), the events (−€295, se 201) and the menu of options (−€369, se 263) are each under two standard errors alone; the lane part and the events have the replay of section 3 behind them (63 and 55 of 64 weeks), so they stay; the menu has the team's two earlier measurements (+€784 tune, +€1,375 hold).
 - **A deliberately small system does not rank.** On-time model with fee, room and queue only, level = world + day, no looks, no pairs: €4,037 a week, on time 85.7%, 28 of 32 weeks under the minimum. The machinery is not decoration: the on-time model's car signs, the looks and the pairs are what make a ranked week.
 
@@ -250,7 +258,7 @@ Monday can be bought back, and it is only worth buying without the learner. With
 - By thirds of the weeks of 65..96, from the hardest drivers to the easiest (the week's own intercept, measured with hindsight on `main`'s play): margin +€1,419 / +€1,186 / +€385, on time −0.36 / −0.30 / −0.18 point. The week whose level is most wrong for B (halal-71, 1.16 logits under what B assumes) goes from 94.7% to 94.1% on time over four samples and gains €1,069.
 - Orders by weekday on 97..128: 73 / 94 / 89 / 98 / 80 → 95 / 104 / 95 / 104 / 86; Monday's sales +€1,984 (se 311); the fastest option 54% → 55% of the orders with a choice.
 - The known hard week (halal-09, the flu on a Friday in the capital region) is where it was: 96.0 / 93.8 / 93.2 / 95.4% on `main` and 95.0 / 95.1 / 93.9 / 94.4% on B over the four strides (mean 94.6% both). The hold week that B hurts is halal-10, the poorest world of the set (€9,180 a week on `main`): 96.8% → 94.4%, €961 less; there the right level for the average week is too hopeful.
-- What B costs: a quarter to a third of a point of on-time on the untouched weeks (16 → 19 late orders a week), 0.8 point on the hold weeks, and a floor about half a point lower (worst of 216 plays 92.2%; `main`'s worst of 176 saved plays 92.8%). The 90% minimum is two points under B's worst play. Through the target the same margin would cost about three times the on-time (the night log's bracket: 0.5 point of target buys €470 for 0.6 point), so B is not the target turned by another name.
+- What B costs: a quarter to a third of a point of on-time on the untouched weeks (16 → 19 late orders a week), 0.8 point on the hold weeks, and a floor about half a point lower (worst of 216 plays 92.2%; `main`'s worst of 176 saved plays 92.8%). The 90% minimum is two points under B's worst play. B is not the target turned by another name: on these weeks `main`'s target trades a point of on-time for €512 (96.5%: +€200, −0.48 point; 97.5%: −€546, +0.97 point; the last group of the table), and at that price B at 97% is +€819 (se 180) at equal on-time and B at 97.5% +€946 (se 215).
 - What B was *not* fitted on: the +0.88 is a measurement (the free intercept of the model on weeks it never saw), not the best of a search; the same number comes out of three disjoint sets of weeks. It was chosen before its neighbours (+0.5, +0.7 without the learner) were played; they are in the table for scale.
 
 **The target, with B.** B at the target of 97% runs a quarter to three quarters of a point under `main`'s on-time. The target gives it back cheaply, because a model whose level is right pays little for caution:
@@ -262,7 +270,7 @@ Monday can be bought back, and it is only worth buying without the learner. With
 | **B, target 97.5%: halal-65..96, two samples a side** | **+€679 (206)** | **+0.52 (0.11)** | −1.6 | 94.8% (92.8%) | 0 |
 | **B, target 97.5%: halal-97..128, once (the confirmation of the head of the branch)** | **+€395 (264)** | **+0.21 (0.16)** | −0.4 | 93.2% (94.5%) | 1 |
 
-From 97% to 97.5% B gives up about €280 for 0.5 to 0.8 point of on-time; `main` paid €340–470 for 0.4–0.6 point at the same step (night log, idea 12). **At 97.5% B earns more than `main` and is on time more often on both untouched sets (+€537 a week and +0.37 point over the 64 weeks), with a floor no lower (worst of 96 plays 93.2%; `main`'s worst of its 96 plays on the same weeks 92.8%).** That is the form at the head of this branch (`FleetPolicy.on_time = 0.975`, one number on top of dce27f9). B at 97% (dce27f9 itself) is the form with about €280 more margin, on time 0.3 point *under* `main` and a floor half a point lower.
+From 97% to 97.5% B gives up about €280 for 0.5 to 0.8 point of on-time; `main` gives up €546 for 0.97 point at the same step on the same weeks. The level and the target are near substitutes once the learner is gone (the intercept moved by +0.5 instead of +0.88, at 97%: +€483 and +0.30 point), so the head sits on a flat stretch, not on an edge. **At 97.5% B earns more than `main` and is on time more often on both untouched sets (+€537 a week and +0.37 point over the 64 weeks), with a floor no lower (worst of 96 plays 93.2%; `main`'s worst of its 96 plays on the same weeks 92.8%).** That is the form at the head of this branch (`FleetPolicy.on_time = 0.975`, one number on top of dce27f9). B at 97% (dce27f9 itself) is the form with about €280 more margin, on time 0.3 point *under* `main` and a floor half a point lower.
 
 **Proofs of the candidate.** Two trees: dce27f9 (B at 97%) and the head of the branch (the same `dispatch/` with one line changed, `FleetPolicy.on_time = 0.975` and its comment: `git diff dce27f9 -- dispatch`).
 

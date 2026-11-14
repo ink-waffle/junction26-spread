@@ -1,5 +1,5 @@
 """Research (research/skeptic): the kit starter's keyword reader of notes, as the repository had it at e9af85a, behind today's NoteFacts.
-`{"fleet": {"kit_notes": true}}` plays a week with it: what the grammar of dispatch/notes.py buys."""
+On branch research/skeptic-switches `{"fleet": {"kit_notes": true}}` plays a week with it: what the grammar of dispatch/notes.py buys (SKEPTIC.md, section 4)."""
 from __future__ import annotations
 
 import re
