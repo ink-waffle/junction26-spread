@@ -49,3 +49,24 @@ Revenue EUR 98.2 an order; fees 63.1 (0.947 x the typical fee 66.6); refunds 1.7
 ## 4. Played
 
 (filled as runs finish)
+
+All runs here: 24 weeks (tune halal-01..08 + wide halal-17..32), strides 14 and 13 where two samples are said, against `gap-main` = 8ae61c5 on the same
+weeks and strides (EUR 15,352 a week, 96.8% on time, 440 orders, worst sample 93.5%); `python -m tools.ablations gap-main gap-<name> ...`.
+
+| Tried (one change each) | samples | margin (se) | on time (se) | orders | verdict |
+|---|---|---|---|---|---|
+| **The price knows a partner** (`gap-back`; patch in scratch `backhaul.patch`): a request whose car would share a two-car gig with a car of ours without a driver costs 0.66 x the gig's fee share + 0.34 x its cost alone | 24x2 | -146 (184) | -0.47 (0.16) | +27 | rejected: it buys orders with on-time like every other lever |
+| **A pair's driver may start later** (`gap-later`): the plan of a two-car gig starts where the wait on the way is least (35 more orders a week pass the pairs' rule) | 24x1 | -90 (205) | -0.30 (0.09) | -2 | rejected |
+| Pairs up to 6 h of driving (`gap-drive6`) | 24x1 | +103 (195) | -0.46 (0.11) | +5 | no: two-car gigs of 5-6 h are booked 36% at 0.70 x and 56% at 0.85 x (3-5 h: 57% / 70%) |
+
+More leads measured on saved weeks and dropped:
+
+4. **The on-time model by class** (`python -m tools.fleet_fit --calibrate orch-head-record`): it says 4.2% late where 4.5% are; only lanes over 400 km are off
+   (7.8% said, 10.9% late, 53 orders a week = 1.6 late orders a week more than it thinks). Worth a quarter point of on-time at most.
+5. **The market's chance of a yes at our own quotes** (scratch `mcal.py`, 30,517 quotes replayed): said 44.4%, dealers 45.2%, within 3 points in every
+   bin of chance, day, trust count and price. Nothing to take.
+6. **Round trips** (a two-car gig that ends where it starts frees the driver's trip home): 5 orders a week have such a partner over 5 h. Too few.
+7. **Do drivers learn to wait on us?** A one-car gig at 0.85 x posted 09-15 with a day of slack is booked within the hour 82% on Monday, 68 / 67 / 68% Tuesday
+   to Thursday, 35% on Friday (weekend work): one step after Monday, no slide through the week.
+8. **What we price out**: 288 requests a week get a quote over 1.8 x list (81 declined): trade-ins (97% of them), private delivery (68%), private pickup (60%),
+   over 600 km (49%), under 40 km (41%), pickups with two drivers or fewer near (47%). All are the on-time model's refusals.
