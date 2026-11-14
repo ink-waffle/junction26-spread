@@ -85,15 +85,6 @@ class Books:
         self.refunded: set[str] = set()
         self.snow: list[tuple[int, int, set[str]]] = []
         self.dirty: set[str] = set()  # orders whose gigs may no longer match the plan
-        self.offers: list[dict] = []  # every direct offer we sent, with its answer
-        self.pairs: list[dict] = []  # every two cars we put in one gig
-        self.open_offers: dict[str, dict[str, dict]] = defaultdict(dict)  # gig -> driver -> the offer that waits for its answer
-
-    def offer_sent(self, offer: dict) -> None:
-        self.offers.append(offer)
-        self.open_offers[offer["gigId"]][offer["driverId"]] = offer
-        if offer["driverId"] in self.drivers:
-            self.drivers[offer["driverId"]].offers[self.day()] += 1
 
     def gig_posted(self, action: PostAction, gig_id: str, schedule: Optional[list[FeeStep]] = None, status: str = "open", posted_at: Optional[int] = None) -> GigState:
         gig = GigState(gig_id, action["stops"], schedule or action["schedule"], self.now if posted_at is None else posted_at, status)
@@ -239,9 +230,6 @@ class Books:
             self.on_time[dealer] = min(25, self.on_time[dealer] + 1)
 
     def _offer_answered(self, e) -> None:
-        offer = self.open_offers[e["gigId"]].pop(e["driverId"], None)
-        if offer:
-            offer["answer"], offer["answeredAt"] = e["answer"], e["at"]
         if e["answer"] != "expired":
             self._seen(e["driverId"], e["at"])
 

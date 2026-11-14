@@ -4,6 +4,7 @@
     python -m tools.offers_study pairs base1        # how often two cars we hold could go in one gig or one chain
     python -m tools.offers_study offers offers-x1   # answers to direct offers by fee multiple and driver class
     python -m tools.offers_study shared offers-x3   # two cars in one gig against the same two cars in two gigs
+    python -m tools.offers_study partners offers-px1  # requests that could pair with a waiting car: win rate and margin by quoted price
 """
 from __future__ import annotations
 
@@ -216,5 +217,54 @@ def shared(tag: str) -> None:
     print(t.groupby("seed").agg(pairs=("fees", "size"), cars=("fees", lambda s: 2 * len(s))))
 
 
+def request_table(run: dict) -> pd.DataFrame:
+    """One row per price request we quoted: outcome and, when won, its money, with a shared gig's fee split by typical fee."""
+    events = run["events"]
+    typical = {item["request"]["id"]: item["request"]["referenceFeeCents"] for item in run["reveal"]["requests"]}
+    orders = {e["order"]["id"]: e["order"] for e in events if e["kind"] == "order_won"}
+    cancelled = {e["orderId"] for e in events if e["kind"] == "order_cancelled"}
+    owners = {gig["id"]: list(dict.fromkeys(stop["orderId"] for stop in gig["stops"])) for gig in run["gigs"]}
+    money, shared_with = defaultdict(int), {}
+    for e in events:
+        if e["kind"] == "ledger":
+            line = e["line"]
+            ids = [line["orderId"]] if line.get("orderId") else owners.get(line.get("gigId"), [])
+            total = sum(typical.get(i, 0) for i in ids) or 1
+            for i in ids:
+                money[(i, "fees" if line["kind"] in ("driver_fee", "failed_visit", "release_fee", "waiting", "fine") else line["kind"])] += line["cents"] * typical.get(i, 0) / total if len(ids) > 1 else line["cents"]
+    for gig in run["gigs"]:
+        if len(owners[gig["id"]]) > 1 and gig["status"] == "done":
+            for i in owners[gig["id"]]:
+                shared_with[i] = gig["id"]
+    partnered = run.get("partnered", {})
+    rows = []
+    for item in run["reveal"]["requests"]:
+        r, quote = item["request"], item["quote"] or {}
+        if not quote:
+            continue
+        kind, cents = next(iter(quote.items()))
+        option = next(o for o in r["options"] if o["kind"] == kind)
+        if cents >= 3 * option["listPriceCents"]:
+            continue
+        i = r["id"]
+        won = item["outcome"] == "won" and i not in cancelled
+        late = money[(i, "late_refund")] + money[(i, "undelivered_penalty")]
+        rows.append({"seed": run["seed"], "id": i, "day": r["arrivedAt"] // DAY, "partner": i in partnered, "multiple": round(cents / option["listPriceCents"], 2),
+                     "drawn": partnered.get(i, {}).get("multiple"), "won": won, "typical": r["referenceFeeCents"] / 100, "list": option["listPriceCents"] / 100,
+                     "price": cents / 100 if won else 0.0, "fees": -money[(i, "fees")] / 100 if won else 0.0, "refund": -late / 100 if won else 0.0,
+                     "margin": (money[(i, "revenue")] + money[(i, "fees")] + late) / 100 if won else 0.0, "in_pair": i in shared_with, "on_time": bool(won and late == 0 and money[(i, "revenue")] > 0)})
+    return pd.DataFrame(rows)
+
+
+def partners(tag: str) -> None:
+    t = pd.concat(request_table(run) for run in runs(tag))
+    t["quoted_at"] = t.drawn.fillna(0)  # 0: not a partner request, quoted as usual
+    agg = lambda d: pd.Series({"requests": len(d), "won": d.won.mean(), "in_pair_if_won": d[d.won].in_pair.mean(), "on_time_if_won": d[d.won].on_time.mean(),
+                               "fees_over_typical_if_won": d[d.won].fees.sum() / max(1, d[d.won].typical.sum()), "margin_per_request": d.margin.mean(), "margin_per_win": d[d.won].margin.mean()})
+    print("requests whose car could share a gig with a car that waited, by the multiple of list we quoted; and the others")
+    print(t.groupby(["partner", "quoted_at"]).apply(agg).round(3).to_string())
+    print(t.groupby("seed").apply(lambda d: pd.Series({"quoted": len(d), "partner": d.partner.mean(), "won": d.won.sum(), "in_pair": d[d.won].in_pair.mean()})).round(3))
+
+
 if __name__ == "__main__":
-    {"bookers": bookers, "pairs": pairs, "offers": offers, "shared": shared}[sys.argv[1]](sys.argv[2])
+    {"bookers": bookers, "pairs": pairs, "offers": offers, "shared": shared, "partners": partners}[sys.argv[1]](sys.argv[2])

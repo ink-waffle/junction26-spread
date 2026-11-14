@@ -19,12 +19,14 @@ class MarketPolicy:
     margin: float = 0.15  # never quote below our expected cost plus this share of it
     explore: Optional[tuple[float, float]] = None  # research: draw each multiple from this range
     options: str = "first"  # which options to quote: first, last, all, or random (research)
+    partner: Optional[tuple[float, ...]] = None  # research: multiples to draw from when the car could share a gig with a car that waits
     seed: str = ""
 
 
 class Market:
-    def __init__(self, policy: MarketPolicy, books: Books, fleet: Fleet):
-        self.policy, self.books, self.fleet = policy, books, fleet
+    def __init__(self, policy: MarketPolicy, books: Books, fleet: Fleet, pairs=None):
+        self.policy, self.books, self.fleet, self.pairs = policy, books, fleet, pairs
+        self.partnered: dict[str, dict] = {}  # research: request id -> the waiting order it could pair with, and the multiple we quoted
 
     def quote(self, request: PriceRequest) -> dict[str, int]:
         """A price in cents for each option we offer."""
@@ -37,6 +39,10 @@ class Market:
             if cost is None:
                 continue
             multiple = rng.uniform(*policy.explore) if policy.explore else policy.price
+            other = self.pairs.partner(request, option) if policy.partner and self.pairs else None
+            if other:
+                multiple = rng.choice(policy.partner)
+                self.partnered[request["id"]] = {"with": other, "multiple": multiple, "option": option["kind"]}
             prices[option["kind"]] = int(max(option["listPriceCents"] * multiple, cost * (1 + policy.margin)) / 100 + 0.5) * 100
         return prices or {options[0]["kind"]: int(options[0]["listPriceCents"] * DECLINE)}
 
