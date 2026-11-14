@@ -2,18 +2,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
-from spread.types import Action, DeliveryOption, PriceRequest
+from spread.types import Action
 
-from . import notes
 from .atlas import HOUR, Atlas, open_spans
 from .books import Books, OrderState
 from .fleet import Fleet
 
 NEAR_KM = 30  # "where it ends": the radius the drivers' app itself calls near (RULES.md)
 WARNING = 3 * HOUR  # the deadline warning comes this long before the last possible pickup (RULES.md)
-NEVER = 10 ** 9
 
 
 @dataclass
@@ -27,22 +25,17 @@ class PairsPolicy:
 
 
 class Pairs:
-    def __init__(self, policy: PairsPolicy, books: Books, fleet: Fleet, atlas: Atlas):
-        self.policy, self.books, self.fleet, self.atlas = policy, books, fleet, atlas
+    """Keeps no state of the week: who waits and which gig is shared are read from the books, so a restart changes nothing."""
+
+    def __init__(self, policy: PairsPolicy, books: Books, fleet: Fleet, atlas: Atlas, pending: set[tuple[str, int]], wake: Callable[[int, str], None]):
+        self.policy, self.books, self.fleet, self.atlas, self.pending, self.wake = policy, books, fleet, atlas, pending, wake
         self.near = {a: {b for b in atlas.places if atlas.crow_km(a, b) <= NEAR_KM} for a in atlas.places}
-        self.waiting: set[str] = set()  # new orders kept out of the app
-        self.paired: set[str] = set()  # orders we have put in a two-car gig: they do not wait again
-        self.until: dict[str, int] = {}  # waiting order -> the minute of the dealer's answer to a quote that counts on it
 
     def holds(self, state: OrderState) -> bool:
         """True while a new one-car order stays out of the app: a second car for its driver may still be won."""
         policy, now = self.policy, self.books.now
-        return (now < self.release(state) and not state.posted and not state.urgent and not state.late and state.id not in self.paired
+        return (now < state.won_at + policy.hold and not state.posted and not state.urgent and not state.late and not state.refusals
                 and len(state.order["legs"]) == 1 and state.order["lastPickupAt"] - WARNING - now >= policy.lead)
-
-    def release(self, state: OrderState) -> int:
-        """The minute a waiting order goes to the app alone."""
-        return max(state.won_at + self.policy.hold, self.until.get(state.id, 0))
 
     def match(self) -> list[Action]:
         """Posts two waiting cars as one gig when one driver can take them in a row; takes a two-car gig that found no driver out of the app."""
@@ -52,21 +45,16 @@ class Pairs:
                 owners = [books.orders.get(order_id) for order_id, _ in gig.legs]
                 if now >= gig.posted_at + policy.patience or any(state is None or state.urgent or state.late for state in owners):
                     actions.append({"type": "withdraw", "gigId": gig.id})
-                    books.gig_gone(gig.id)
-        for order_id in sorted(self.waiting | books.dirty):
-            state = books.orders.get(order_id)
-            if state and self.holds(state):
-                self.waiting.add(order_id)
-            elif order_id in self.waiting:  # its hold is over: the desk posts it alone
-                self.waiting.discard(order_id)
-                books.dirty.add(order_id)
-        waiting = [books.orders[order_id] for order_id in sorted(self.waiting)]
-        options = [(idle, p.id, q.id) for p in waiting for q in waiting if p is not q for idle in [self.idle(p, q)] if idle is not None]
+                    books.gig_gone(gig.id)  # its cars are dirty now: the desk posts each alone
+                else:
+                    self.wake(gig.posted_at + policy.patience, gig.legs[0][0])
+        waiting = {state.id: state for state in books.orders.values() if self.holds(state) and (state.id, 0) not in self.pending}
+        for state in waiting.values():
+            self.wake(state.won_at + policy.hold, state.id)  # then the desk posts it alone
+        options = [(idle, p.id, q.id) for p in waiting.values() for q in waiting.values() if p is not q for idle in [self.idle(p, q)] if idle is not None]
         for _, p_id, q_id in sorted(options):
-            if p_id in self.waiting and q_id in self.waiting:
-                self.waiting -= {p_id, q_id}
-                self.paired |= {p_id, q_id}
-                p, q = books.orders[p_id], books.orders[q_id]
+            if p_id in waiting and q_id in waiting:
+                p, q = waiting.pop(p_id), waiting.pop(q_id)
                 first, second = self.fleet.audience(p, [0]), self.fleet.audience(q, [0])
                 typical = p.request["referenceFeeCents"] + q.request["referenceFeeCents"]
                 actions.append({"type": "post", "stops": self.fleet.stops(p, [0]) + self.fleet.stops(q, [0]),
@@ -93,26 +81,3 @@ class Pairs:
                     return None
                 idle, t, here = idle + (at - t if here else 0), at, site["placeId"]
         return idle if idle <= policy.idle else None
-
-    def partner(self, request: PriceRequest, option: DeliveryOption) -> Optional[str]:
-        """The waiting order whose driver could also take this request's car, if we win it with this option; None when there is none."""
-        if len(request["legs"]) != 1:
-            return None
-        leg = dict(request["legs"][0])
-        for end in ("pickup", "delivery"):  # an order's windows at dealer sites end at the deadline of the option the dealer chose
-            if not leg[end]["privateAddress"]:
-                leg[end] = dict(leg[end], window={"from": leg[end]["window"]["from"], "to": min(leg[end]["window"]["to"], option["deadline"])})
-        state = OrderState({"id": request["id"], "legs": [leg], "deadline": option["deadline"]}, request, notes.read(request["note"], request["arrivedAt"]), request["respondBy"])
-        for order_id in sorted(self.waiting):
-            other = self.books.orders.get(order_id)
-            if other and (self.idle(other, state) is not None or self.idle(state, other) is not None):
-                self.until[order_id] = max(self.until.get(order_id, 0), request["respondBy"] + 1)  # it waits for the dealer's answer
-                return order_id
-        return None
-
-    def alarm(self) -> int:
-        """The next minute to act at when no event comes first: a hold, or a two-car gig's patience, runs out."""
-        books, policy = self.books, self.policy
-        times = [self.release(books.orders[order_id]) for order_id in self.waiting if order_id in books.orders]
-        times += [gig.posted_at + policy.patience for gig in books.gigs.values() if gig.status == "open" and gig.shared]
-        return min(times, default=NEVER)
