@@ -140,7 +140,7 @@ class Books:
             self.dirty.add(state.id)
 
     def _order_cancelled(self, e) -> None:
-        state = self.orders.pop(e["orderId"], None)
+        self.orders.pop(e["orderId"], None)
         for item in e["gigs"]:
             gig = self.gigs.get(item["gigId"])
             if gig is None:
