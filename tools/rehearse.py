@@ -56,8 +56,8 @@ class Pacer(threading.Thread):
         minute, last = float(self.now), time.monotonic()
         while self.now < self.ends_at:
             time.sleep(0.05)
-            wall = time.monotonic()
-            minute, last = minute + (wall - last) * self.speed * HOUR / pace(int(minute)), wall
+            wall = time.monotonic()  # when we cannot reach the server its clock stands still, as the final's does while the server is down
+            minute, last = minute + min(wall - last, 1.0) * self.speed * HOUR / pace(int(minute)), wall
             if int(minute) > self.now:
                 try:
                     self.now = self.world.advance(to=min(int(minute), self.ends_at))["now"]
@@ -284,7 +284,7 @@ def baseline(tag: str, seed: str) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--tag", required=True)
+    parser.add_argument("--tag", default="live-rehearsal")
     parser.add_argument("--seeds", default="halal-01", help="a named set (tune, hold, wide, quick) or seeds separated by commas")
     parser.add_argument("--level", type=int, default=8)
     parser.add_argument("--policy", default="{}")
@@ -300,7 +300,13 @@ def main() -> None:
                              "With a value: the shell command that starts the desk on another machine, {world} for the world's id")
     parser.add_argument("--baseline", default="live-practice", help="the tag of the practice-loop runs to compare with")
     parser.add_argument("--workers", type=int, default=2)
+    parser.add_argument("--pace", help="only move the clock of this world, to its end or to --until: for a desk that someone else starts, on any machine")
     args = parser.parse_args()
+    if args.pace:
+        world = Client().world(args.pace)
+        snapshot = world.snapshot()
+        Pacer(world, args.speed, snapshot["now"], min(args.until, snapshot["endsAt"])).run()
+        return
     seeds = SEEDS.get(args.seeds) or args.seeds.split(",")
     trouble = [item for item in args.trouble.split(",") if item]
     results = []
