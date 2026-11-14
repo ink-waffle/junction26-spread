@@ -77,11 +77,11 @@ class Market:
         margin = offers[best][1] - costs[best]
         return {kind: euros(cost + margin) for kind, cost in costs.items()}  # the dealer chooses its speed, and we earn the same whichever it takes
 
-    def parts(self, request: PriceRequest) -> list[tuple]:
-        """The parts of the level that this request touches, of those the policy gives a spread."""
+    def parts(self, request: PriceRequest, war: bool = False) -> list[tuple]:
+        """The parts of the level that this request touches, of those the policy gives a spread. With `war`, the day part is its belief for a war day."""
         leg, day = request["legs"][0], request["arrivedAt"] // DAY
         pickup, delivery = leg["pickup"]["placeId"], leg["delivery"]["placeId"]
-        keys = {"world": (), "day": (day,), "dealer": (request["dealerId"],), "from": (pickup,), "to": (delivery,), "lane": (pickup, delivery), "from today": (pickup, day)}
+        keys = {"world": (), "day": (day, "war") if war else (day,), "dealer": (request["dealerId"],), "from": (pickup,), "to": (delivery,), "lane": (pickup, delivery), "from today": (pickup, day)}
         return [(name, *keys[name]) for name in self.policy.spread]
 
     def belief(self, part: tuple) -> tuple[float, float]:
@@ -93,7 +93,7 @@ class Market:
     def level(self, request: PriceRequest, option: DeliveryOption, war: bool = False) -> tuple[float, float]:
         """Mean and variance of the log multiple of the list price at which this dealer buys this option half the time, before today's event:
         with the day part as it is if today is the war day, or if it is not."""
-        policy, beliefs = self.policy, [self.belief((*part, "war") if war and part[0] == "day" else part) for part in self.parts(request)]
+        policy, beliefs = self.policy, [self.belief(part) for part in self.parts(request, war)]
         known = policy.trust * self.books.on_time[request["dealerId"]] - policy.speed * request["options"].index(option)
         return known + sum(mean for mean, _ in beliefs), sum(variance for _, variance in beliefs)
 
@@ -144,34 +144,37 @@ class Market:
         if not request or not prices:
             return
         option = self.weighed(request, prices, won)
-        slope, x, day = self.policy.slope, math.log(prices[option["kind"]] / option["listPriceCents"]), request["arrivedAt"] // DAY
-        levels = {war: self.level(request, option, war) for war in (False, True)}
-        said = lambda shift, war: math.log(self.yes((levels[war][0] + shift - x) * (1 if won else -1), levels[war][1]))  # how well an event foretold the answer
+        asked = math.log(prices[option["kind"]] / option["listPriceCents"])
+        levels = {war: self.level(request, option, war) for war in (False, True)}  # as they were when the dealer answered
+        self.hear(request, levels, asked, won)
+        mix = self.mix(request)  # with this answer heard
+        self.step([part for part in self.parts(request) if part[0] != "day"], levels, mix, asked, won)
+        for war in (False, True):  # the day part learns twice: as it is if today is the war day, and if it is not
+            self.step([part for part in self.parts(request, war) if part[0] == "day"], levels, [component for component in mix if component[2] == war], asked, won)
+        self.cars[request["legs"][0]["pickup"]["placeId"]] += 1
+
+    def hear(self, request: PriceRequest, levels: dict[bool, tuple[float, float]], asked: float, won: Optional[str]) -> None:
+        """Adds to each event that today can be how much better than a calm day it foretold this answer, as a log-likelihood."""
+        said = lambda shift, war: math.log(self.yes((levels[war][0] + shift - asked) * (1 if won else -1), levels[war][1]))
         for event in ["war", *self.regions] if self.regions else []:
             gain = said(self.shift(request, event), event == "war") - said(0.0, False)
             if gain:
-                heard = self.heard.setdefault(day, {})
+                heard = self.heard.setdefault(request["arrivedAt"] // DAY, {})
                 heard[event] = max(-SURE, min(SURE, heard.get(event, 0.0) + gain))
-        mix, parts = self.mix(request), self.parts(request)  # with this answer heard
 
-        def step(mix: list, parts: list) -> None:
-            """One Kalman step of these parts towards the answer, when the level is this mix."""
-            total = sum(chance for chance, _, _ in mix)
-            if total <= 0:
-                return
-            mean = sum(chance * (levels[war][0] + shift) for chance, shift, war in mix) / total
-            variance = sum(chance * (levels[war][1] + (levels[war][0] + shift - mean) ** 2) for chance, shift, war in mix) / total
-            p = 1 / (1 + math.exp(-slope * (mean - x)))
-            weight = slope * slope * p * (1 - p)
-            push, shrink = slope * ((won is not None) - p) / (1 + weight * variance), weight / (1 + weight * variance)
-            for part in parts:
-                m, v = self.belief(part)
-                self.beliefs[part] = (m + v * push, v - v * v * shrink)
-
-        step(mix, [part for part in parts if part[0] != "day"])
-        for war in (False, True):  # the day part learns twice: as it is if today is the war day, and if it is not
-            step([component for component in mix if component[2] == war], [(*part, "war") if war else part for part in parts if part[0] == "day"])
-        self.cars[request["legs"][0]["pickup"]["placeId"]] += 1
+    def step(self, parts: list[tuple], levels: dict[bool, tuple[float, float]], mix: list[tuple[float, float, bool]], asked: float, won: Optional[str]) -> None:
+        """One Kalman step of these parts towards the answer, when the level is this mix."""
+        slope, total = self.policy.slope, sum(chance for chance, _, _ in mix)
+        if total <= 0:
+            return
+        mean = sum(chance * (levels[war][0] + shift) for chance, shift, war in mix) / total
+        variance = sum(chance * (levels[war][1] + (levels[war][0] + shift - mean) ** 2) for chance, shift, war in mix) / total
+        p = 1 / (1 + math.exp(-slope * (mean - asked)))
+        weight = slope * slope * p * (1 - p)
+        push, shrink = slope * ((won is not None) - p) / (1 + weight * variance), weight / (1 + weight * variance)
+        for part in parts:
+            m, v = self.belief(part)
+            self.beliefs[part] = (m + v * push, v - v * v * shrink)
 
     def weighed(self, request: PriceRequest, prices: dict[str, int], won: Optional[str]) -> DeliveryOption:
         """The option of our quote that the dealer set against the competitor: the one it bought, else our best offer in its eyes."""
