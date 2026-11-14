@@ -105,13 +105,12 @@ def patient(call, tries: int = 30):
             time.sleep(10)
 
 
-def play_through(world, new_desk) -> Desk:
-    """Plays a practice world to its end. When the server stops answering, a new desk rejoins from the log and its journal, as in the final."""
-    desk, away = new_desk(), False
+def play_through(world, new_desk, away: bool = False) -> Desk:
+    """Plays a practice world to its end. When the server stops answering, or with `away`, a new desk rejoins from the log and its journal, as in the final."""
     for _ in range(30):
         try:
+            desk = new_desk()
             if away:
-                desk = new_desk()
                 desk.rejoin(world.snapshot(), world.events())
             play_practice(world, desk)
             return desk

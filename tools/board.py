@@ -16,17 +16,14 @@ from spread.client import Client, SpreadError, World
 
 from dispatch.atlas import Atlas
 from dispatch.desk import Desk, Policy
-from dispatch.run import play_practice
-from tools.harness import RUNS, Slot
+from tools.harness import RUNS, Slot, patient, play_through
 
 
 def play(client: Client, world: World, level: int, overrides: dict, rejoin: bool) -> dict:
-    desk = Desk(Atlas(client.map()), world.roster(), Policy.of(overrides, seed=world.id), journal=os.path.join(RUNS, f"journal-{world.id}.jsonl"), verbose=True)
-    if rejoin:
-        history = world.events()
-        desk.rejoin(world.snapshot(), history)
-    play_practice(world, desk)
-    score = world.score()
+    atlas, roster, journal = Atlas(patient(client.map)), patient(world.roster), os.path.join(RUNS, f"journal-{world.id}.jsonl")
+    new_desk = lambda: Desk(atlas, roster, Policy.of(overrides, seed=world.id), journal=journal, verbose=True)
+    play_through(world, new_desk, away=rejoin)
+    score = patient(world.score)
     commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
     row = {"at": time.strftime("%m-%d %H:%M"), "world": world.id, "level": level, "commit": commit, "policy": overrides, "margin": score["marginCents"] / 100,
            "onTime": score["onTimeShare"], "won": score["wonOrders"], "ranked": score["ranked"]}
