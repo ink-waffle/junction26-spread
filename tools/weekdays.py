@@ -1,6 +1,6 @@
 """Orders won by weekday, for saved runs: does a week start as fast as it ends?
 
-    python -m tools.weekdays final-fresh skeptic-base-s14
+    python -m tools.weekdays final-fresh skeptic-base-s14 simple-E-s14@97-128
 
 Per tag and weekday, as a mean over the tag's weeks: requests, requests we priced to win (not declined), orders won, the share won,
 the price we asked and the price we won at (multiples of the list price, cheapest option), the fee the won orders' first gigs opened at
@@ -51,10 +51,13 @@ def week(run: dict) -> dict[int, dict[str, float]]:
 
 
 def table(tag: str) -> None:
+    tag, _, span = tag.partition("@")  # tag@97-128: only the weeks halal-97..128 of the tag
+    low, high = (int(n) for n in span.split("-")) if span else (0, 10 ** 6)
     weeks = []
     for path in sorted(glob.glob(os.path.join(ROOT, "runs", tag, "*.json.gz"))):
-        with gzip.open(path, "rt") as file:
-            weeks.append(week(json.load(file)))
+        if low <= int(os.path.basename(path).split(".")[0].rsplit("-", 1)[-1]) <= high:
+            with gzip.open(path, "rt") as file:
+                weeks.append(week(json.load(file)))
     if not weeks:
         return print(f"{tag}: no saved weeks")
     print(f"{tag}: {len(weeks)} weeks, a mean week")
