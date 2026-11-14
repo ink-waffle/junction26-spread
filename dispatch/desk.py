@@ -14,6 +14,7 @@ from .atlas import Atlas, clock
 from .books import Books, OrderState
 from .fleet import Fleet, FleetPolicy
 from .market import Market, MarketPolicy
+from .offers import Offers, OffersPolicy
 from .pairs import Pairs, PairsPolicy
 
 
@@ -23,13 +24,14 @@ class Policy:
     market: MarketPolicy = field(default_factory=MarketPolicy)
     fleet: FleetPolicy = field(default_factory=FleetPolicy)
     pairs: PairsPolicy = field(default_factory=PairsPolicy)
+    offers: OffersPolicy = field(default_factory=OffersPolicy)
 
     @staticmethod
     def of(overrides: Optional[dict] = None, seed: str = "") -> "Policy":
         """The default policy with `{"market": {...}, "fleet": {...}, "pairs": {...}}` overrides, for experiments."""
         def part(name: str) -> dict:  # JSON has lists where a policy has tuples
             return {key: tuple(value) if isinstance(value, list) else value for key, value in (overrides or {}).get(name, {}).items()}
-        return Policy(MarketPolicy(seed=seed, **part("market")), FleetPolicy(**part("fleet")), PairsPolicy(**part("pairs")))
+        return Policy(MarketPolicy(seed=seed, **part("market")), FleetPolicy(**part("fleet")), PairsPolicy(**part("pairs")), OffersPolicy(**part("offers")))
 
 
 class Desk:
@@ -42,6 +44,7 @@ class Desk:
         self.outbox: list[Action] = []
         self.pending: set[tuple[str, int]] = set()  # legs whose post is in the outbox or on its way
         self.pairs = Pairs(policy.pairs, self.books, self.fleet, atlas, self.pending)
+        self.offers = Offers(policy.offers, self.books, atlas)
         self.journal, self.verbose = journal, verbose
         self.careful = False  # the final sets it: an event that the desk cannot read is logged and passed over, not fatal
 
@@ -100,6 +103,7 @@ class Desk:
             if order_id in books.orders:
                 self.settle(books.orders[order_id])
         # an order that still needs a gig from us stays dirty: it waits for a partner, or its two-car gig went after its turn
+        self.outbox += self.offers.send()
         books.dirty = {o for o in books.dirty | dirty if o in books.orders and books.orders[o].refusals < 4 and any((o, leg) not in self.pending for leg in books.orders[o].unposted())}
 
     def settle(self, state: OrderState) -> None:
@@ -134,6 +138,8 @@ class Desk:
                 books.gig_gone(action["gigId"])
             elif action["type"] == "reprice" and action["gigId"] in books.gigs:
                 books.gigs[action["gigId"]].schedule = action["schedule"]
+            elif action["type"] == "offer":  # a replay learns here whom we have asked
+                books.offers.setdefault((action["gigId"], action["driverId"]), books.now)
         for action, result in zip(actions, results):
             if action["type"] == "post":
                 legs = [(s["orderId"], s["leg"]) for s in action["stops"] if s["kind"] == "pickup"]
