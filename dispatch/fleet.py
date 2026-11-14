@@ -5,9 +5,9 @@ import random
 from dataclasses import dataclass
 from typing import Optional
 
-from spread.types import Audience, FeeStep, StopRef
+from spread.types import Audience, DeliveryOption, FeeStep, PriceRequest, StopRef
 
-from .atlas import DAY, HOUR, Atlas
+from .atlas import DAY, HOUR, Atlas, open_spans
 from .books import Books, OrderState
 
 MAX_PLAN_MINUTES = 12 * HOUR  # a gig with several cars may not plan more driving (RULES.md)
@@ -15,9 +15,11 @@ MAX_PLAN_MINUTES = 12 * HOUR  # a gig with several cars may not plan more drivin
 
 @dataclass
 class FleetPolicy:
-    fee: float = 1.0  # the one fee of a gig, as a multiple of the typical fee: flat, so drivers never learn to wait
+    fee: float = 1.15  # the one fee of a gig, as a multiple of the typical fee: flat, so drivers never learn to wait
     urgent_fee: float = 1.6  # after the deadline warning
     late_fee: float = 1.3  # once the car can only arrive late
+    min_slack: float = 8.0  # hours from the dealer's answer to the last possible pickup, below which we do not want the car
+    decline: tuple[str, ...] = ("private_pickup", "trade_in", "premium")  # kinds of request we do not want
     explore: Optional[tuple[float, ...]] = None  # research: draw each order's fee multiple from these
     seed: str = ""
 
@@ -33,6 +35,29 @@ class GigPlan:
 class Fleet:
     def __init__(self, policy: FleetPolicy, books: Books, atlas: Atlas):
         self.policy, self.books, self.atlas = policy, books, atlas
+
+    def cost(self, request: PriceRequest, option: DeliveryOption) -> Optional[int]:
+        """What we expect to pay, in cents, to move this request by this option's deadline; None when we should not win it."""
+        policy, leg = self.policy, request["legs"][0]
+        kinds = {"private_pickup": leg["pickup"]["privateAddress"], "trade_in": len(request["legs"]) > 1, "premium": any(l["car"]["premium"] for l in request["legs"])}
+        if any(kinds[kind] for kind in policy.decline):
+            return None
+        last = self.last_pickup(request, option)
+        if last is None or last - request["respondBy"] < policy.min_slack * HOUR:
+            return None
+        return int(request["referenceFeeCents"] * policy.fee)
+
+    def last_pickup(self, request: PriceRequest, option: DeliveryOption) -> Optional[int]:
+        """The last minute to collect the first car and still deliver it by the option's deadline, by road minutes and stated hours."""
+        leg = request["legs"][0]
+        pickup, delivery = leg["pickup"], leg["delivery"]
+        drive = self.atlas.drive(pickup["placeId"], delivery["placeId"])
+        due = min(option["deadline"], delivery["window"]["to"]) if delivery["privateAddress"] else option["deadline"]
+        arrive = max((b for a, b in open_spans(delivery["hours"], delivery["window"]["from"], due)), default=None)
+        if arrive is None:
+            return None
+        end = min(arrive - drive, pickup["window"]["to"])
+        return max((b for a, b in open_spans(pickup["hours"], pickup["window"]["from"], end)), default=None)
 
     def plan(self, state: OrderState, legs: list[int]) -> list[GigPlan]:
         """The gigs that should carry these legs of the order now."""

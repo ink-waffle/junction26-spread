@@ -32,8 +32,8 @@ class Policy:
 class Desk:
     def __init__(self, atlas: Atlas, roster: list[DriverProfile], policy: Policy, journal: Optional[str] = None, verbose: bool = False):
         self.books = Books(roster)
-        self.market = Market(policy.market, self.books)
         self.fleet = Fleet(policy.fleet, self.books, atlas)
+        self.market = Market(policy.market, self.books, self.fleet)
         self.outbox: list[Action] = []
         self.pending: set[tuple[str, int]] = set()  # legs whose post is in the outbox or on its way
         self.journal, self.verbose = journal, verbose

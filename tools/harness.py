@@ -22,7 +22,7 @@ from dispatch.atlas import Atlas
 from dispatch.desk import Desk, Policy
 from dispatch.run import play_practice
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.environ.get("SPREAD_SHARED") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # runs/ and .slots/ are shared by all worktrees
 SLOTS, RUNS = os.path.join(ROOT, ".slots"), os.path.join(ROOT, "runs")
 SEEDS = {
     "tune": [f"halal-{i:02d}" for i in range(1, 9)],
@@ -118,7 +118,7 @@ def play(tag: str, seed: str, level: int, overrides: dict, save: bool) -> dict:
         os.makedirs(folder, exist_ok=True)
         with gzip.open(os.path.join(folder, f"{seed}.json.gz"), "wt") as file:
             json.dump({"seed": seed, "level": level, "worldId": world.id, "policy": overrides, "summary": summary, "score": score,
-                       "quotes": desk.books.quotes, "roster": roster, "events": events, "reveal": world.reveal()}, file)
+                       "quotes": desk.books.quotes, "roster": roster, "events": events, "gigs": world.snapshot()["gigs"], "reveal": world.reveal()}, file)
     return summary
 
 
