@@ -79,10 +79,9 @@ class Market:
 
     def parts(self, request: PriceRequest) -> list[tuple]:
         """The parts of the level that this request touches, of those the policy gives a spread."""
-        leg, day, dealer = request["legs"][0], request["arrivedAt"] // DAY, request["dealerId"]
+        leg, day = request["legs"][0], request["arrivedAt"] // DAY
         pickup, delivery = leg["pickup"]["placeId"], leg["delivery"]["placeId"]
-        keys = {"world": (), "day": (day,), "dealer": (dealer,), "from": (pickup,), "to": (delivery,), "lane": (pickup, delivery),
-                "from today": (pickup, day), "to today": (delivery, day), "dealer today": (dealer, day)}
+        keys = {"world": (), "day": (day,), "dealer": (request["dealerId"],), "from": (pickup,), "to": (delivery,), "lane": (pickup, delivery), "from today": (pickup, day)}
         return [(name, *keys[name]) for name in self.policy.spread]
 
     def belief(self, part: tuple) -> tuple[float, float]:
