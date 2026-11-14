@@ -1,6 +1,8 @@
 """How a car meets its driver beyond a single gig in the app: two cars in one gig, and direct offers."""
 from __future__ import annotations
 
+import heapq
+import math
 import random
 from collections import defaultdict
 from dataclasses import dataclass
@@ -25,11 +27,14 @@ class OffersPolicy:
     chain_fee: tuple[float, ...] = ()  # the same for a second car that only starts where the first ends; empty: no such gigs
     pair_control: float = 0.0  # research: share of pairs posted as two single gigs
     pair_minutes: int = 90  # an unbooked two-car gig is split into single gigs after this long
+    pair_drive: int = 12 * HOUR  # the most driving, in road minutes, a two-car gig may plan: longer ones find no driver
     pair_lead: int = 3 * HOUR  # a pair must still be feasible for a driver who sets out this much later
+    offer_after: Optional[int] = None  # minutes a gig sits unbooked in the app before we offer it directly, at its app fee; None: no offers
     explore: Optional[tuple[float, ...]] = None  # research: each offer's fee multiple is drawn from these, its driver from a random class
     rounds: int = 3  # research: rounds of offers a gig gets when it opens, and again after its deadline warning
-    quiet_fee: float = 0.6  # research arm "first": the app fee while the first offers are out
-    quiet_minutes: int = 30
+    quiet_fee: float = 0.6  # the fee a new gig opens at, as a multiple of the typical fee, for its first quiet_minutes
+    quiet_minutes: int = 0  # 0: a gig opens at its full fee
+    quiet_share: float = 1.0  # research: share of orders that open low
     seed: str = ""
 
 
@@ -43,7 +48,6 @@ class Offers:
         self.alone: set[str] = set()  # orders that go in a gig of their own from now on
         self.rounds: dict[str, int] = defaultdict(int)  # order -> rounds of offers sent
         self.asked: dict[str, set[str]] = defaultdict(set)  # order -> drivers who got an offer for it
-        self.opened: set[str] = set()  # orders that have had a gig
         self.meta: dict[tuple[str, str], dict] = {}
 
     # --- two cars in one gig ---
@@ -96,7 +100,7 @@ class Offers:
                 back = second["delivery"]["placeId"] in self.near[first["pickup"]["placeId"]]
                 fees = policy.pair_fee if back else policy.chain_fee
                 places = [first["pickup"]["placeId"], first["delivery"]["placeId"], second["pickup"]["placeId"], second["delivery"]["placeId"]]
-                if not fees or sum(self.atlas.drive(a, b) for a, b in zip(places, places[1:])) > MAX_PLAN_MINUTES:
+                if not fees or sum(self.atlas.drive(a, b) for a, b in zip(places, places[1:])) > min(MAX_PLAN_MINUTES, policy.pair_drive):
                     continue
                 route = self.route([p, q], max(now + policy.pair_lead, first["pickup"]["window"]["from"]))
                 if route and route[1] <= HOUR:
@@ -133,8 +137,50 @@ class Offers:
         times = [books.orders[order_id].won_at + policy.hold for order_id in self.waiting if order_id in books.orders]
         times += [gig.posted_at + policy.pair_minutes for gig in books.gigs.values() if gig.status == "open" and gig.shared]
         if policy.explore:
-            times += [now] * posting + [now - now % DAY + READ_FROM] * (now % DAY < READ_FROM)
+            times += [now] * posting
+        if policy.offer_after is not None:
+            times += [gig.posted_at + policy.offer_after for gig in books.gigs.values() if gig.status == "open" and gig.posted_at + policy.offer_after > now]
+        if policy.explore or policy.offer_after is not None:
+            times += [now - now % DAY + READ_FROM] * (now % DAY < READ_FROM)
         return min(times, default=NEVER)
+
+    def offers(self) -> list[Action]:
+        """Each gig the app has left unbooked gets direct offers, at its app fee, to the three drivers likeliest to say yes."""
+        books, policy, now = self.books, self.policy, self.books.now
+        if policy.offer_after is None or not READ_FROM <= now % DAY < READ_TO - OPEN_MINUTES:
+            return []
+        holding = {gig.driver for gig in books.gigs.values() if gig.status in ("booked", "working")}
+        sending: dict[str, int] = defaultdict(int)
+        actions: list[Action] = []
+        slow = [gig for gig in books.gigs.values() if gig.status == "open" and now >= gig.posted_at + policy.offer_after and gig.legs and gig.legs[0][0] in books.orders]
+        for gig in sorted(slow, key=lambda gig: books.orders[gig.legs[0][0]].order["lastPickupAt"]):
+            waiting = books.open_offers[gig.id]
+            for driver_id in [d for d, offer in waiting.items() if offer["at"] + OPEN_MINUTES + 5 < now]:
+                del waiting[driver_id]
+            if waiting:
+                continue
+            order_id = gig.legs[0][0]
+            state, delivery = books.orders[order_id], self.place(gig.stops[-1])
+            audience = self.fleet.audience(state, [leg for owner, leg in gig.legs if owner == order_id])
+
+            def score(driver: DriverState) -> float:  # tools/offers_study.py fit: log-odds of a yes, the terms that differ between drivers
+                profile = driver.profile
+                return (0.74 * math.log1p(profile["completedGigs"]) + 0.95 * (profile["homePlaceId"] in self.near[delivery])
+                        + 0.6 * (profile["id"] in holding) - 1.13 * (driver.last_seen < 0))
+
+            pool = [driver for driver_id, driver in books.drivers.items()
+                    if driver.offers[now // DAY] + sending[driver_id] < PER_DRIVER and driver_id not in self.asked[order_id]
+                    and (driver.profile["licence"] == "manual" or not audience["manualLicence"])
+                    and (driver.profile["rating"] >= 4.8 and driver.profile["completedGigs"] >= 50 or not audience["experienced"])]
+            fee = self.app_fee(gig)
+            for driver in heapq.nlargest(PER_GIG, pool, key=score):
+                driver_id = driver.profile["id"]
+                self.asked[order_id].add(driver_id)
+                sending[driver_id] += 1
+                self.meta[(gig.id, driver_id)] = {"at": now, "gigId": gig.id, "orderId": order_id, "driverId": driver_id, "feeCents": fee, "class": "targeted",
+                                                  "arm": "targeted", "urgent": state.urgent, "late": state.late, "postedAt": gig.posted_at, "score": round(score(driver), 2), "answer": None}
+                actions.append({"type": "offer", "gigId": gig.id, "driverId": driver_id, "feeCents": fee})
+        return actions
 
     # --- direct offers (research) ---
 
@@ -142,13 +188,13 @@ class Offers:
         return random.Random(f"{self.policy.seed}:arm:{order_id}").choice(("control", "with", "first"))
 
     def opening(self, state: OrderState, schedule: list[FeeStep]) -> list[FeeStep]:
-        """The fee schedule a new gig opens with: in the research arm "first", low while the first offers are out."""
-        first = state.id not in self.opened
-        self.opened.add(state.id)
-        if not (self.policy.explore and first and self.arm(state.id) == "first") or state.urgent or state.late:
+        """The fee schedule of an order's first gig: low for a short while, so the drivers for whom the car is cheap take it first."""
+        policy = self.policy
+        chosen = self.arm(state.id) == "first" if policy.explore else random.Random(f"{policy.seed}:quiet:{state.id}").random() < policy.quiet_share
+        if not policy.quiet_minutes or not chosen or state.posted or state.urgent or state.late:
             return schedule
-        quiet = max(1, int(schedule[0]["feeCents"] / self.fleet.fee_multiple(state) * self.policy.quiet_fee))
-        return [{"at": self.books.now, "feeCents": quiet}, {"at": self.books.now + self.policy.quiet_minutes, "feeCents": schedule[-1]["feeCents"]}]
+        quiet = max(1, int(schedule[0]["feeCents"] / self.fleet.fee_multiple(state) * policy.quiet_fee))
+        return [{"at": self.books.now, "feeCents": quiet}, {"at": self.books.now + policy.quiet_minutes, "feeCents": schedule[-1]["feeCents"]}]
 
     def place(self, stop) -> Optional[str]:
         state = self.books.orders.get(stop["orderId"])
@@ -157,7 +203,9 @@ class Offers:
     def act(self) -> list[Action]:
         """Research: each open gig outside the control arm gets rounds of three offers, to drivers of random classes at random fees."""
         books, policy, now = self.books, self.policy, self.books.now
-        if not policy.explore or not READ_FROM <= now % DAY < READ_TO - OPEN_MINUTES:
+        if not policy.explore:
+            return self.offers()
+        if not READ_FROM <= now % DAY < READ_TO - OPEN_MINUTES:
             return []
         today = now - now % DAY
         ends = {gig.driver: self.place(gig.stops[-1]) for gig in books.gigs.values() if gig.status in ("booked", "working") and gig.driver}
