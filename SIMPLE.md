@@ -7,23 +7,23 @@ Everything below prints again:
 python -m tools.weekdays final-fresh skeptic-base-s14          # orders won by weekday, saved runs
 python -m tools.start_study final-fresh                        # the price of a late order hour by hour, Monday against the other days
 python -m tools.trust_study final-fresh                        # dealers' trust through the week
-python -m tools.replicates simple-main-s14,simple-main-s13 simple-D-s14,simple-D-s13   # the candidate against the frozen main, halal-97..128
+python -m tools.replicates simple-main-s14,simple-main-s13,simple-main-s12 simple-D-s14,simple-D-s13,simple-D-s12   # the candidate against the frozen main (halal-97..128; simple-D-s14 also holds tune + wide)
 ```
 
 ## 0. Verdict
 
 **Recommend D, commit 892fdaf on `research/simple`: `main` minus 64 fitted numbers, nothing added.** The 60-number place table of the prior, `known`/`KNOWN` of the on-time model, and the dealer and pickup-today parts of the level are deleted; 65 numbers remain of 129.
 
-| On halal-97..128 (never played before), strides 14 and 13, 64 samples a side | frozen main | D | difference (paired se) |
+| On halal-97..128 (never played before), strides 14, 13 and 12, 96 samples a side | frozen main | D | difference (paired se) |
 |---|---|---|---|
-| margin a week | €15,798 | €15,755 | −43 (189) |
-| on time, mean | 96.28% | 96.42% | +0.14 point (0.09) |
-| on time, worst sample | 93.9% | 94.5% | |
-| ranked | 64 of 64 | 64 of 64 | |
-| orders Monday / Wednesday | 72 / 89 (0.81) | 76 / 90 (0.85) | |
+| margin a week | €15,764 | €15,688 | −76 (184) |
+| on time, mean | 96.28% | 96.42% | +0.14 point (0.06) |
+| on time, worst sample | 93.9% | 93.8% | |
+| ranked | 96 of 96 | 96 of 96 | |
+| orders Monday / Wednesday (430 a week both) | 72 / 89 (0.81) | 76 / 89 (0.85) | |
 
 - **Proven for D:** the table above; restart test on halal-02 with 12 restarts: the same week to the cent (€20,906.24 with and without restarts; 11 of 12 rebuilt desks identical, the twelfth differs in one unsent quote by €1, 34,600 → 34,500: a quote still in the outbox is priced again at the restart, after the events of its batch; not looked into further, the week's money is the same); `dispatch/` parses as Python 3.9; the judged tree is the committed tree (`diff -r`).
-- **Not proven for D:** a no-stride play of the 32 weeks (strides 14 and 13 only); a rehearsal of the live loop on this commit. D changes no code path of the live loop (`desk.py`, `run.py`, `books.py` are `main`'s).
+- **Not proven for D:** a no-stride play of the 32 weeks (strides 14, 13 and 12 only; halal-02 alone was played without strides); a rehearsal of the live loop on this commit. D changes no code path of the live loop (`desk.py`, `run.py`, `books.py` are `main`'s).
 - **It is a choice between equals.** D does not earn more than `main`; it is the same result with half the numbers, and a jury reads less. If the orchestrator prefers not to touch a system that ran three rounds, `main` as frozen loses nothing measurable.
 
 **Do not take the two changes that look like free money on our own weeks:**
@@ -80,7 +80,7 @@ Candidate **D** (commit 892fdaf) is `main` minus 64 of its 129 fitted or hand-se
 | the place table of the prior (`prior.PLACES`) | 60 | a level per pickup and delivery place, fitted on 8 worlds; the week's own answers teach the same parts (`from`, `to`, `lane`) from zero | the skeptic's single sample: −€122 (se 259); in D below |
 | `known` and `KNOWN` in the on-time model | 2 | wrong sign on 64 unseen weeks (baked +0.25, they say −0.17 ± 0.06); it makes the week's first bookings 1.15 logits more pessimistic and the late price at Monday 10:00 twice what it is without | +€200 (se 232), six more orders on Monday (the skeptic) |
 | the dealer part and the pickup-today part of the level | 2 | they foretell nothing on unseen weeks (−0.3 and +1.2 per mille of log-likelihood) | −€98 (se 166) and −€28 (se 209) (the skeptic) |
-| **all four together = D** | **64** | | **−€43 (se 189), on time +0.14 point (se 0.09)** on halal-97..128, two strides (section 4) |
+| **all four together = D** | **64** | | **−€76 (se 184), on time +0.14 point (se 0.06)** on halal-97..128, three strides (section 4); −€87 (se 264) on tune + wide, where the table was fitted |
 
 What stays, and why (one sentence each):
 
@@ -99,6 +99,7 @@ What stays, and why (one sentence each):
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | frozen main | 32×2 | €15,798 | | 96.28% | | 93.9% | 0 | 64/64 | 430 | 72 / 89 (0.81) | 72 93 89 99 81 |
 | **D** = main − 64 numbers (892fdaf) | 32×2 | €15,755 | **−43 (189)** | 96.42% | **+0.14 (0.09)** | 94.5% | 0 | 64/64 | 431 | 76 / 90 (0.85) | 76 88 90 99 83 |
+| D with a third stride (12) for both: main €15,764 | 32×3 | €15,688 | **−76 (184)** | 96.42% | **+0.14 (0.06)** | 93.8% (main 93.9%) | 0 | 96/96 | 430 | 76 / 89 (0.85) | 76 88 89 99 82 |
 | E = D + the level centred (+0.88), no learner | 32×2 | €16,307 | +509 (221) | 95.95% | −0.33 (0.11) | 92.4% | 2 | 64/64 | 473 | 94 / 95 (1.00) | 94 101 95 103 86 |
 | H = D + the level centred, learner kept without its ±1 clamp, target 97.5% | 32×2 | €15,603 | −195 (184) | 96.42% | +0.13 (0.10) | 94.2% | 0 | 64/64 | 449 | 83 / 94 (0.88) | 83 97 94 100 81 |
 | G = H with the clamp (stride 14 only) | 32×1 | | identical to H to the cent in 32 of 32 weeks: the clamp never binds once the level is centred | | | | | | | | |
@@ -124,7 +125,7 @@ What stays, and why (one sentence each):
 
 What the tables say:
 
-1. **D is as good as main on weeks nobody had seen, with half the numbers.** Margin −€43 (se 189), on time +0.14 point (se 0.09), worst sample 93.9% → 94.5%, 64 of 64 ranked, Monday 72 → 76 orders. This is the candidate.
+1. **D is as good as main on weeks nobody had seen, with half the numbers.** Three strides: margin −€76 (se 184), on time +0.14 point (se 0.06), worst sample 93.9% → 93.8%, 96 of 96 ranked, Monday 72 → 76 orders. This is the candidate.
 2. **A week can start at full speed, and it is a move along the target's own trade, not a gain.** With the model's level where unseen weeks put it (E), Monday wins as many orders as Wednesday (94 / 95) and the week 43 more; the margin is +€509 and on time −0.33 point, two samples under 93.5% where main has none. The team's own exchange rate (97% → 96.5%: +€473 for −0.5 point) makes that about +€200 at equal on-time. With the target raised to 97.5% to give the on-time back and the learner kept (H) the result is main's and D's: −€195 (se 184), +0.13 point, Monday 83 against 72, eighteen more orders a week that earn nothing. The fitted pessimism of the model's level was a safety margin under another name, as the night log found once before ("A better-calibrated on-time model").
 3. **The learner is not a free deletion: it is the insurance against a week unlike ours.** In weeks like ours it earns nothing measurable (B against E). When the model is one logit too easy for the world it meets, the system without the learner loses 2.8 points of on-time (one week at 90.5%, nine of 24 under 93.5%); with the learner 1.0 point (worst 93.0%). A deletion that looks free on our weeks (+€778 on halal-65..96, +€509 here) removes the only part of the driver side that answers to a changed world within the day. **Keep `Fleet.learned`.**
 4. **The fitted pessimism is a reserve, and centring the level spends it.** In a world two logits harder than the calibrated level, the frozen main loses 1.25 points of on-time (two samples) and stays ranked in every week (worst 92.6%): its level starts 0.88 under the truth and its learner may move one logit more. With the level centred and the same learner (G) the same world costs 1.9 points and the worst week is 91.3%. Without the clamp the centred system holds (worst 93.3%, on time −0.9 point, but €1,046 a week poorer where main is level): if the level is ever centred, the clamp must go with it, and that is H. D in the same world, two samples: −1.14 points (main −1.25), worst week 91.6% (main 92.6%), three of 48 samples under 93.5% as main: the deletions take nothing from the reserve. H is not recommended: it is a larger change than D for the same result in our weeks and no better one in the hard world.
@@ -135,8 +136,8 @@ Saved under `runs/<tag>/`; stride 14 unless the tag says 13. `judge` = halal-97.
 
 | Tag | Tree | Policy |
 |---|---|---|
-| `simple-main-s14`, `-s13` (judge) | `research/simple-switches` 30fb27b, defaults = `main` | `{}` |
-| `simple-D-s14`, `-s13` (judge; `-s14` also explore), `simple-D-ns` (halal-02, no stride, the restart test's baseline) | `research/simple` 892fdaf | `{}` |
+| `simple-main-s14`, `-s13`, `-s12` (judge) | `research/simple-switches` 30fb27b, defaults = `main` | `{}` |
+| `simple-D-s14`, `-s13`, `-s12` (judge; `-s14` also explore), `simple-D-ns` (halal-02, no stride, the restart test's baseline) | `research/simple` 892fdaf | `{}` |
 | `simple-H-s14`, `-s13` (judge) | `research/simple-centred` 20db512 | `{}` |
 | `simple-G-s14` (judge) | 20db512 with the clamp of 892fdaf | `{}` |
 | `simple-E-s14`, `-s13` (judge and explore) | switches | D's switches + `"world": false`, `"weights": {"one": -4.8738}` |
