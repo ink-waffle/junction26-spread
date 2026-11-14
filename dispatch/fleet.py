@@ -28,7 +28,7 @@ REFUND = 0.54  # what a late order pays back on average, as a share of its list 
 DOUBT = 4.0  # how firmly we hold, before a week's own outcomes speak, that its world is the model's: the prior's weight, in outcomes
 GRIP = 4  # how steeply the price of a late order rises once we expect more of them than we allow ourselves
 CALM = 20  # orders: a week's first orders say little about its share of late ones
-LAST_DAY = DAY  # before its last pickup: a gig still open then ends in a deadline warning two times in three (AUDIT.md)
+LAST_DAY = DAY  # before its last pickup: of the gigs still open then, one in four reaches the deadline warning and ends late (tools/late_study.py)
 KNOWN = 100  # bookings after which the drivers know that our fees stay as posted
 
 
