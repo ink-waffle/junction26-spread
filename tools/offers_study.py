@@ -315,7 +315,7 @@ def board(tag: str) -> None:
         for item in run.get("pairs", []):
             if item["old"] not in t.index or item["new"] not in t.index:
                 continue
-            row = {"seed": run["seed"], "arm": item["arm"], "old_age": item["at"] - item["oldPostedAt"], "old_fee": item["oldFeeCents"] / (item["typicalCents"] / 2), "typical": item["typicalCents"] / 100}
+            row = {"seed": run["seed"], "arm": item["arm"], "multiple": item.get("multiple"), "old_age": item["at"] - item["oldPostedAt"], "old_fee": item["oldFeeCents"] / (item["typicalCents"] / 2), "typical": item["typicalCents"] / 100}
             for name in ("old", "new"):
                 later = [at for at, _ in bookings[item[name]] if at >= item["at"]]
                 wait = later[0] - item["at"] if later else float("inf")
@@ -326,7 +326,8 @@ def board(tag: str) -> None:
     b = pd.DataFrame(rows)
     agg = dict(pairs=("fees", "size"), delivered_as_pair=("in_pair", "mean"), old_driver_60=("old_60", "mean"), old_driver_180=("old_180", "mean"), new_driver_60=("new_60", "mean"), new_driver_180=("new_180", "mean"),
                old_wait_median=("old_wait", "median"), new_wait_median=("new_wait", "median"), fees_over_typical=("fees", "mean"), old_on_time=("old_on_time", "mean"), new_on_time=("new_on_time", "mean"), margin=("margin", "mean"))
-    print(b.groupby("arm").agg(**agg).round(2).T.to_string())
+    b["multiple"] = [m if m == m and m is not None else 0 for m in b.get("multiple", pd.Series([None] * len(b)))]
+    print(b.groupby(["arm", "multiple"]).agg(**agg).round(2).T.to_string())
     print(b.groupby([pd.cut(b.old_age, [0, 30, 120, 600, 100000]), "arm"], observed=True).agg(**agg).round(2).T.to_string())
     print(b.groupby("seed").arm.value_counts().unstack().to_string())
 

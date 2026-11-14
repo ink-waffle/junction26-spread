@@ -30,7 +30,7 @@ class Policy:
         def tuples(part: dict) -> dict:
             return {k: tuple(v) if isinstance(v, list) else v for k, v in part.items()}
         return Policy(MarketPolicy(seed=seed, **tuples(overrides.get("market", {}))), FleetPolicy(seed=seed, **tuples(overrides.get("fleet", {}))),
-                      PairsPolicy(**overrides.get("pairs", {})))
+                      PairsPolicy(**tuples(overrides.get("pairs", {}))))
 
 
 class Desk:

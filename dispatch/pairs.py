@@ -26,6 +26,8 @@ class PairsPolicy:
     idle: int = HOUR  # the most minutes that driver may stand waiting at the stops
     board: bool = False  # also pair a new car with a car that sits in the app without a driver
     control: float = 0.0  # research: the share of such pairs that we leave as two gigs
+    board_fee: tuple[float, ...] = ()  # research: fees to draw from for a pair with a car from the board
+    board_age: int = 0  # research: a car must have sat in the app this many minutes before it is paired from the board
     kept: float = 0.0  # the share of two-car gigs that a driver takes and keeps: what a likely partner takes off a car's cost when we price it
 
 
@@ -51,6 +53,16 @@ class Pairs:
     def shared(self) -> list:
         return [gig for gig in self.books.gigs.values() if gig.status == "open" and gig.shared]
 
+    def sitting(self) -> dict:
+        """The cars that sit in the app alone, without a driver, and may still join a pair: order id -> its gig."""
+        books, policy, now, board = self.books, self.policy, self.books.now, {}
+        for gig in books.gigs.values() if policy.board else []:
+            state = books.orders.get(gig.legs[0][0]) if gig.status == "open" and len(gig.legs) == 1 else None
+            if (state and not state.paired and not state.urgent and not state.late and len(state.order["legs"]) == 1 and now >= gig.posted_at + policy.board_age
+                    and state.order["lastPickupAt"] - WARNING - now >= policy.lead):
+                board[state.id] = gig
+        return board
+
     def match(self) -> list[Action]:
         """Posts two waiting cars as one gig when one driver can take them in a row; takes a two-car gig that has no driver in time out of the app."""
         books, policy, now, actions = self.books, self.policy, self.books.now, []
@@ -60,11 +72,7 @@ class Pairs:
                 actions.append({"type": "withdraw", "gigId": gig.id})
                 books.gig_gone(gig.id)  # its cars are dirty now: the desk posts each alone
         waiting = {state.id: state for state in self.waiting()}
-        board = {}  # cars that sit in the app alone, without a driver: order id -> its gig
-        for gig in books.gigs.values() if policy.board and waiting else []:
-            state = books.orders.get(gig.legs[0][0]) if gig.status == "open" and len(gig.legs) == 1 else None
-            if state and not state.paired and not state.urgent and not state.late and len(state.order["legs"]) == 1 and state.order["lastPickupAt"] - WARNING - now >= policy.lead:
-                board[state.id] = gig
+        board = self.sitting() if waiting else {}
         everyone = {**waiting, **{order_id: books.orders[order_id] for order_id in board}}
         options = [(p.id not in board and q.id not in board, idle, p.id, q.id) for p in everyone.values() for q in everyone.values()
                    if p is not q and (p.id in waiting or q.id in waiting) for idle in [self.idle(p, q)] if idle is not None]
@@ -72,9 +80,10 @@ class Pairs:
             if p_id in everyone and q_id in everyone:
                 p, q = everyone.pop(p_id), everyone.pop(q_id)
                 old = next((order_id for order_id in (p_id, q_id) if order_id in board), None)
+                multiple = random.Random(f"{q_id}:{p_id}").choice(policy.board_fee) if old and policy.board_fee else policy.fee
                 if old:
                     alone = random.Random(f"{p_id}:{q_id}").random() < policy.control
-                    self.log.append({"at": now, "old": old, "new": q_id if old == p_id else p_id, "first": p_id, "arm": "two gigs" if alone else "one gig",
+                    self.log.append({"at": now, "old": old, "new": q_id if old == p_id else p_id, "first": p_id, "arm": "two gigs" if alone else "one gig", "multiple": None if alone else multiple,
                                      "oldPostedAt": board[old].posted_at, "oldFeeCents": board[old].schedule[-1]["feeCents"], "typicalCents": p.request["referenceFeeCents"] + q.request["referenceFeeCents"]})
                     if alone:  # research control: neither pairs again, the new car goes to the app now
                         p.paired = q.paired = True
@@ -85,7 +94,7 @@ class Pairs:
                 typical = p.request["referenceFeeCents"] + q.request["referenceFeeCents"]
                 actions.append({"type": "post", "stops": self.fleet.stops(p, [0]) + self.fleet.stops(q, [0]),
                                 "audience": {key: first[key] or second[key] for key in first},
-                                "schedule": [{"at": now, "feeCents": max(1, int(typical * policy.fee + 0.5))}]})
+                                "schedule": [{"at": now, "feeCents": max(1, int(typical * multiple + 0.5))}]})
         return actions
 
     def idle(self, p: OrderState, q: OrderState) -> Optional[int]:
@@ -119,8 +128,9 @@ class Pairs:
             if not leg[end]["privateAddress"]:
                 leg[end] = dict(leg[end], window={"from": leg[end]["window"]["from"], "to": min(leg[end]["window"]["to"], option["deadline"])})
         mine = OrderState({"id": request["id"], "legs": [leg], "deadline": option["deadline"]}, request, notes.read(request["note"], request["arrivedAt"]), request["respondBy"])
-        partners = [other for other in self.waiting() if other.won_at + policy.hold > request["respondBy"]  # it still waits when the dealer answers
-                    and (self.idle(other, mine) is not None or self.idle(mine, other) is not None)]
+        loose = [other for other in self.waiting() if other.won_at + policy.hold > request["respondBy"]]  # they still wait when the dealer answers
+        loose += [self.books.orders[order_id] for order_id in self.sitting()]
+        partners = [other for other in loose if self.idle(other, mine) is not None or self.idle(mine, other) is not None]
         typical = request["referenceFeeCents"] + max((other.request["referenceFeeCents"] for other in partners), default=0)
         return int(policy.kept * (multiple - policy.fee) * typical) if partners else 0
 
