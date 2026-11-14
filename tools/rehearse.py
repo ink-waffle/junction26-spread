@@ -16,6 +16,7 @@ import json
 import os
 import random
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -108,6 +109,7 @@ class Stage:
 
     def roster(self):
         self.late()
+        self.count["joins"] += 1  # each new desk reads the driver list once
         return self.real.roster()
 
     def score(self):
@@ -116,7 +118,6 @@ class Stage:
 
     def events(self, after: int = -1):
         self.late()
-        self.count["joins"] += after < 0
         return self.real.events(after)
 
     def act(self, actions):
@@ -155,12 +156,12 @@ class Stage:
             yield event
 
 
-def rehearse(tag: str, seed: str, level: int, overrides: dict, speed: float, lag: float, trouble: dict[str, int], down: float, until: int) -> dict:
+def rehearse(tag: str, seed: str, level: int, overrides: dict, speed: float, lag: float, trouble: dict[str, int], down: float, until: int, process: bool) -> dict:
     folder = os.path.join(RUNS, tag)
-    os.makedirs(folder, exist_ok=True)
-    os.chdir(folder)  # the desk keeps its journal where it runs
-    sys.stdout = sys.stderr = open(f"{seed}.log", "w", buffering=1)
-    client, rng = Client(), random.Random(f"{tag}:{seed}")
+    os.makedirs(os.path.join(folder, seed), exist_ok=True)
+    os.chdir(os.path.join(folder, seed))  # the desk keeps its journal where it runs
+    sys.stdout = sys.stderr = open(os.path.join(folder, f"{seed}.log"), "w", buffering=1)
+    client, rng = run.Impatient(), random.Random(f"{tag}:{seed}")
     with Slot() as slot:
         world = create(client, level, seed)
         slot.hold(world.id)
@@ -174,7 +175,7 @@ def rehearse(tag: str, seed: str, level: int, overrides: dict, speed: float, lag
             stage = Stage(client, world, pacer, lag, schedule)
             pacer.start()
             downtime = 0.0
-            while True:
+            while not process:
                 try:
                     run.live(stage, overrides)
                     break
@@ -182,6 +183,22 @@ def rehearse(tag: str, seed: str, level: int, overrides: dict, speed: float, lag
                     print(f"{clock(pacer.now)}  -- the desk is dead for {down:.0f} s", flush=True)
                     downtime += down
                     time.sleep(down)
+            if process:  # the real thing: the desk is its own process, started as for the final, and a kill is SIGKILL
+                command = [sys.executable, "-m", "dispatch", "--final", "--world", world.id, "--policy", json.dumps(overrides)]
+                env = dict(os.environ, PYTHONPATH=os.path.dirname(os.path.dirname(os.path.abspath(run.__file__))))
+                kills = sorted(minute for minute, kind in schedule if kind == "kill")
+                desk = subprocess.Popen(command, env=env, stdout=sys.stdout, stderr=sys.stdout)
+                while pacer.is_alive():
+                    time.sleep(0.1)
+                    if kills and pacer.now >= kills[0]:
+                        desk.kill()
+                        desk.wait()
+                        print(f"{clock(pacer.now)}  -- trouble: kill -9; the desk is dead for {down:.0f} s", flush=True)
+                        kills, downtime = kills[1:], downtime + down
+                        time.sleep(down)
+                    if desk.poll() is not None and pacer.is_alive():
+                        desk = subprocess.Popen(command, env=env, stdout=sys.stdout, stderr=sys.stdout)
+                desk.kill()
             pacer.join()
             if world.snapshot()["now"] < world.snapshot()["endsAt"]:  # only a part of the week was rehearsed: the practice loop plays the rest at once
                 desk = Desk(Atlas(client.map()), world.roster(), Policy.of(overrides, seed=world.id), journal=f"journal-{world.id}.jsonl")
@@ -204,7 +221,7 @@ def rehearse(tag: str, seed: str, level: int, overrides: dict, speed: float, lag
         "quoted": len(took), "quoteP50": percentile(took, 0.5), "quoteP99": percentile(took, 0.99), "quoteMax": took[-1] if took else 0.0,
         "peak": peak, "batches": len(stage.batches), "actions": sum(n for _, n in stage.batches), **stage.count,
     })
-    with gzip.open(f"{seed}.json.gz", "wt") as file:
+    with gzip.open(os.path.join(folder, f"{seed}.json.gz"), "wt") as file:
         json.dump({"seed": seed, "level": level, "worldId": world.id, "policy": overrides, "summary": summary, "score": score, "quotes": desk.books.quotes,
                    "roster": roster, "events": events, "gigs": world.snapshot()["gigs"], "reveal": reveal}, file)
     return summary
@@ -240,6 +257,7 @@ def main() -> None:
     parser.add_argument("--trouble", default="", help="for example kill:3,dead:2,cut:2,fail:2")
     parser.add_argument("--down", type=float, default=18, help="real seconds a killed desk stays down")
     parser.add_argument("--until", type=int, default=10 ** 9, help="rehearse to this world minute; the rest of the week plays at once")
+    parser.add_argument("--process", action="store_true", help="run the desk as its own process (python -m dispatch --final --world), so kill is SIGKILL; only kill trouble, no timing")
     parser.add_argument("--baseline", default="live-practice", help="the tag of the practice-loop runs to compare with")
     parser.add_argument("--workers", type=int, default=2)
     args = parser.parse_args()
@@ -247,7 +265,8 @@ def main() -> None:
     trouble = {kind: int(times) for kind, times in (item.split(":") for item in args.trouble.split(",") if item)}
     results = []
     with ProcessPoolExecutor(max_workers=min(args.workers, len(seeds))) as pool:
-        futures = {pool.submit(rehearse, args.tag, seed, args.level, json.loads(args.policy), args.speed, args.lag / 1000, trouble, args.down, args.until): seed for seed in seeds}
+        futures = {pool.submit(rehearse, args.tag, seed, args.level, json.loads(args.policy), args.speed, args.lag / 1000, trouble, args.down, args.until, args.process): seed
+                   for seed in seeds}
         for future in as_completed(futures):
             try:
                 results.append(future.result())

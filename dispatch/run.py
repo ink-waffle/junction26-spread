@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
+import http.client
 import json
 import sys
 import time
@@ -21,6 +23,17 @@ WAKE_ON: list[DeskEventKind] = ["price_request", "order_won", "order_changed", "
 GAP = 0.02  # seconds of silence that end a burst of events
 QUIET = 1.0  # seconds without an event before the live loop reads the clock
 SILENCE = 15  # world minutes the clock may move without an event before the live loop reads the log: a stream can die without a word
+PATIENCE = 5  # seconds without a byte before a request of the final counts as lost: the kit waits 20, more than a world hour
+
+
+class Impatient(Client):
+    """The kit's client with the final's patience."""
+
+    def _send(self, method, path, payload, headers):
+        if self._connection is None:  # else the kit opens it with its own 20 seconds
+            kind = http.client.HTTPSConnection if self._parts.scheme == "https" else http.client.HTTPConnection
+            self._connection = kind(self._parts.netloc, timeout=PATIENCE)
+        return super()._send(method, path, payload, headers)
 
 
 def play_practice(world: World, desk: Desk, on_day: Optional[Callable[[int, Score], None]] = None, until: int = 10 ** 9) -> None:
@@ -30,8 +43,7 @@ def play_practice(world: World, desk: Desk, on_day: Optional[Callable[[int, Scor
     desk.books.now, ends_at = snapshot["now"], snapshot["endsAt"]
     while desk.books.now < min(until, ends_at):
         day, actions = desk.books.now // DAY, desk.take()
-        alarm = max(desk.alarms[0][0], desk.books.now + 1) if desk.alarms else ends_at
-        step = world.advance(until=WAKE_ON, max=min(ends_at, (day + 1) * DAY, alarm), actions=actions)
+        step = world.advance(until=WAKE_ON, max=min(ends_at, (day + 1) * DAY, max(desk.alarm(), desk.books.now)), actions=actions)
         desk.sent(actions, step["results"])
         desk.step(step["events"], step["now"])
         if on_day and desk.books.now // DAY > day:
@@ -45,12 +57,13 @@ def play_live(world: World, desk: Desk, now: Callable[[], int], on_day: Optional
     ends_at = snapshot["endsAt"]
     desk.rejoin(snapshot, history)
     books = desk.books
-    print(f"{clock(books.now)}  joined after {len(history)} events: {len(books.orders)} orders, {len(desk.outbox)} actions to send", flush=True)
+    print(f"{clock(books.now)}  joined after {len(history)} events: {len(books.orders)} orders, {len(books.quotes)} of {len(books.requests)} requests quoted, "
+          f"{len(desk.outbox)} actions to send", flush=True)
     send(world, desk)
     stream, heard, slowest = world.stream(after=books.seq, idle=GAP), books.now, 0.0
     while books.now < ends_at:
         hour = books.now // HOUR
-        burst = waiting(stream)
+        burst = waiting(stream, QUIET if desk.alarm() > ends_at else QUIET / 4)  # an alarm is due at a minute: look at the clock more often
         started = time.monotonic()
         if burst:
             minute = heard = burst[-1]["at"]
@@ -67,30 +80,33 @@ def play_live(world: World, desk: Desk, now: Callable[[], int], on_day: Optional
         if books.now // HOUR > hour:
             waiting_cars = sum(1 for state in books.orders.values() if state.unposted() or any(books.gigs[g].status == "open" for g in state.gig_of.values()))
             print(f"{clock(books.now)}  margin €{books.margin() / 100:>10,.2f}  {len(books.orders):>4} orders  {waiting_cars:>3} without a driver  "
-                  f"{len(books.quotes):>4} quotes  slowest turn {slowest * 1000:.0f} ms", flush=True)
+                  f"{len(books.quotes):>4} of {len(books.requests):>4} requests quoted  slowest turn {slowest * 1000:.0f} ms", flush=True)
             slowest = 0.0
             if on_day and books.now // DAY > hour // 24:
                 on_day(hour // 24, world.score())
 
 
-def waiting(stream: Iterator[Optional[DeskEvent]]) -> list[DeskEvent]:
-    """Every event that is already waiting on the stream, so one batch answers them all; [] after a quiet second."""
+def waiting(stream: Iterator[Optional[DeskEvent]], quiet: float) -> list[DeskEvent]:
+    """Every event that is already waiting on the stream, so one batch answers them all; [] after `quiet` seconds without one."""
     burst, since = [], time.monotonic()
     for event in stream:  # None after GAP seconds without an event
         if event is not None:
             burst.append(event)
-        elif burst or time.monotonic() - since >= QUIET:
+        elif burst or time.monotonic() - since >= quiet:
             break
     return burst
 
 
 def turn(desk: Desk, burst: list[DeskEvent], minute: int) -> None:
-    """A turn of the final. An event that the desk cannot read is logged and passed over: the turn starts again after it."""
-    for _ in range(len(burst) + 1):
+    """A turn of the final. An event that the desk cannot answer is logged and passed over: the turn starts again after it."""
+    while True:
+        seen = desk.books.seq
         try:
             return desk.step(burst, minute)
         except Exception:
             traceback.print_exc()
+            if desk.books.seq == seen:  # no event got us here: the plan itself failed, and the next turn tries it again
+                return
 
 
 def send(world: World, desk: Desk) -> None:
@@ -104,16 +120,19 @@ def send(world: World, desk: Desk) -> None:
 
 
 def act(world: World, actions: list[Action]) -> list[ActionResult]:
-    """Batches of 50. A batch that the server cannot read goes again one action at a time, so a bad action costs only itself."""
+    """Batches of 50, the quotes in their own: they must not wait for the tokens of forty posts.
+    A batch that the server cannot read goes again one action at a time, so a bad action costs only itself."""
     results: list[ActionResult] = []
-    for i in range(0, len(actions), ACTIONS_PER_CALL):
-        batch = actions[i:i + ACTIONS_PER_CALL]
-        try:
-            results += world.act(batch)
-        except Unreachable:
-            raise
-        except SpreadError as error:
-            results += [{"ok": False, "reason": str(error)}] if len(batch) == 1 else [result for action in batch for result in act(world, [action])]
+    quotes = sum(action["type"] == "quote" for action in actions)  # the desk put them first
+    for part in (actions[:quotes], actions[quotes:]):
+        for i in range(0, len(part), ACTIONS_PER_CALL):
+            batch = part[i:i + ACTIONS_PER_CALL]
+            try:
+                results += world.act(batch)
+            except Unreachable:
+                raise
+            except SpreadError as error:
+                results += [{"ok": False, "reason": str(error)}] if len(batch) == 1 else [result for action in batch for result in act(world, [action])]
     return results
 
 
@@ -151,6 +170,8 @@ def live(client: Client, overrides: dict, world_id: Optional[str] = None) -> Sco
         except Exception as error:  # the server restarts, the network drops, or we have a bug: the world keeps going, so do we
             if not isinstance(error, Unreachable):
                 traceback.print_exc()
+            if isinstance(error, SpreadError) and error.status in (403, 404):  # this world is not ours to play any more: ask again which one is
+                world = None
             wait = 0.5 if time.monotonic() - failed_at > 60 else min(5.0, wait * 2)
             failed_at = time.monotonic()
             print(f"{error}. A new desk rejoins in {wait:.1f} s.", file=sys.stderr, flush=True)
@@ -171,13 +192,18 @@ def main() -> None:
     parser.add_argument("--world", help="with --final: play this world instead of the final (a rehearsal: someone else advances a practice world)")
     parser.add_argument("--policy", default="{}", help='JSON overrides, for example {"market": {"price": 1.4}}')
     args = parser.parse_args()
-    client = Client()
     if args.final:
+        lock = open("journal-desk.lock", "a")  # two desks on one world would both quote and both post
         try:
-            score = live(client, json.loads(args.policy), args.world)
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            sys.exit("Another desk already runs from this folder. Stop it first.")
+        try:
+            score = live(Impatient(), json.loads(args.policy), args.world)
         except KeyboardInterrupt:
             sys.exit("Stopped. The world keeps running without the desk; start it again with --final.")
     else:
+        client = Client()
         world = client.create(level=args.level, seed=args.seed, board=args.board)
         print(f"World {world.id}, level {args.level}.", flush=True)
         desk = Desk(Atlas(client.map()), world.roster(), Policy.of(json.loads(args.policy), seed=args.seed or ""), verbose=True)
