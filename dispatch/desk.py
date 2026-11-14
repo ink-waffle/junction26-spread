@@ -10,6 +10,7 @@ from typing import Optional
 
 from spread.types import Action, ActionResult, DeskEvent, DeskSnapshot, DriverProfile, PriceRequest
 
+from . import notes
 from .atlas import Atlas, clock
 from .books import Books, OrderState
 from .fleet import Fleet, FleetPolicy
@@ -36,6 +37,9 @@ class Desk:
     """One week's desk: the books, the three that decide (market, fleet, pairs), and the outbox of actions on their way to the world."""
 
     def __init__(self, atlas: Atlas, roster: list[DriverProfile], policy: Policy, journal: Optional[str] = None, verbose: bool = False):
+        if policy.fleet.kit_notes:  # research/skeptic: the kit starter's keyword reader
+            from tools import kit_notes
+            notes.read = kit_notes.read
         self.books = Books(roster)
         self.fleet = Fleet(policy.fleet, self.books, atlas, held=lambda state: self.pairs.holds(state))  # its queue leaves out the cars that wait for a partner
         self.market = Market(policy.market, self.books, self.fleet)

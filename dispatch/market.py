@@ -40,6 +40,8 @@ class MarketPolicy:
     level: float = prior.LEVEL  # the log price level of an average world
     spread: dict = field(default_factory=lambda: dict(prior.SPREAD))  # the parts of a level, and how far each strays from its prior (sd)
     surprises: bool = True  # False leaves the war day and the outage day to the day and place parts: the market before idea 13, which tools/surprises.py replays
+    places: bool = True  # research/skeptic: False starts every place part at zero
+    menu: bool = True  # research/skeptic: False quotes the one best option only
     explore: Optional[tuple[float, float]] = None  # draw each multiple of the list price from this range: how the random weeks behind prior.py (explore1) were played
     seed: str = ""  # of those draws
 
@@ -52,7 +54,7 @@ class Market:
 
     def __init__(self, policy: MarketPolicy, books: Books, fleet: Fleet, places: Optional[dict] = None):
         self.policy, self.books, self.fleet = policy, books, fleet
-        self.places = prior.PLACES if places is None else places  # tools/winmodel.py fits this table through here
+        self.places = (prior.PLACES if policy.places else {}) if places is None else places  # tools/winmodel.py fits this table through here
         self.beliefs: dict[tuple, tuple[float, float]] = {}  # part -> mean and variance of its share of the log level
         atlas = fleet.atlas if fleet and policy.surprises else None  # without a map the events are not weighed
         self.regions = {town: frozenset(place for place in atlas.places if atlas.crow_km(town, place) <= REACH) for town in sorted(atlas.places)} if atlas else {}  # town -> the places an outage around it reaches
@@ -75,6 +77,8 @@ class Market:
         if best is None or offers[best][0] <= 0:
             return decline(request)
         margin = offers[best][1] - costs[best]
+        if not self.policy.menu:
+            return {best: offers[best][1]}
         return {kind: euros(cost + margin) for kind, cost in costs.items()}  # the dealer chooses its speed, and we earn the same whichever it takes
 
     def learn(self, request_id: str, won: Optional[str]) -> None:
