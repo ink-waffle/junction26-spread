@@ -46,7 +46,7 @@ Check before a final: `python -m tools.rehearse --tag live-check --seeds halal-0
 
 ## A machine near the server
 
-The server is in Stockholm; the organisers recommend a machine near it. From this laptop in Helsinki the round trip is 55 ms and the desk keeps up at eight times the final's speed, so the cloud machine is insurance against the laptop's network, not a need. Verda (we have credits):
+The organisers recommend a machine near the server, in Stockholm. From this laptop in Helsinki the round trip is 55 ms: a quote reaches the world 72 ms after its request (median; 190 ms at the 99th percentile), the desk answers every request at eight times the final's speed, and with 1.5 s added to every request it still answered every request of a Monday. So the cloud machine is insurance against the laptop and its network, not a need. Verda (we have credits):
 
 1. Create the smallest CPU instance in the region nearest Stockholm (Helsinki, FIN), Ubuntu 24.04, with your SSH key. Nothing here needs a GPU.
 2. Copy the code: `git clone git@github.com:ink-waffle/junction26-spread.git spread` with a deploy key, or `rsync -a --exclude .venv --exclude runs ./ user@host:spread/`.
