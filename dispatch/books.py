@@ -8,9 +8,6 @@ from typing import Optional
 from spread.types import DeskEvent, DriverProfile, FeeStep, Order, PostAction, PriceRequest, StopRef
 
 from . import notes
-from .atlas import DAY
-
-LIVE = ("open", "booked", "working")
 
 
 @dataclass
@@ -21,7 +18,6 @@ class GigState:
     posted_at: int
     status: str = "open"
     driver: Optional[str] = None
-    fee: Optional[int] = None
 
     @property
     def legs(self) -> list[tuple[str, int]]:
@@ -64,11 +60,6 @@ class OrderState:
 @dataclass
 class DriverState:
     profile: DriverProfile
-    last_seen: int = -1  # last minute the driver viewed, booked or answered
-    place: Optional[str] = None  # where our gig last left them
-    free_at: int = 0
-    gigs: int = 0
-    offers: dict[int, int] = field(default_factory=lambda: defaultdict(int))  # day -> offers sent
 
 
 class Books:
@@ -89,8 +80,8 @@ class Books:
         self.snow: list[tuple[int, int, set[str]]] = []
         self.dirty: set[str] = set()  # orders whose gigs may no longer match the plan
 
-    def gig_posted(self, action: PostAction, gig_id: str, schedule: Optional[list[FeeStep]] = None, status: str = "open", posted_at: Optional[int] = None) -> GigState:
-        gig = GigState(gig_id, action["stops"], schedule or action["schedule"], self.now if posted_at is None else posted_at, status)
+    def gig_posted(self, action: PostAction, gig_id: str, posted_at: Optional[int] = None) -> GigState:
+        gig = GigState(gig_id, action["stops"], action["schedule"], self.now if posted_at is None else posted_at)
         self.gigs[gig_id] = gig
         for order_id, leg in gig.legs:
             if order_id in self.orders:
@@ -154,15 +145,11 @@ class Books:
                 gig.stops = [s for s in gig.stops if s["orderId"] != e["orderId"]]
         self.dirty.discard(e["orderId"])
 
-    def _gig_viewed(self, e) -> None:
-        self._seen(e["driverId"], e["at"])
-
     def _gig_booked(self, e) -> None:
         gig = self.gigs.get(e["gigId"])
-        self._seen(e["driverId"], e["at"])
         if gig is None:
             return
-        gig.status, gig.driver, gig.fee = "booked", e["driverId"], e["feeCents"]
+        gig.status, gig.driver = "booked", e["driverId"]
         for order_id, leg in gig.legs:  # also heals a gig we wrongly thought withdrawn
             if order_id in self.orders:
                 self.orders[order_id].gig_of[leg] = gig.id
@@ -170,7 +157,7 @@ class Books:
     def _gig_dropped(self, e) -> None:
         gig = self.gigs.get(e["gigId"])
         if gig:
-            gig.status, gig.driver, gig.fee = "open", None, None
+            gig.status, gig.driver = "open", None
             for order_id, _ in gig.legs:
                 if order_id in self.orders:
                     self.orders[order_id].alarm_at = e["at"]
@@ -203,9 +190,6 @@ class Books:
         if state:
             state.released[e["leg"]] = e["at"]
 
-    def _picked_up(self, e) -> None:
-        self._at_place(e["gigId"], e["placeId"])
-
     def _visit_failed(self, e) -> None:
         state = self.orders.get(e["orderId"])
         if state:
@@ -214,7 +198,6 @@ class Books:
             self.dirty.add(state.id)
 
     def _delivered(self, e) -> None:
-        self._at_place(e["gigId"], e["placeId"])
         state = self.orders.get(e["orderId"])
         if state:
             state.order["deliveredAt"][e["leg"]] = e["at"]
@@ -222,9 +205,6 @@ class Books:
         gig = self.gigs.get(e["gigId"])
         if gig and all(self._leg_done(order_id, leg) for order_id, leg in gig.legs):
             gig.status = "done"
-            if gig.driver in self.drivers:
-                self.drivers[gig.driver].free_at = e["at"]
-                self.drivers[gig.driver].gigs += 1
 
     def _forecast(self, e) -> None:
         self.snow.append((e["from"], e["to"], set(e["placeIds"])))
@@ -240,25 +220,9 @@ class Books:
         elif line["kind"] == "revenue" and dealer:
             self.on_time[dealer] = min(25, self.on_time[dealer] + 1)
 
-    def _offer_answered(self, e) -> None:
-        if e["answer"] != "expired":
-            self._seen(e["driverId"], e["at"])
-
-    def _seen(self, driver_id: str, at: int) -> None:
-        if driver_id in self.drivers:
-            self.drivers[driver_id].last_seen = at
-
-    def _at_place(self, gig_id: str, place: str) -> None:
-        gig = self.gigs.get(gig_id)
-        if gig and gig.driver in self.drivers:
-            self.drivers[gig.driver].place = place
-
     def _leg_done(self, order_id: str, leg: int) -> bool:
         state = self.orders.get(order_id)
         return state is None or state.order["deliveredAt"][leg] is not None or leg not in state.gig_of
 
     def margin(self) -> int:
         return sum(self.ledger.values())
-
-    def day(self) -> int:
-        return self.now // DAY
