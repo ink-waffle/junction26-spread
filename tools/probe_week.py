@@ -53,17 +53,24 @@ def bisect(parent, desk: Desk, state: dict, day: int, passes: int) -> None:
             asked[request["id"]] = math.log(price / option["listPriceCents"])
             return {option["kind"]: price}
 
-        with Slot() as slot:
-            fork = parent.fork()
-            slot.hold(fork.id)
-            fork._last_seq = parent._last_seq  # the copy's log starts with the parent's: read only what is new
-            try:
-                answers = stride(fork, quote, day * DAY + FIRST, day * DAY + LAST)
-            finally:
+        answers = {}
+        for attempt in range(4):  # another harness that finds no free slot deletes worlds nobody holds, and can catch a copy before we hold it
+            with Slot() as slot:
+                fork = parent.fork()
+                slot.hold(fork.id)
+                fork._last_seq = parent._last_seq  # the copy's log starts with the parent's: read only what is new
                 try:
-                    fork.delete()
-                except SpreadError:
-                    pass
+                    answers = stride(fork, quote, day * DAY + FIRST, day * DAY + LAST)
+                    break
+                except SpreadError as error:
+                    if error.status != 404 or attempt == 3:
+                        raise
+                    asked.clear()
+                finally:
+                    try:
+                        fork.delete()
+                    except SpreadError:
+                        pass
         for request_id, bought in answers.items():
             if request_id in asked:
                 bracket, x = state["brackets"][request_id], asked[request_id]

@@ -1,10 +1,10 @@
 """The week's unannounced events: which day and region each fell on, and what they are worth to the market.
 
     python -m tools.surprises exact                        # probed weeks (tools/probe_week.py), where every threshold is known: the war day, the outage day and region
-    python -m tools.surprises find main-m10 [more tags]    # saved weeks: the same from the dealers' answers alone, by weighing every possible week
-    python -m tools.surprises money [seeds]                # probed weeks replayed: the euros of each day for our market, for one that weighs the events,
-                                                           # and for one that is told them at 08:00; how many requests our prices take to follow
-    python -m tools.surprises fleet main-m10 [more tags]   # the driver side: the bulk order, and each day's bookings
+    python -m tools.surprises find main-m10 [more tags]    # saved weeks: the same from the dealers' answers alone, as the market weighs them
+    python -m tools.surprises money [seeds]                # probed weeks replayed: the euros of each day for our market, for the market before it weighed
+                                                           # the events, and for one that is told them at 08:00; how many requests our level takes to follow
+    python -m tools.surprises fleet main-m10 [more tags]   # the driver side: the bulk order, the flu day, and each day's bookings
 
 A replay quotes each request of a probed week in the order of the week, at the cost the fleet gave it, and lets the dealer answer by its measured
 threshold: it buys the option with the most euros under its threshold. A slower option's threshold is the faster one's minus the dealer's euros for speed."""
@@ -21,18 +21,17 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from dispatch.atlas import DAY, HOUR
+from dispatch import prior
+from dispatch.atlas import DAY
 from dispatch.books import Books
-from dispatch.market import Market, MarketPolicy
+from dispatch.market import CLOSES, OPENS, OUTAGE, REACH, WAR, WORKDAYS, Market, MarketPolicy
+from tools.census import NAMES, flu
 from tools.study import ROOT, atlas, runs, table
 
 FOLDER = os.path.join(ROOT, "runs", "bisect")
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"]
-WAR, OUTAGE = math.log(0.8), math.log(1.3)  # the two events as the rules state them: the competitor 20% under its prices, its backup 30% over them
-REACH, OPENS, CLOSES, WORKDAYS = 80, 8 * HOUR, 18 * HOUR, 5  # an outage's region (km around a town), the hours of both events, the days they can fall on
-SURE = 200.0  # log-likelihood beyond which an event's day is settled
-CALM = 0.05  # how far a day without an event strays from its week (log sd, from the probed weeks): the day part's spread once the events are weighed apart
 SPEED = {("same_day", "next_day"): 1450, ("next_day", "within_3_days"): 610}  # cents the median dealer gives for the faster option (tools/probe_read.py)
+BEFORE = {"surprises": False, "spread": {**prior.SPREAD, "day": 0.125}}  # the market before it weighed the events: its day part's spread was fitted with the events in it
 pd.set_option("display.width", 250, "display.max_columns", 40)
 
 
@@ -52,78 +51,7 @@ class Costs:
         return self.asked[request["id"]]["cost"][request["options"].index(option)]
 
 
-class Weighs(Market):
-    """Tried, not adopted (see `money`). A market that knows the shape of the two events: a week has one war day and one outage day and town, never
-    both on one day. Each answer weighs every such week, and a level is the calm level plus the mix of shifts that today's possible events leave."""
-
-    def __init__(self, policy: MarketPolicy, books: Books, fleet):
-        super().__init__(policy, books, fleet)
-        # event ("war", or the town an outage is around) -> the log price it adds, and for cars that leave where
-        self.events = {event: (WAR if event == "war" else OUTAGE, touched(event)) for event in ["war", *sorted(fleet.atlas.places)]}
-        self.heard: dict[int, dict[str, float]] = {}  # day -> event -> log-likelihood of the day's answers against a calm day
-        self.curves: dict[tuple, tuple] = {}  # the level and mix of the option being priced: a quote asks for its chance at 271 prices
-
-    def shift(self, request, event: str) -> float:
-        size, places = self.events[event]
-        return size if OPENS <= request["arrivedAt"] % DAY < CLOSES and request["legs"][0]["pickup"]["placeId"] in places else 0.0
-
-    def odds(self, day: int) -> dict[str, float]:
-        """The chance of each event on a day, from every answer so far; a day not heard yet says nothing."""
-        if day >= WORKDAYS:
-            return {}
-        heard, towns = [self.heard.get(d, {}) for d in range(WORKDAYS)], [event for event in self.events if event != "war"]
-        war = [math.exp(h.get("war", 0.0)) for h in heard]
-        outage = [sum(math.exp(h.get(town, 0.0)) for town in towns) / len(towns) for h in heard]
-        others = [d for d in range(WORKDAYS) if d != day]
-        odds = {town: math.exp(heard[day].get(town, 0.0)) / len(towns) * sum(war[d] for d in others) for town in towns}
-        odds["war"] = war[day] * sum(outage[d] for d in others)
-        calm = sum(war[w] * outage[d] for w in others for d in others if d != w)
-        return {event: weight / (calm + sum(odds.values())) for event, weight in odds.items()}
-
-    def mix(self, request) -> list[tuple[float, float]]:
-        """What today's possible events do to this request's level: each shift with its chance."""
-        mix: dict[float, float] = defaultdict(float)
-        for event, chance in self.odds(request["arrivedAt"] // DAY).items():
-            mix[self.shift(request, event)] += chance
-        mix[0.0] = max(0.0, 1 - sum(chance for shift, chance in mix.items() if shift))
-        return [(chance, shift) for shift, chance in mix.items()]
-
-    def yes(self, above: float, variance: float) -> float:
-        return 1 / (1 + math.exp(-self.policy.slope * above / math.sqrt(1 + math.pi * self.policy.slope ** 2 * variance / 8)))
-
-    def chance(self, request, option, price: int) -> float:
-        key = (request["id"], option["kind"])
-        if key not in self.curves:
-            self.curves = {key: (self.level(request, option), self.mix(request))}
-        (mean, variance), mix = self.curves[key]
-        return sum(chance * self.yes(mean + shift - math.log(price / option["listPriceCents"]), variance) for chance, shift in mix)
-
-    def learn(self, request_id: str, won: Optional[str]) -> None:
-        request, prices = self.books.requests.get(request_id), self.books.quotes.get(request_id)
-        if not request or not prices:
-            return
-        self.curves = {}
-        option = self.weighed(request, prices, won)
-        slope, (mean, variance), x = self.policy.slope, self.level(request, option), math.log(prices[option["kind"]] / option["listPriceCents"])
-        said = lambda shift: math.log(self.yes((mean + shift - x) * (1 if won else -1), variance))  # how well a level this much higher foretold the answer
-        for event in self.events:
-            shift = self.shift(request, event)
-            if shift:
-                heard = self.heard.setdefault(request["arrivedAt"] // DAY, {})
-                heard[event] = max(-SURE, min(SURE, heard.get(event, 0.0) + said(shift) - said(0.0)))
-        mix = self.mix(request)  # with this answer heard
-        shift = sum(chance * shift for chance, shift in mix)
-        mean, variance = mean + shift, variance + sum(chance * s * s for chance, s in mix) - shift * shift
-        p = 1 / (1 + math.exp(-slope * (mean - x)))
-        weight = slope * slope * p * (1 - p)
-        push, shrink = slope * ((won is not None) - p) / (1 + weight * variance), weight / (1 + weight * variance)
-        for part in self.parts(request):
-            m, v = self.belief(part)
-            self.beliefs[part] = (m + v * push, v - v * v * shrink)
-        self.curves = {}
-
-
-class Told(Weighs):
+class Told(Market):
     """A market that is told each day's event at 08:00: what the best detector could earn."""
 
     def __init__(self, *args, truth: dict):
@@ -219,7 +147,7 @@ def replay(t: pd.DataFrame, week: dict, make) -> pd.DataFrame:
         if asks:
             books.requests[request_id] = request
             books.quotes[request_id] = market.quote(request)
-            levels[request_id] = market.level(request, request["options"][0])[0] + sum(chance * shift for chance, shift in (market.mix(request) if isinstance(market, Weighs) else []))
+            levels[request_id] = market.level(request, request["options"][0])[0] + sum(chance * shift for chance, shift in market.mix(request))
             continue
         prices, options, surplus = books.quotes[request_id], request["options"], {}
         cents = options[0]["listPriceCents"] * math.exp(known.theta[request_id])
@@ -255,7 +183,7 @@ def money(seeds: list[str]) -> None:
         t, week = probed(seed)
         truth = exact(t)
         events = truth["events"]
-        makes = {"ours": lambda books, fleet: Market(MarketPolicy(), books, fleet), "weighs": lambda books, fleet: Weighs(MarketPolicy(), books, fleet),
+        makes = {"before": lambda books, fleet: Market(MarketPolicy(**BEFORE), books, fleet), "ours": lambda books, fleet: Market(MarketPolicy(), books, fleet),
                  "told": lambda books, fleet: Told(MarketPolicy(), books, fleet, truth=events)}
         plays = {name: replay(t, week, make) for name, make in makes.items()}
         by_day = pd.DataFrame({name: play.groupby("day").margin.sum() for name, play in plays.items()}).round(0)
@@ -264,30 +192,40 @@ def money(seeds: list[str]) -> None:
                    for i, k in week["outcomes"].items() if k and i in week["asked"] and week["requests"][i]["arrivedAt"] < WORKDAYS * DAY)
         names = {day: ("war" if event == "war" else f"outage {event}") for day, event in events.items()}
         print(f"\n== {seed}: {len(t)} requests; the desk's own week at the fleet's cost €{real:,.0f}; a replay, euros over the fleet's cost and orders by day")
-        print(by_day.assign(orders_ours=won.ours, orders_weighs=won.weighs, orders_told=won.told, event=[names.get(d, "") for d in by_day.index]).rename(index=dict(enumerate(DAYS))).to_string())
+        print(by_day.assign(orders_before=won.before, orders_ours=won.ours, orders_told=won.told, event=[names.get(d, "") for d in by_day.index]).rename(index=dict(enumerate(DAYS))).to_string())
         row = {"seed": seed, **{name: play.margin.sum() for name, play in plays.items()}}
-        ours, told = plays["ours"], plays["told"]
+        before, ours, told = plays["before"], plays["ours"], plays["told"]
         working = (t.minute % DAY >= OPENS) & (t.minute % DAY < CLOSES)
         for day, event in events.items():
             kind = "war" if event == "war" else "outage"
             reached = (t.day == day) & working & t["from"].isin(touched(event))
             calm = replay(t.assign(theta=t.theta - (WAR if event == "war" else OUTAGE) * reached), week, makes["ours"])  # the same week without this event
-            k, hour, first, lost = follows(ours, told, reached)
             on = lambda play, d=day: round(play[play.day == d].margin.sum())
-            speeds.append({"seed": seed, "event": f"{kind} {DAYS[day]}" + ("" if kind == "war" else f" {event}"), "requests reached": int(reached.sum()), "our level off at first": round(first, 3),
-                           "requests until within 5%": k, "at hour": round(hour, 1), "told earns more before": round(lost), "ours that day": on(ours), "told": on(told), "weighs": on(plays["weighs"]),
-                           "orders ours": int(ours[ours.day == day].won.count()), "orders told": int(told[told.day == day].won.count()),
-                           "without the event: ours": on(calm), "orders": int(calm[calm.day == day].won.count()),
-                           "next day ours": on(ours, day + 1), "next day told": on(told, day + 1), "next day without": on(calm, day + 1)})
+            there = reached[(t.day == day).values].values
+            line = {"seed": seed, "event": f"{kind} {DAYS[day]}" + ("" if kind == "war" else f" {event}"), "requests reached": int(reached.sum())}
+            for name, play in (("before", before), ("ours", ours)):
+                k, hour, first, lost = follows(play, told, reached)
+                off = (play.level - told.level)[(play.day == day).values]  # how far the level is from the told market's over the day: where the event reached, and elsewhere
+                line.update({f"{name}: requests until within 5%": k, f"{name}: at hour": round(hour, 1), f"{name}: median off where reached": round(off[there].median(), 3),
+                             f"{name}: elsewhere": round(off[~there].median(), 3)})
+            line.update({"that day: before": on(before), "ours": on(ours), "told": on(told), "orders before": int(before[before.day == day].won.count()), "orders ours": int(ours[ours.day == day].won.count()),
+                         "without the event: ours": on(calm), "orders": int(calm[calm.day == day].won.count()),
+                         "next day: before": on(before, day + 1), "ours ": on(ours, day + 1), "told ": on(told, day + 1)})
+            speeds.append(line)
             row.update({f"{kind} {name}": play[play.day == day].margin.sum() for name, play in plays.items()})
             row[f"{kind} gives"] = on(ours) - on(calm) + on(ours, day + 1) - on(calm, day + 1)
         totals.append(row)
     totals = pd.DataFrame(totals).set_index("seed").round(0)
     print("\n== a week, euros over the fleet's cost\n" + totals.to_string())
     print("mean   " + totals.mean().round(0).to_string().replace("\n", "   "))
-    print(f"told - ours: mean €{(totals.told - totals.ours).mean():,.0f} a week ({(totals.told / totals.ours - 1).mean():+.1%}), by seed {(totals.told - totals.ours).astype(int).tolist()};  "
-          f"weighs - ours: mean €{(totals.weighs - totals.ours).mean():,.0f}, by seed {(totals.weighs - totals.ours).astype(int).tolist()}")
-    print("\n== how fast our prices follow an event (requests the event touched, in order of arrival)\n" + pd.DataFrame(speeds).to_string(index=False))
+    for name in ("ours", "told"):
+        more = totals[name] - totals.before
+        print(f"{name} - before: mean €{more.mean():,.0f} a week ({more.sum() / totals.before.sum():+.1%}), standard error {more.std() / len(more) ** 0.5:,.0f}, {int((more > 0).sum())} of {len(more)} weeks up, by week {more.astype(int).tolist()}")
+    speeds = pd.DataFrame(speeds)
+    print("\n== how fast the level follows an event (requests the event reached, in order of arrival), and the day's euros\n" + speeds.to_string(index=False))
+    numbers = speeds.select_dtypes("number")
+    for kind in ("war", "outage"):
+        print(f"median {kind} day: " + numbers[speeds.event.str.startswith(kind).values].median().round(2).to_string().replace("\n", "   "))
 
 
 def show_exact(seeds: list[str]) -> None:
@@ -299,10 +237,10 @@ def show_exact(seeds: list[str]) -> None:
         print(f"{seed}  war {DAYS[e['war']]} ({e['war_step']:+.3f} against the calm days; the next lowest day {e['next_lowest']:+.3f})   {outage}   days {e['days']}   sd left {e['sd']:.3f}")
 
 
-def believed(run: dict) -> tuple[Weighs, list[dict]]:
+def believed(run: dict) -> tuple[Market, list[dict]]:
     """A saved week through the weighing market, as a restart would replay it: the market at the week's end, and what it believed of each day after each answer."""
     books = Books(run["roster"])
-    market, trail = Weighs(MarketPolicy(spread={**MarketPolicy().spread, "day": CALM}), books, Costs()), []
+    market, trail = Market(MarketPolicy(), books, Costs()), []
     for event in run["events"]:
         books.observe(event)
         kind = event["kind"]
@@ -327,7 +265,7 @@ def find(tags: list[str]) -> None:
             odds = [market.odds(day) for day in range(WORKDAYS)]
             war = max(range(WORKDAYS), key=lambda day: odds[day]["war"])
             day, town = max(((d, town) for d in range(WORKDAYS) for town in odds[d] if town != "war"), key=lambda item: odds[item[0]][item[1]])
-            region = market.events[town][1]
+            region = market.regions[town]
             there = sum(1 for d in trail if d["day"] == day)
             shares = {d: sum(chance for event, chance in odds[d].items() if event != "war") for d in range(WORKDAYS)}
             line = (f"{tag} {seed}  war {DAYS[war]} (chance {odds[war]['war']:.2f}; log-likelihood against a calm day {market.heard.get(war, {}).get('war', 0):+.0f}, the next day's "
@@ -381,6 +319,18 @@ def fleet(tags: list[str]) -> None:
         print(f"\n== {tag}: orders by the day they were won (on time share; median hours to the first booking; share booked within the hour; € per order)")
         for column in ("orders", "on_time", "wait", "in_hour", "margin"):
             print(f"  {column}\n" + by_day[column].unstack("day").rename(columns=dict(enumerate(DAYS))).round(2).to_string())
+        rows = []
+        for seed in sorted(won.seed.unique()):  # the flu day, where the count of drivers (tools/census.py) saw one: that day against the week's other four
+            day, missing = flu(seed)
+            if day is not None and day < WORKDAYS:
+                mine = won[won.seed == seed]
+                that, rest, booked = mine[mine.day == day], mine[mine.day != day], mine.first_booked_at // DAY
+                rows.append({"seed": seed, "flu day": NAMES[day], "regular drivers at home": f"{missing:.0%}", "orders won": len(that), "a day of the rest": round(len(rest) / 4),
+                             "bookings an hour (08-20)": round((booked == day).sum() / 12, 1), "rest ": round(((booked < WORKDAYS) & (booked != day)).sum() / 48, 1),
+                             "median h to a driver": round(that.wait.median(), 2), "rest  ": round(rest.wait.median(), 2), "within the hour": round((that.wait <= 1).mean(), 2),
+                             "rest   ": round((rest.wait <= 1).mean(), 2), "late": round(1 - that.on_time.mean(), 3), "rest    ": round(1 - rest.on_time.mean(), 3)})
+        if rows:
+            print(f"\n== {tag}: the flu day, where the count of drivers saw one on a working day\n" + pd.DataFrame(rows).to_string(index=False))
 
 
 def seeds_probed() -> list[str]:
