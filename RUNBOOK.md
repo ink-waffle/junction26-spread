@@ -14,7 +14,7 @@ The final's clock runs by itself: a weekday hour is 18 real seconds, so a price 
 | 14:19 | The week ends on the second Wednesday at 22:00. | `End  margin € …` and `Ranked.` or `Not ranked.` |
 | after | Stop the desk (`tmux kill-session -t spread`), or it waits for the next final and plays it. | |
 
-A test final starts on Thursday with nothing of ours in it: no orders, no journal, and M may already count the requests of Monday to Wednesday that nobody answered. The desk treats it as any world it joins late: the market starts from its prior and learns from the first answers, and the on-time line counts only what we win from Thursday on. Rehearse it with `python -m tools.rehearse --tag live-thu --seeds halal-02 --start 4320`.
+A test final starts on Thursday with nothing of ours in it: no orders, no journal, and M may already count the requests of Monday to Wednesday that nobody answered. The desk treats it as any world it joins late: the market starts from its prior and learns from the first answers, and the on-time line counts only what we win from Thursday on. Rehearsed on halal-02 from the laptop at the real clock (`python -m tools.rehearse --tag live-thu --seeds halal-02 --start 4320`): joined after 1,230 events with 0 orders, answered all 422 requests of Thursday and Friday, won 108, 95.4% on time, €4,093. Its Thursday sold at 1.56 × list where the week played from Monday sold the same Thursday at 1.90 ×: the learner's first day is its cheapest, and in a test final the first day is the busiest left.
 
 ## Start (any machine)
 
@@ -83,7 +83,7 @@ Thursday   margin €    222.48  revenue €     931.00    65 orders  100.0% on 
 
 - One line per world hour, from our own books: every 18 s by day, every 3 s at night. No line for a minute: it is dead, or it cannot reach the server.
 - `N of M requests quoted`: both must grow together between 08:00 and 18:00 on weekdays. The gap is what we did not answer in time; requests from before we joined stay in the gap.
-- `slowest turn`: the longest time in that hour from a burst of events to the world's answer to our actions. From the cloud machine 15 to 60 ms, from the laptop 70 to 600 ms. Above 3,000 ms quotes start to miss their 4.5 s.
+- `slowest turn`: the longest time in that hour from a burst of events to the world's answer to our actions. From the cloud machine 15 to 60 ms (316 ms once in a week), from the laptop on the phone hotspot 70 to 1,100 ms. Above 3,000 ms quotes start to miss their 4.5 s. The desk's own thinking is not in question: a quote takes under 1.5 ms, a week 0.7 s.
 - One line per world day with the server's own score. On time must stay at or above 90%.
 - `refused …`: an action the world refused, with its reason. `N requests ran out before we saw them`: we were away or slow, and did not send quotes that nobody would read.
 - `… No desk for N min; a new one rejoins in N s.`: a request failed, or the server restarted, and the desk rebuilt itself. After five tries in a row it says so once a minute: the server or our network is down, and the desk keeps trying for as long as it takes.
