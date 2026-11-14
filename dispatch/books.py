@@ -47,6 +47,7 @@ class OrderState:
     late: bool = False  # a gig expired or a window ended: the car can only go late, without windows
     changed: bool = False  # the dealer changed the order after we posted it
     tried: bool = False  # the world has heard of a gig with this order: it does not wait for a partner again
+    paired: bool = False  # the order has been in a two-car gig: it is not paired a second time
     refusals: int = 0
 
     @property
@@ -95,6 +96,7 @@ class Books:
             if order_id in self.orders:
                 self.orders[order_id].gig_of[leg] = gig_id
                 self.orders[order_id].tried = True
+                self.orders[order_id].paired |= gig.shared
         return gig
 
     def gig_gone(self, gig_id: str) -> None:
