@@ -10,11 +10,11 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Iterable, Optional
+from typing import Optional
 
-from spread.types import DeliveryOption, Leg, Note, OpeningHours, PriceRequest, StopPlace, TimeWindow
+from spread.types import Note
 
-from .atlas import DAY, HOUR, open_spans
+from .atlas import DAY, HOUR
 
 
 @dataclass
@@ -247,67 +247,3 @@ def read(note: Optional[Note], arrived_at: int) -> NoteFacts:
         elif cues & {"ready", "collect"}:
             facts.ready_at = at
     return facts
-
-
-# What the facts mean for a gig: when the car can really be collected, and by when it must really arrive.
-
-END = 9 * DAY + 22 * HOUR  # the world ends on the second Wednesday at 22:00
-MIN_SPAN = HOUR  # a chance shorter than this finds no driver: take the next one
-SLOW_DRIVE = 15  # percent by which a real drive exceeds the map's minutes one time in twenty (tools/drive_times.py)
-
-Span = tuple[int, int]
-
-
-def real(hours: Optional[OpeningHours], opens: Optional[int], closes: Optional[int]) -> Optional[OpeningHours]:
-    """A site's stated hours cut to the real weekday hours of a note; drivers plan by the stated ones."""
-    if hours is None:
-        return None
-    return {**hours, "opens": max(hours["opens"], opens or 0), "closes": min(hours["closes"], DAY if closes is None else closes)}
-
-
-def arrive_by(delivery: StopPlace, facts: NoteFacts, deadline: int) -> Optional[int]:
-    """The last minute at which the car arrives on time: by the note's deadline, with the delivery site really open."""
-    due = deadline if facts.deadline is None else min(deadline, facts.deadline)
-    return max((b for _, b in open_spans(real(delivery["hours"], facts.delivery_opens, facts.delivery_closes), delivery["window"]["from"], due)), default=None)
-
-
-def collect_spans(pickup: StopPlace, facts: NoteFacts, start: int, end: int, snow: Iterable[Span] = ()) -> list[Span]:
-    """The parts of [start, end] in which the car can be collected: ready, released, the site really open, no snow on summer tyres."""
-    start = max(start, pickup["window"]["from"], facts.ready_at or 0, facts.released_at or 0)
-    spans = open_spans(real(pickup["hours"], facts.pickup_opens, facts.pickup_closes), start, end)
-    for snow_from, snow_to in snow if facts.summer_tyres else ():
-        spans = [(a, b) for lo, hi in spans for a, b in ((lo, min(hi, snow_from - 1)), (max(lo, snow_to), hi)) if a <= b]
-    return spans
-
-
-def chances(request: PriceRequest, option: DeliveryOption, facts: NoteFacts, drive: int) -> list[Span]:
-    """When a request's first car can really be collected and still arrive on time for this option. The last minute of the last
-    span is the true `lastPickupAt`: a late ready time, a note deadline or an early closing shrink the slack the request shows."""
-    leg = request["legs"][0]
-    moved = DAY * max(0, (facts.ready_at or 0) // DAY - leg["pickup"]["window"]["from"] // DAY)  # a car ready days later moves its deadline by the same days
-    arrive = arrive_by(leg["delivery"], facts, option["deadline"] + moved)
-    return [] if arrive is None else collect_spans(leg["pickup"], facts, request["respondBy"], min(arrive - drive, leg["pickup"]["window"]["to"] + moved))
-
-
-def windows(leg: Leg, facts: NoteFacts, deadline: int, drive: int, now: int, snow: Iterable[Span] = ()) -> tuple[Optional[TimeWindow], Optional[TimeWindow]]:
-    """The windows that a gig's pickup and delivery need so that the driver meets the car ready, both sites really open and
-    the note's deadline; None where the order's own window already says so. A stop has one window and real hours repeat daily,
-    so a pickup with shorter real hours gets one day's chance: when it passes unbooked the gig expires, and the next post takes the next."""
-    pickup, delivery = leg["pickup"], leg["delivery"]
-    arrive, first, second, spans = arrive_by(delivery, facts, deadline), None, None, []
-    earlier = arrive is not None and not delivery["privateAddress"] and arrive < arrive_by(delivery, NoteFacts(), deadline)
-    for spare in () if arrive is None else (drive * SLOW_DRIVE // 100, 0) if earlier else (0,):
-        last = min(arrive - spare - drive, pickup["window"]["to"])  # the last minute to collect the car and be on time
-        spans = collect_spans(pickup, facts, now, last, snow)
-        if spans and earlier:  # the note ends the delivery before the order's window does: our window says so, with room for a slow drive if there is any
-            second = {"from": delivery["window"]["from"], "to": arrive - spare}
-        if spans:
-            break
-    if not spans:  # the car can only arrive late: collect it at the first real chance, deliver without a window
-        last = END
-        spans = collect_spans(pickup, facts, now, last, snow)
-    if spans and not pickup["privateAddress"] and spans != open_spans(pickup["hours"], max(now, pickup["window"]["from"]), last):  # fewer chances than the stated hours show
-        if spans != open_spans(pickup["hours"], spans[0][0], last):  # and gaps that no driver can see: one chance of a useful length
-            spans = [next((span for span in spans if span[1] - span[0] >= MIN_SPAN), max(spans, key=lambda span: span[1] - span[0]))]
-        first = {"from": spans[0][0], "to": spans[-1][1]}
-    return first, second

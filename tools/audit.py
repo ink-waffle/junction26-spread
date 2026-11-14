@@ -16,7 +16,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from dispatch import notes, prior
+from dispatch import notes, prior, timetable
 from dispatch.atlas import DAY
 from tools.study import ROOT, atlas, runs
 
@@ -76,7 +76,7 @@ def rows(run: dict) -> list[dict]:
                "klass": "trade-in" if len(r["legs"]) > 1 else "private pickup" if leg["pickup"]["privateAddress"] else "premium" if car["premium"] else "private delivery" if leg["delivery"]["privateAddress"] else "plain",
                "fact": facts != notes.NoteFacts(), "ready": leg["pickup"]["window"]["from"], "trust": trust.get(r["id"], 0), "won": item["outcome"] == "won", "option": item["option"]}
         for i, option in enumerate(r["options"]):
-            spans = notes.chances(r, option, facts, drive) if len(r["legs"]) == 1 else []
+            spans = timetable.chances(r, option, facts, drive) if len(r["legs"]) == 1 else []
             row.update({f"list_{option['kind']}": option["listPriceCents"] / 100, f"skip_{option['kind']}": i, f"room_{option['kind']}": sum(b - c for c, b in spans) / 60})
             if option["kind"] in quote:
                 row[f"q_{option['kind']}"] = quote[option["kind"]] / 100

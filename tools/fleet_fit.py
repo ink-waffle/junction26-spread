@@ -15,7 +15,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-from dispatch import notes
+from dispatch import notes, timetable
 from dispatch.atlas import DAY, HOUR
 from dispatch.books import Books
 from dispatch.fleet import ON_TIME, Fleet, FleetPolicy
@@ -79,7 +79,7 @@ def rows(run: dict, tag: str = "") -> list[dict]:
             request, queue = event["request"], fleet.queue()
             facts = notes.read(request["note"], request["arrivedAt"])
             for option in request["options"]:
-                spans = notes.chances(request, option, facts, fleet.road(request["legs"][0]))
+                spans = timetable.chances(request, option, facts, fleet.timetable.road(request["legs"][0]))
                 if spans:
                     signs[(request["id"], option["kind"])] = (fleet.car(request, spans, request["respondBy"]), queue, option["listPriceCents"], option is request["options"][0])
         elif kind == "order_won":
@@ -111,7 +111,7 @@ def rows(run: dict, tag: str = "") -> list[dict]:
             for state in [s for s in books.orders.values() if s.id in out and fleet.waits(s) and fleet.posted(s) and not s.urgent]:  # after the warning the fee is no longer the one we chose
                 multiple = fleet.posted(state)
                 others = queue.without(multiple)
-                car = fleet.car(state.request, fleet.chances_left(state), books.now, state.won_at)
+                car = fleet.car(state.request, fleet.timetable.chances_left(state), books.now, state.won_at)
                 looks.append(dict(fleet.signs(car, multiple, others), queue=others.backlog, going=others.going, bookings=queue.known, list=out[state.id]["list"], seed=run["seed"], tag=tag, id=state.id,
                                   option=state.order["option"], multiple=multiple, on_time=out[state.id]["on_time"], refund=out[state.id]["refund"], won_at=state.won_at, look=1))
     return [dict(row, look=0) for row in out.values()] + [row for row in looks if row["id"] in out]

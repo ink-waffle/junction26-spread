@@ -13,7 +13,7 @@ import os
 
 import pandas as pd
 
-from dispatch import notes
+from dispatch import notes, timetable
 from dispatch.atlas import DAY, HOUR
 from dispatch.fleet import REFUND
 from dispatch.market import Market
@@ -29,7 +29,7 @@ def traced(quote):
         queue = fleet.queue()
         late_price = fleet.late_price(queue)
         for option in request["options"]:
-            spans = notes.chances(request, option, notes.read(request["note"], request["arrivedAt"]), fleet.road(request["legs"][0]))
+            spans = timetable.chances(request, option, notes.read(request["note"], request["arrivedAt"]), fleet.timetable.road(request["legs"][0]))
             if not spans:
                 continue
             typical, refund = request["referenceFeeCents"], REFUND * option["listPriceCents"]

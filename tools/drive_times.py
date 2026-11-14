@@ -1,4 +1,4 @@
-"""How much longer than the map's road minutes does a real drive take? The source of notes.SLOW_DRIVE.
+"""How much longer than the map's road minutes does a real drive take? The source of timetable.SLOW_DRIVE.
 
     python -m tools.drive_times base1,explore1        # tune worlds
     python -m tools.drive_times <runs on hold seeds>   # to confirm

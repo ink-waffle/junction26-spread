@@ -8,7 +8,8 @@ from spread.types import Action
 
 from .atlas import HOUR, Atlas, open_spans
 from .books import Books, GigState, OrderState
-from .fleet import CHARGING, NEAR_KM, Fleet
+from .fleet import NEAR_KM, Fleet
+from .timetable import CHARGING
 
 PLATES = 30  # minutes to fetch transfer plates on the way to a pickup (RULES.md)
 WARNING = 3 * HOUR  # the deadline warning comes this long before the last possible pickup (RULES.md)
