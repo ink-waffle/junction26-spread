@@ -37,7 +37,7 @@ def traced(quote):
             multiple, late = fleet.cheapest_fee(car, typical, refund, late_price, queue)
             calm = fleet.cheapest_fee(car, typical, refund, 0.0, queue)
             TRACE.append({"id": request["id"], "at": books.now, "option": option["kind"], "list": option["listPriceCents"], "typical": typical, "room": math.expm1(car["slack"]),
-                          "multiple": multiple, "late": late, "late_price": late_price, "backlog": queue.backlog, "queue_late": queue.late, "world": queue.world,
+                          "multiple": multiple, "late": late, "late_price": late_price, "backlog": queue.backlog, "queue_late": queue.late,
                           "harm": fleet.harm(multiple, queue, late_price), "refund": refund, "cost": fleet.cost(request, option), "level": self.level(request, option)[0],
                           "calm_multiple": calm[0], "calm_late": calm[1], "orders": len(books.orders)})
         return quote(self, request)

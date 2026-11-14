@@ -11,13 +11,13 @@ Result, level 8: `[FINAL: € … margin, … % on time, place … of …]`. In 
 
 ## The modules
 
-`dispatch/` is 1,948 lines of Python in eleven modules. `NIGHT_LOG.md` has the 14 ideas behind them, each with its measured effect. It uses the standard library and the kit's client, nothing else.
+`dispatch/` is 1,900 lines of Python in eleven modules. `NIGHT_LOG.md` has the 14 ideas behind them, each with its measured effect, and what a skeptic's pass over all of it took out again (15; `SKEPTIC.md`). It uses the standard library and the kit's client, nothing else.
 
 | Module | Job | Why it exists |
 |---|---|---|
 | `books.py` | Everything the desk knows, as a fold over the world's events. It decides nothing. | A restart is then a replay of the log. |
 | `market.py` | `quote(request)`: a price for each option. `learn(...)`: one Kalman step per yes or no, which also weighs on which day the price war is and on which day and where the outage. | The competitor's price is never shown. A dealer's yes and no are the only signal. |
-| `fleet.py` | `cost(request, option)`: what the car costs us. `plan(order, legs)`: the gig and its one fee. Behind both, the on-time model (`chance`, `cheapest_fee`), the rule for when a fee is chosen again (`fee_now`), and what the week teaches the model: one intercept, and the day of its flu. | A car booked before its deadline warning is on time 96% of the time, otherwise 25%. So a car's cost is its fee plus its risk. |
+| `fleet.py` | `cost(request, option)`: what the car costs us. `plan(order, legs)`: the gig and its one fee. Behind both, the on-time model (`chance`, `cheapest_fee`), the rule for when a fee is chosen again (`fee_now`), and what the week teaches the model: the day of its flu. | A car booked before its deadline warning is on time 96% of the time, otherwise 25%. So a car's cost is its fee plus its risk. |
 | `pairs.py` | Puts two cars in one gig when the second starts where the first ends. Keeps no state. | The typical fee of a trade-in is half of two single typical fees: the trip home is half a driver's cost. |
 | `timetable.py` | When a car can be collected and by when it must arrive: `chances(request, option, …)` before an order is won, then the stops of its gig and their windows. | The opening hours, the note, a failed visit, snow and the refund ladder each say when; a stop has one window. |
 | `notes.py` | `read(note, arrived_at)`: the facts of a dealer's note. | The world acts on a note whether we read it or not. |
@@ -43,7 +43,7 @@ Result, level 8: `[FINAL: € … margin, … % on time, place … of …]`. In 
 2. **Cost = fee + risk.** `Fleet.cost` is the fee, the expected refund of a late car, the car's use of the room under the delivery minimum, and its harm to the cars that already wait. There is no list of forbidden cars.
 3. **Quote = argmax (price − cost) × P(yes).** Every other option of the request is quoted at the same margin over its own cost, so the dealer chooses its speed.
 4. **State = a fold of events and acknowledged actions.** A module may remember only what follows from the world's log and the journal of `Desk.sent`. `tools/restart_test.py` checks it object by object.
-5. **Every knob of an experiment is a field of `Policy`** (`MarketPolicy`, `FleetPolicy`, `PairsPolicy`). An experiment is a JSON override, never an edit. What is not a knob is a named constant at the top of its module, with its reason on the line: a number of the rules, a fitted weight, or one of the few set by hand (`fleet.GRIP`, `DOUBT`, `CALM`, `KNOWN`; `market.SURE`; `timetable.MIN_SPAN`, `RETRY`).
+5. **Every knob of an experiment is a field of `Policy`** (`MarketPolicy`, `FleetPolicy`, `PairsPolicy`). An experiment is a JSON override, never an edit. What is not a knob is a named constant at the top of its module, with its reason on the line: a number of the rules, a fitted weight, or one of the few set by hand (`fleet.GRIP`, `CALM`; `market.SURE`; `timetable.MIN_SPAN`, `RETRY`).
 6. **A constant learned offline comes from a script** in `tools/` that regenerates it from saved weeks (table below).
 7. **Fit on `halal-01..08`, confirm on `halal-09..16`.** No constant was fitted on the second set. One number was chosen after looking at it: the on-time target, 96% at that time (idea 11); idea 12 set it to 97% on the tune and wide weeks. One week of the second set, halal-09, was opened to study the flu (idea 14) and is named as such wherever it is counted. The week's events (ideas 13 and 14) were designed and fitted on `halal-01..08` and `halal-17..32` together.
 
@@ -70,6 +70,7 @@ The default policy is the one the final plays. An experiment overrides it, for e
 | `NIGHT_LOG.md` | The log of every idea in the order we had it, with the measured effect, and what did not work. |
 | `RESEARCH.md` | What we measured about the world (drivers, dealers, the competitor) and how experiments are run. |
 | `AUDIT.md` | A loss audit of Saturday morning's system: where money leaked, ranked by size. |
+| `SKEPTIC.md` | Saturday evening's audit against overfitting: every fitted or hand-set number, each part removed on 32 weeks nobody had played, and what was deleted. |
 | `RUNBOOK.md` | The final, step by step, with the numbers of each rehearsal. |
 
 The saved weeks themselves (`runs/`, 1.2 GB on Saturday evening) are not in the repository. With a team key each tool below plays or reads them again.
@@ -77,7 +78,9 @@ The saved weeks themselves (`runs/`, 1.2 GB on Saturday evening) are not in the 
 | Baked-in number | Where | Regenerated by |
 |---|---|---|
 | Dealers: slope, trust, speed, level, a level per place | `dispatch/prior.py` | `python -m tools.winmodel fit explore1 market-r30 market-r15 main-m4-r0.15 market-z0` |
-| Drivers: the 16 weights of the on-time model, the late share of booked cars, the average refund | `fleet.ON_TIME`, `BOOKED_LATE`, `REFUND` | `python -m tools.fleet_fit <tags>`; `--add <signs> <tags>` for the later signs (the pickup side, the flu); `--calibrate <tags>` compares it with outcomes |
+| Drivers: the 15 weights of the on-time model, the late share of booked cars, the average refund | `fleet.ON_TIME`, `BOOKED_LATE`, `REFUND` | `python -m tools.fleet_fit <tags>`; `--add <signs> <tags>` for the later signs (the pickup side, the flu); `--calibrate <tags>` compares it with outcomes |
+| The on-time model's level on weeks it was not fitted on (the +0.88 in `ON_TIME["one"]`), and each sign's weight there | `fleet.ON_TIME` | `python -m tools.skeptic_fit orch-base-s14 -- final-fresh skeptic-base-s14` |
+| What each part earns on weeks nobody had played (the table of `SKEPTIC.md`) | — | `python -m tools.ablations skeptic-base skeptic-<part> …`, with the switches of branch `research/skeptic-switches` |
 | The flu's night: the share of the bookings held for a day that come back in its first hour | `fleet.SICK`, `WELL` | `python -m tools.night_study <tags>` |
 | A gig still open on its last day ends late one time in four | `fleet.LAST_DAY` | `python -m tools.late_study <tags>` |
 | A real drive against the map's minutes | `timetable.SLOW_DRIVE` | `python -m tools.drive_times base1,explore1` |
@@ -91,4 +94,4 @@ Set by hand and tested on the 8 tune weeks, not fitted: the fee steps (0.85 to 1
 
 ## What is weak
 
-The on-time model is fitted on our practice weeks; a week can move two numbers of it: one intercept, and which day its flu is. A note in words outside the vocabulary is missed silently. One week moves by about a point of on-time and €1,000–3,000 between two plays of nearly the same policy, so eight weeks played once do not resolve differences under about €500 a week; the late decisions were made on 24 weeks with several samples a side (`tools/replicates.py`). `PRESENTATION.md`, slide 10, has the list.
+The on-time model is fitted on our practice weeks, and its level was set on 64 weeks that the fit never saw; a week moves one thing in it: which day its flu is. A week whose drivers are scarcer than in any of ours is held by the barrier alone, which counts the late orders as they show. A note in words outside the vocabulary is missed silently. One week moves by about a point of on-time and €1,000–3,000 between two plays of nearly the same policy, so eight weeks played once do not resolve differences under about €500 a week; the late decisions were made on 24 weeks with several samples a side (`tools/replicates.py`). `PRESENTATION.md`, slide 10, has the list.

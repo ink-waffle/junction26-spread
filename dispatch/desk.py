@@ -135,9 +135,6 @@ class Desk:
             elif action["type"] == "reprice" and action["gigId"] in books.gigs:
                 books.gigs[action["gigId"]].schedule = action["schedule"]
         for action, result in zip(actions, results):
-            if action["type"] == "post" and result["ok"]:
-                self.fleet.gig_posted(action)  # before the books take the batch's gigs: the fleet's memory is of the minute it planned them
-        for action, result in zip(actions, results):
             if action["type"] == "post":
                 legs = [(s["orderId"], s["leg"]) for s in action["stops"] if s["kind"] == "pickup"]
                 self.pending.difference_update(legs)
