@@ -6,6 +6,7 @@
     python -m tools.offers_study shared offers-x3   # two cars in one gig against the same two cars in two gigs
     python -m tools.offers_study partners offers-px1  # requests that could pair with a waiting car: win rate and margin by quoted price
     python -m tools.offers_study paired offers-mp1    # a run with two-car gigs: cars paired, their fees and on-time share
+    python -m tools.offers_study board offers-mx1     # a new car paired with a car that sat unbooked, against the same two left alone
 """
 from __future__ import annotations
 
@@ -299,5 +300,37 @@ def paired(tag: str) -> None:
     print("all:", {"cars": len(c), "in_two_car_gig": round((c.car == "delivered in a two-car gig").mean(), 3), "fees_over_typical": round(c.fees.sum() / c.typical.sum(), 3), "on_time": round(c.on_time.mean(), 3)})
 
 
+def board(tag: str) -> None:
+    """A new car paired with a car that sat in the app without a driver, against the same two cars left as two gigs (randomised control)."""
+    rows = []
+    for run in runs(tag):
+        t = request_table(run).set_index("id")
+        owners = {gig["id"]: list(dict.fromkeys(stop["orderId"] for stop in gig["stops"])) for gig in run["gigs"]}
+        bookings = defaultdict(list)
+        for e in run["events"]:
+            if e["kind"] == "gig_booked":
+                for order_id in owners.get(e["gigId"], []):
+                    bookings[order_id].append((e["at"], e["gigId"]))
+        deadline = {e["order"]["id"]: e["order"]["lastPickupAt"] for e in run["events"] if e["kind"] == "order_won"}
+        for item in run.get("pairs", []):
+            if item["old"] not in t.index or item["new"] not in t.index:
+                continue
+            row = {"seed": run["seed"], "arm": item["arm"], "multiple": item.get("multiple"), "old_age": item["at"] - item["oldPostedAt"], "old_fee": item["oldFeeCents"] / (item["typicalCents"] / 2), "typical": item["typicalCents"] / 100}
+            for name in ("old", "new"):
+                later = [at for at, _ in bookings[item[name]] if at >= item["at"]]
+                wait = later[0] - item["at"] if later else float("inf")
+                row.update({f"{name}_wait": wait, f"{name}_60": wait <= 60, f"{name}_180": wait <= 180, f"{name}_on_time": bool(t.on_time[item[name]]), f"{name}_fees": t.fees[item[name]],
+                            f"{name}_slack": (deadline.get(item[name], 0) - item["at"]) / HOUR})
+            row.update(fees=(row["old_fees"] + row["new_fees"]) / row["typical"], in_pair=bool(t.in_pair[item["old"]] and t.in_pair[item["new"]]), margin=t.margin[item["old"]] + t.margin[item["new"]])
+            rows.append(row)
+    b = pd.DataFrame(rows)
+    agg = dict(pairs=("fees", "size"), delivered_as_pair=("in_pair", "mean"), old_driver_60=("old_60", "mean"), old_driver_180=("old_180", "mean"), new_driver_60=("new_60", "mean"), new_driver_180=("new_180", "mean"),
+               old_wait_median=("old_wait", "median"), new_wait_median=("new_wait", "median"), fees_over_typical=("fees", "mean"), old_on_time=("old_on_time", "mean"), new_on_time=("new_on_time", "mean"), margin=("margin", "mean"))
+    b["multiple"] = [m if m == m and m is not None else 0 for m in b.get("multiple", pd.Series([None] * len(b)))]
+    print(b.groupby(["arm", "multiple"]).agg(**agg).round(2).T.to_string())
+    print(b.groupby([pd.cut(b.old_age, [0, 30, 120, 600, 100000]), "arm"], observed=True).agg(**agg).round(2).T.to_string())
+    print(b.groupby("seed").arm.value_counts().unstack().to_string())
+
+
 if __name__ == "__main__":
-    {"bookers": bookers, "pairs": pairs, "offers": offers, "shared": shared, "partners": partners, "paired": paired}[sys.argv[1]](sys.argv[2])
+    {"bookers": bookers, "pairs": pairs, "offers": offers, "shared": shared, "partners": partners, "paired": paired, "board": board}[sys.argv[1]](sys.argv[2])

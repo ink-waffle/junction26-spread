@@ -142,7 +142,7 @@ class Desk:
                 for order_id, _ in legs:
                     state = books.orders.get(order_id)
                     if state and len({owner for owner, _ in legs}) > 1:  # a refused two-car gig sends its cars alone, and says nothing of their windows
-                        state.tried = True
+                        state.tried = state.paired = True
                         books.dirty.add(order_id)
                     elif state and "already in a live gig" not in result["reason"]:  # that one a driver booked before we could replace it: its booking puts it back in the books
                         state.refusals += 1
