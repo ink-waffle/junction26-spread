@@ -4,8 +4,10 @@ live loop (dispatch.run.live) plays it through the stream and `act`, with the tr
     python -m tools.rehearse --tag live-r1 --seeds quick --speed 4
     python -m tools.rehearse --tag live-lag --seeds halal-01 --speed 2 --lag 1500 --trouble kill:3,dead:2,cut:2,fail:2 --down 18
 
-Trouble, each at random working minutes: `kill` the desk dies and a new one starts `--down` real seconds later;
-`dead` the stream goes silent without an error; `cut` the stream's socket is closed; `fail` a request gets no answer.
+Trouble, `kind:times` at random working minutes or `kind@minute`: `kill` the desk dies and a new one starts `--down`
+real seconds later; `dead` the stream goes silent without an error; `cut` the stream's socket is closed; `fail` a
+request gets no answer and its connection is gone; `dark` there is no route to the server for `--dark` real seconds;
+`names` from then on the system's resolver and the public name servers are down.
 Every run is saved like a harness run, with the rehearsal's own numbers, and compared with `--baseline`."""
 from __future__ import annotations
 
@@ -25,7 +27,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import spread.stream
 from spread.client import Client, SpreadError, Unreachable
 
-from dispatch import run
+from dispatch import names, run
 from dispatch.atlas import DAY, HOUR, Atlas, clock
 from dispatch.desk import Desk, Policy
 from tools.harness import RUNS, SEEDS, Slot, create, summarise
@@ -67,9 +69,10 @@ class Stage:
     """A practice world dressed as the final, for `dispatch.run.live`: `final()` names it and reads the pacer's clock,
     and every call goes through the trouble we inject. It times each quote from the event to the world's answer."""
 
-    def __init__(self, client: Client, world, pacer: Pacer, lag: float, trouble: list[tuple[int, str]]):
-        self.client, self.real, self.pacer, self.lag, self.trouble = client, world, pacer, lag, sorted(trouble)
-        self.id = world.id
+    def __init__(self, client: Client, world, pacer: Pacer, lag: float, trouble: list[tuple[int, str]], dark: float = 0):
+        self.client, self.real, self.pacer, self.lag, self.trouble, self.dark = client, world, pacer, lag, sorted(trouble), dark
+        self.id, self.lit_at = world.id, 0.0
+        self.turns: list[tuple[int, float]] = []  # (price requests in the burst, seconds the desk thought) of each turn
         self.asked: dict[str, float] = {}  # request id -> when its event reached us
         self.answered: dict[str, float] = {}  # request id -> seconds from the event to the world's answer to our quote
         self.batches: list[tuple[float, int]] = []  # (when, actions) of each batch sent
@@ -91,10 +94,20 @@ class Stage:
             return True
         return False
 
-    def late(self) -> None:
+    def late(self, lag: bool = True) -> None:
         if self.due("kill"):
             raise Killed
-        time.sleep(self.lag)
+        if self.due("dark"):
+            self.lit_at = time.monotonic() + self.dark
+        if self.due("names"):  # from now on only an address that we kept leads to the server
+            plain, names.SERVERS = names.system, ()
+            names.system = lambda host, *a, **k: plain(host, *a, **k) if host[:1].isdigit() else self.no_name()
+        if time.monotonic() < self.lit_at:
+            raise Unreachable(0, "rehearsal: no route to the server")
+        time.sleep(self.lag * lag)
+
+    def no_name(self):
+        raise socket.gaierror(8, "rehearsal: the resolver is down")
 
     # the client
     def map(self):
@@ -130,6 +143,9 @@ class Stage:
         if self.due("fail"):  # half of the lost requests reach the world, half do not
             if random.random() < 0.5:
                 self.real.act(actions)
+            if self.client._connection:  # as the kit does when no answer comes: the next request opens a new connection
+                self.client._connection.close()
+                self.client._connection = None
             raise Unreachable(0, "rehearsal: the request got no answer")
         wall = time.monotonic()
         self.tokens, self.refilled = min(50.0, self.tokens + (wall - self.refilled) * 20), wall
@@ -148,8 +164,7 @@ class Stage:
         self.count["streams"] += 1
         self.late()
         for event in self.real.stream(after=after, idle=idle):
-            if self.due("kill"):
-                raise Killed
+            self.late(lag=False)
             if self.due("cut"):
                 with socket.socket(fileno=os.dup(self.sockets[-1])) as copy:
                     copy.shutdown(socket.SHUT_RDWR)
@@ -162,7 +177,8 @@ class Stage:
             yield event
 
 
-def rehearse(tag: str, seed: str, level: int, overrides: dict, speed: float, lag: float, trouble: dict[str, int], down: float, until: int, process: bool) -> dict:
+def rehearse(tag: str, seed: str, level: int, overrides: dict, speed: float, lag: float, trouble: list[str], down: float, until: int, process: str,
+             start: int = 7 * HOUR, dark: float = 0) -> dict:
     folder = os.path.join(RUNS, tag)
     os.makedirs(os.path.join(folder, seed), exist_ok=True)
     os.chdir(os.path.join(folder, seed))  # the desk keeps its journal where it runs
@@ -174,11 +190,19 @@ def rehearse(tag: str, seed: str, level: int, overrides: dict, speed: float, lag
         started = time.time()
         try:
             ends_at = min(until, world.snapshot()["endsAt"])
-            start = world.advance(to=7 * HOUR)["now"]  # nothing happens before Monday 08:00
-            working = [day * DAY + minute for day in range(5) for minute in range(9 * HOUR, 18 * HOUR) if day * DAY + minute < ends_at]
-            schedule = [(rng.choice(working), kind) for kind, times in trouble.items() for _ in range(times)]
+            start = world.advance(to=start)["now"]  # nothing happens before Monday 08:00; a later start leaves the days before it unanswered
+            working = [day * DAY + minute for day in range(5) for minute in range(9 * HOUR, 18 * HOUR) if start < day * DAY + minute < ends_at]
+            schedule = [(int(item.split("@")[1]), item.split("@")[0]) for item in trouble if "@" in item]
+            schedule += [(rng.choice(working), item.split(":")[0]) for item in trouble if ":" in item for _ in range(int(item.split(":")[1]))]
             pacer = Pacer(Client().world(world.id), speed, start, ends_at)
-            stage = Stage(client, world, pacer, lag, schedule)
+            stage = Stage(client, world, pacer, lag, schedule, dark)
+            think = Desk.step
+
+            def timed(desk, events, now):  # how long the desk thinks about a burst: the part of a turn that no network explains
+                began = time.perf_counter()
+                think(desk, events, now)
+                stage.turns.append((sum(event["kind"] == "price_request" for event in events), time.perf_counter() - began))
+            Desk.step = timed
             pacer.start()
             downtime = 0.0
             while not process:
@@ -191,6 +215,8 @@ def rehearse(tag: str, seed: str, level: int, overrides: dict, speed: float, lag
                     time.sleep(down)
             if process:  # the real thing: the desk is its own process, started as for the final, and a kill is SIGKILL
                 command = [sys.executable, "-m", "dispatch", "--final", "--world", world.id, "--policy", json.dumps(overrides)]
+                if process != "local":  # a desk on another machine: `process` is the shell command that starts it there, {world} for the world's id
+                    command = ["/bin/sh", "-c", process.format(world=world.id)]
                 env = dict(os.environ, PYTHONPATH=os.path.dirname(os.path.dirname(os.path.abspath(run.__file__))))
                 kills = sorted(minute for minute, kind in schedule if kind == "kill")
                 desk = subprocess.Popen(command, env=env, stdout=sys.stdout, stderr=sys.stdout)
@@ -219,13 +245,16 @@ def rehearse(tag: str, seed: str, level: int, overrides: dict, speed: float, lag
     desk = Desk(Atlas(client.map()), roster, Policy.of(overrides, seed=world.id), journal=f"journal-{world.id}.jsonl")
     desk.rejoin(world.snapshot(), events)  # the books of the week, from the log and the journal
     summary = summarise(seed, world.id, score, desk, events, time.time() - started)
-    took = sorted(stage.answered.values())
+    took, thought = sorted(stage.answered.values()), sorted(seconds for _, seconds in stage.turns)
+    bulk = max(stage.turns, default=(0, 0.0))  # the turn with the most price requests in one burst
     peak = max((sum(n for at, n in stage.batches if wall <= at < wall + 1) for wall, _ in stage.batches), default=0)
     summary.update({
         "speed": speed, "lag": lag, "trouble": trouble, "down": downtime,
         "unquoted": sum(1 for r in reveal["requests"] if r["outcome"] == "unquoted" and r["request"]["arrivedAt"] < ends_at),
         "quoted": len(took), "quoteP50": percentile(took, 0.5), "quoteP99": percentile(took, 0.99), "quoteMax": took[-1] if took else 0.0,
         "peak": peak, "batches": len(stage.batches), "actions": sum(n for _, n in stage.batches), **stage.count,
+        "turns": len(thought), "thinkP50": percentile(thought, 0.5), "thinkP99": percentile(thought, 0.99), "thinkMax": thought[-1] if thought else 0.0,
+        "thinkTotal": sum(thought), "bulk": bulk[0], "bulkThink": bulk[1],
     })
     with gzip.open(os.path.join(folder, f"{seed}.json.gz"), "wt") as file:
         json.dump({"seed": seed, "level": level, "worldId": world.id, "policy": overrides, "summary": summary, "score": score, "quotes": desk.books.quotes,
@@ -241,7 +270,8 @@ def line(s: dict, base: dict) -> str:
     against = f"practice €{base['margin']:>9,.0f} {base['onTime']:6.1%}" if base else "practice        n/a"
     return (f"{s['seed']:<10} margin €{s['margin']:>9,.0f}  on time {s['onTime']:6.1%}  won {s['won']:>4}/{s['requests']:<4}  | {against}  | "
             f"unquoted {s['unquoted']:>3}  refused {s['refused']:>3}  quote ms p50 {s['quoteP50'] * 1000:>4.0f} p99 {s['quoteP99'] * 1000:>4.0f} max {s['quoteMax'] * 1000:>5.0f}  "
-            f"peak {s['peak']:>2} actions/s  joins {s['joins']}  streams {s['streams']}  {s['seconds']}s")
+            f"peak {s['peak']:>2} actions/s  joins {s['joins']}  streams {s['streams']}  think ms p50 {s.get('thinkP50', 0) * 1000:.1f} p99 {s.get('thinkP99', 0) * 1000:.0f} "
+            f"max {s.get('thinkMax', 0) * 1000:.0f}, {s.get('bulk', 0)} requests at once {s.get('bulkThink', 0) * 1000:.0f}  {s['seconds']}s")
 
 
 def baseline(tag: str, seed: str) -> dict:
@@ -260,19 +290,23 @@ def main() -> None:
     parser.add_argument("--policy", default="{}")
     parser.add_argument("--speed", type=float, default=1.0, help="1 is the final's clock: 18 real seconds per weekday hour")
     parser.add_argument("--lag", type=float, default=0, help="milliseconds added to every request")
-    parser.add_argument("--trouble", default="", help="for example kill:3,dead:2,cut:2,fail:2")
+    parser.add_argument("--trouble", default="", help="for example kill:3,dead:2,cut:2,fail:2,dark@4900,names@5000")
     parser.add_argument("--down", type=float, default=18, help="real seconds a killed desk stays down")
+    parser.add_argument("--dark", type=float, default=60, help="real seconds that `dark` trouble leaves us without a route")
+    parser.add_argument("--start", type=int, default=7 * HOUR, help="the world minute the rehearsal starts at; a test final starts at 4320, Thursday 00:00")
     parser.add_argument("--until", type=int, default=10 ** 9, help="rehearse to this world minute; the rest of the week plays at once")
-    parser.add_argument("--process", action="store_true", help="run the desk as its own process (python -m dispatch --final --world), so kill is SIGKILL; only kill trouble, no timing")
+    parser.add_argument("--process", nargs="?", const="local", default="",
+                        help="run the desk as its own process (python -m dispatch --final --world), so kill is SIGKILL; only kill trouble, no timing. "
+                             "With a value: the shell command that starts the desk on another machine, {world} for the world's id")
     parser.add_argument("--baseline", default="live-practice", help="the tag of the practice-loop runs to compare with")
     parser.add_argument("--workers", type=int, default=2)
     args = parser.parse_args()
     seeds = SEEDS.get(args.seeds) or args.seeds.split(",")
-    trouble = {kind: int(times) for kind, times in (item.split(":") for item in args.trouble.split(",") if item)}
+    trouble = [item for item in args.trouble.split(",") if item]
     results = []
     with ProcessPoolExecutor(max_workers=min(args.workers, len(seeds))) as pool:
-        futures = {pool.submit(rehearse, args.tag, seed, args.level, json.loads(args.policy), args.speed, args.lag / 1000, trouble, args.down, args.until, args.process): seed
-                   for seed in seeds}
+        futures = {pool.submit(rehearse, args.tag, seed, args.level, json.loads(args.policy), args.speed, args.lag / 1000, trouble, args.down, args.until, args.process,
+                               args.start, args.dark): seed for seed in seeds}
         for future in as_completed(futures):
             try:
                 results.append(future.result())

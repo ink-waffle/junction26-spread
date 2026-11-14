@@ -13,6 +13,7 @@ from typing import Callable, Iterator, Optional
 from spread.client import ACTIONS_PER_CALL, Client, SpreadError, Unreachable, World
 from spread.types import Action, ActionResult, DeskEvent, DeskEventKind, Score
 
+from . import names
 from .atlas import DAY, HOUR, Atlas, clock
 from .desk import Desk, Policy
 
@@ -27,7 +28,11 @@ PATIENCE = 5  # seconds without a byte before a request of the final counts as l
 
 
 class Impatient(Client):
-    """The kit's client with the final's patience."""
+    """The kit's client for the final: less patience with a silent server, and the server's address also when the resolver fails."""
+
+    def __init__(self, url: Optional[str] = None, key: Optional[str] = None):
+        super().__init__(url, key)
+        names.keep(self._parts.hostname)
 
     def _send(self, method, path, payload, headers):
         if self._connection is None:  # else the kit opens it with its own 20 seconds
@@ -55,6 +60,8 @@ def play_live(world: World, desk: Desk, now: Callable[[], int], on_day: Optional
     history = world.events()
     snapshot = world.snapshot()
     ends_at = snapshot["endsAt"]
+    if snapshot["now"] >= ends_at:  # we were away until the end
+        return
     desk.rejoin(snapshot, history)
     books = desk.books
     print(f"{clock(books.now)}  joined after {len(history)} events: {len(books.orders)} orders, {len(books.quotes)} of {len(books.requests)} requests quoted, "
@@ -154,7 +161,7 @@ def next_final(client: Client) -> World:
 
 def live(client: Client, overrides: dict, world_id: Optional[str] = None) -> Score:
     """Plays the final, or a world whose clock someone else moves, to its end. Every failure leads to the same place: a new desk that rejoins."""
-    atlas, world, wait, failed_at = None, None, 0.5, 0.0
+    atlas, world, wait, failed_at, told = None, None, 0.0, 0.0, 0.0
     while True:
         try:
             atlas = atlas or Atlas(client.map())
@@ -166,12 +173,14 @@ def live(client: Client, overrides: dict, world_id: Optional[str] = None) -> Sco
             play_live(world, desk, now, lambda day, score: report(WEEKDAYS[day % 7], score))
             return world.score()
         except Exception as error:  # the server restarts, the network drops, or we have a bug: the world keeps going, so do we
-            if not isinstance(error, Unreachable):
-                traceback.print_exc()
             if isinstance(error, SpreadError) and error.status in (403, 404):  # this world is not ours to play any more: ask again which one is
                 world = None
             wait = 0.0 if time.monotonic() - failed_at > 10 else min(5.0, wait * 2 or 0.5)  # a desk that lived ten seconds had recovered: try at once
-            print(f"{error}. A new desk rejoins in {wait:.1f} s.", file=sys.stderr, flush=True)
+            if wait < 5.0 or time.monotonic() - told > 60:  # the first failures get a line each, a long outage one a minute
+                if not isinstance(error, Unreachable):
+                    traceback.print_exc()
+                print(f"{error}. A new desk rejoins in {wait:.1f} s.", file=sys.stderr, flush=True)
+                told = time.monotonic()
             time.sleep(wait)
             failed_at = time.monotonic()
 
