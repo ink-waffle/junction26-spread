@@ -55,4 +55,4 @@ Level 8 throughout. "tune" = our seeds halal-01..08, "hold" = halal-09..16 (neve
 - Flat 1.0 × typical on everything we could win at 1.3 × list (halal-01): −€8,001, 57.7% on time. We won 591 cars; drivers booked ~150 a day.
 
 ## Ranking rounds and test finals
-- none played yet
+- **Saturday 09:00 round** (played 10:38 with commit f20e34d = ideas 1–7): 5 of 5 weeks ranked, total €48,860 (€6,521 / €8,434 / €10,772 / €13,515 / €9,616; on time 93.5–97.6%; 214–384 orders). Place 35 of 45 ranked teams at that moment; top €79,003, 10th €69,979, 20th €59,652, House best €50,660, House starter not ranked. The top ten earn 1.43 × our margin on the same weeks: about €10 more per order, and more orders in worlds where the competitor is cheap.
