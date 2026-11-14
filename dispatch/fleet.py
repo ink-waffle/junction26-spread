@@ -76,7 +76,7 @@ class Fleet:
         self.policy, self.books, self.atlas = policy, books, atlas
         homes = [driver.profile["homePlaceId"] for driver in books.drivers.values()]
         self.supply = {place: math.log1p(sum((1 + atlas.crow_km(home, place) / NEAR_KM) ** -2 for home in homes)) for place in atlas.places}  # the week's drivers, each counted by how near they live: a quarter at the app's 30 km
-        self.forecast: dict[str, tuple[float, int]] = {}  # order -> the model's logit when the world took its gig, the flu apart, and the car's last day: what this week's outcomes are measured against
+        self.forecast: dict[str, float] = {}  # order -> the model's logit when the world took its gig: what this week's outcomes are measured against
         self.held = lambda state: False  # the desk's pairs say which orders we keep out of the app ourselves: no driver has turned those down
 
     def cost(self, request: PriceRequest, option: DeliveryOption) -> Optional[int]:
@@ -116,13 +116,12 @@ class Fleet:
         """The intercept that best explains this week's own orders against what the model said when we posted each: this world's drivers, as far as they have shown themselves.
         An order with a driver counts as almost on time, a waiting one as the model sees it now, a late or delivered one as it ended."""
         books, seen = self.books, []
-        flu = {day: ON_TIME["flu"] * self.flu(day) for day in range(5)}  # as the nights have shown it since: the flu is not the world's hardness
-        for order_id, (logit, day) in self.forecast.items():
+        for order_id, logit in self.forecast.items():
             state = books.orders.get(order_id)
             if state is None or state.undelivered() and not state.late and self.needs_driver(state) and order_id not in waiting:
                 continue
             outcome = 0.0 if state.late else 1 / (1 + math.exp(-waiting[order_id])) if order_id in waiting else 1 - BOOKED_LATE if state.undelivered() else float(order_id not in books.refunded)
-            seen.append((logit + flu.get(day, 0.0), outcome))
+            seen.append((logit, outcome))
         shift = 0.0
         for _ in range(4):  # Newton's method on one number, from a prior that the world is the model's
             chances = [1 / (1 + math.exp(-logit - shift)) for logit, _ in seen]
@@ -276,9 +275,8 @@ class Fleet:
         cars = sum(1 for stop in action["stops"] if stop["kind"] == "pickup")
         paid = action["schedule"][0]["feeCents"] / (state.request["referenceFeeCents"] * cars / len(state.order["legs"]))
         multiple = min(self.policy.fees + (self.policy.explore or ()), key=lambda m: abs(m - paid))  # the fee as we chose it, before it became whole cents
-        spans = self.chances(state)
-        car = self.car(state.request, spans, self.books.now, state.won_at)
-        self.forecast[state.id] = self.logit(dict(car, flu=0.0), multiple, self.queue(but=state)), max((b for _, b in spans), default=self.books.now) // DAY
+        car = self.car(state.request, self.chances(state), self.books.now, state.won_at)
+        self.forecast[state.id] = self.logit(car, multiple, self.queue(but=state))
 
     def looked(self, state: OrderState, gig: GigState) -> bool:
         """True when the gig's fee was chosen after everything that asks for a new choice: a lost driver, the deadline warning, its hours in the app if we look early, the last day before its last pickup."""
