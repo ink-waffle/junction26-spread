@@ -42,7 +42,6 @@ class FleetPolicy:
     crowding: float = 1.0  # research: how much of the harm to the waiting cars we charge
     early_look: float = 6.0  # hours in the app after which a gig without a taker gets its fee chosen again, one step up at least; 0: only on its last day
     explore: Optional[tuple[float, ...]] = None  # research: draw each order's fee multiple from these
-    burst: int = 5  # orders that lose their driver within one hour before the gigs among them that are due within a day reopen at the urgent fee; 0: never
     seed: str = ""
 
 
@@ -239,28 +238,20 @@ class Fleet:
 
     def fee_multiple(self, state: OrderState, legs: list[int], typical: float) -> float:
         """One fee while a gig waits, and few changes of it, so drivers do not learn to wait. It is chosen when the order needs a driver, and again only when it loses one,
-        when its deadline warning comes, and when the gig has sat long (some hours in the app if we look early, the last day before its last pickup): then at least one step up.
-        After the warning, and when a night or a flu took its driver on its last day, it is the urgent fee."""
+        when its deadline warning comes, and when the gig has sat long (some hours in the app if we look early, the last day before its last pickup): then at least one step up."""
         policy, books, gig = self.policy, self.books, self.open_gig(state, legs[0])
         posted = gig.schedule[-1]["feeCents"] / typical if gig else 0.0
         if state.late:
             return policy.late_fee
         if gig and self.looked(state, gig):
             return posted
-        if state.urgent or gig and self.deserted(state, gig):
+        if state.urgent:
             return max(posted, policy.urgent_fee)
         queue = self.queue(but=state)
         floor = posted if not gig or gig.schedule[-1]["at"] < state.alarm_at else min((m for m in policy.fees if m > posted), default=posted)  # a gig that waited that long did not pay the drivers who saw it
         car = self.car(state.request, self.chances(state), books.now, state.won_at)
         chosen = self.fee(car, typical, REFUND * self.list_price(state), self.late_price(queue), queue, floor)[0]
         return random.Random(f"{policy.seed}:{state.id}").choice(policy.explore) if policy.explore and not posted else chosen
-
-    def deserted(self, state: OrderState, gig: GigState) -> bool:
-        """True for a gig due within a day whose driver left in an hour in which several of our orders lost theirs: the hour after midnight, when drivers decide whether they work that day, or a flu.
-        Nobody reads its new notification before the morning, the drivers who would take it are at home, and only a fee that pays a longer trip finds another."""
-        books, lost = self.books, state.alarm_at
-        left = sum(1 for other in books.orders.values() if lost - HOUR <= other.alarm_at <= lost and not other.urgent)
-        return bool(self.policy.burst) and gig.schedule[-1]["at"] < lost and books.now >= state.order["lastPickupAt"] - LAST_DAY and left >= self.policy.burst
 
     def gig_posted(self, action: PostAction) -> None:
         """The world took a gig of ours. For an order's first gig of its own we keep what the model says of it at this minute: the week's world is measured against it.
