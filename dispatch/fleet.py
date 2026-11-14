@@ -66,6 +66,7 @@ class Fleet:
         self.drivers_near = {place: sum(1 for home in homes if atlas.crow_km(home, place) <= NEAR_KM) for place in atlas.places}
         self.forecast: dict[str, float] = {}  # order -> the model's logit when we posted it: what this week's outcomes are measured against
         self.world = 0.0  # how much easier (+) or harder than the model's this week's world has shown itself, in logits
+        self.held = lambda state: False  # the desk's pairs say which orders we keep out of the app ourselves: no driver has turned those down
 
     def cost(self, request: PriceRequest, option: DeliveryOption) -> Optional[int]:
         """What we expect to pay, in cents, to move this request by this option's deadline: the fee, the late car's refund, its use of the room under the delivery minimum, and what it does to the cars that wait for a driver."""
@@ -81,7 +82,7 @@ class Fleet:
     def queue(self, but: Optional[OrderState] = None) -> Queue:
         """The orders that wait for a driver now, but for one: how many, at what fee, with what chances."""
         books, policy = self.books, self.policy
-        waiting = [(state, self.posted(state) or 1.0) for state in books.orders.values() if state is not but and not state.late and self.needs_driver(state)]
+        waiting = [(state, self.posted(state) or 1.0) for state in books.orders.values() if state is not but and not state.late and self.needs_driver(state) and not self.held(state)]
         queue = Queue(len(waiting), sum(multiple for _, multiple in waiting) / max(1, len(waiting)))
         logits = {}
         for state, multiple in waiting:
@@ -174,7 +175,7 @@ class Fleet:
 
     def open_gig(self, state: OrderState, leg: int) -> Optional[GigState]:
         gig = self.books.gigs.get(state.gig_of.get(leg, ""))
-        return gig if gig and gig.status == "open" else None
+        return gig if gig and gig.status == "open" and not gig.shared else None  # a two-car gig's fee is not this order's own
 
     def posted(self, state: OrderState) -> float:
         """The multiple of its typical fee that the order's open gig shows in the app; 0 when it has none."""

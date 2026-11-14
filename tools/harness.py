@@ -14,7 +14,7 @@ import os
 import sys
 import time
 from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor, as_completed
+import subprocess
 
 from spread.client import Client, SpreadError
 
@@ -149,6 +149,28 @@ def line(s: dict) -> str:
             f"drops {s['drops']:>3}  failed {s['failed']:>3}  {'RANKED' if s['ranked'] else 'not ranked'}  {s['seconds']}s")
 
 
+def play_each(args: argparse.Namespace, seeds: list[str], tries: int = 3):
+    """Plays each seed in a process of its own, at most `workers` at once; a process that dies is started again."""
+    command = [sys.executable, "-m", "tools.harness", "--one", "--tag", args.tag, "--level", str(args.level), "--policy", args.policy] + ["--no-save"] * args.no_save
+    waiting, running = [(seed, 1) for seed in seeds], {}
+    while waiting or running:
+        while waiting and len(running) < args.workers:
+            seed, attempt = waiting.pop(0)
+            running[subprocess.Popen(command + ["--seeds", seed], stdout=subprocess.PIPE, text=True)] = (seed, attempt)
+        for process in [p for p in running if p.poll() is not None]:
+            seed, attempt = running.pop(process)
+            output = process.stdout.read().strip().splitlines()
+            if process.returncode == 0 and output:
+                summary = json.loads(output[-1])
+                print(line(summary), flush=True)
+                yield summary
+            else:
+                print(f"{seed:<10} died with exit code {process.returncode} (try {attempt} of {tries})", file=sys.stderr, flush=True)
+                if attempt < tries:
+                    waiting.append((seed, attempt + 1))
+        time.sleep(0.5)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--tag", required=True, help="a name for this version; runs are saved under runs/<tag>/")
@@ -158,21 +180,17 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--no-save", action="store_true")
     parser.add_argument("--clean", action="store_true", help="only delete orphaned practice worlds")
+    parser.add_argument("--one", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.clean:
         print(f"deleted {delete_orphans(Client())} orphaned worlds")
         return
     seeds = SEEDS.get(args.seeds) or args.seeds.split(",")
     overrides = json.loads(args.policy)
-    results = []
-    with ProcessPoolExecutor(max_workers=min(args.workers, len(seeds))) as pool:
-        futures = {pool.submit(play, args.tag, seed, args.level, overrides, not args.no_save): seed for seed in seeds}
-        for future in as_completed(futures):
-            try:
-                results.append(future.result())
-                print(line(results[-1]), flush=True)
-            except Exception as error:
-                print(f"{futures[future]:<10} FAILED: {type(error).__name__}: {error}", file=sys.stderr, flush=True)
+    if args.one:
+        print(json.dumps(play(args.tag, seeds[0], args.level, overrides, not args.no_save)), flush=True)
+        return
+    results = list(play_each(args, seeds))
     if results:
         n = len(results)
         print(f"== {args.tag}  {args.policy}\n== mean margin €{sum(r['margin'] for r in results) / n:,.0f}  min on time {min(r['onTime'] for r in results):.1%}  "
