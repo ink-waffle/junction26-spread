@@ -3,7 +3,7 @@
 Nine slides. Each slide is one claim (its title), the evidence, and one figure to draw.
 
 - Everything is level 8. A week counts ("ranked") only when at least 90% of its orders are on time.
-- Practice weeks: **tune** = seeds `halal-01..08` (every fitted number comes from these), **hold** = `halal-09..16`, **wide** = `halal-17..32`. No constant was fitted on hold or wide.
+- Practice weeks: **tune** = seeds `halal-01..08` (every fitted price and fee number comes from these), **hold** = `halal-09..16`, **wide** = `halal-17..32`. No constant was fitted on hold or wide. Two caveats: the on-time target (96%) was chosen after looking at hold and wide weeks, and the wide worlds' notes and Mondays were used to build the note reader and to bisect dealers.
 - The configuration described is commit `07c8f21` with the policy `{"fleet": {"early_look": 6}}` (the on-time target of 96% is the default). The Saturday 12:00 ranking round was played with it.
 - `[UPDATE: source]` marks a number that can still move. `OPEN_NUMBERS.md` has the command for each one.
 - Run tags in `code font` are folders under `runs/` and lines of `runs/log.jsonl`.

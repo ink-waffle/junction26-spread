@@ -15,7 +15,7 @@ Before you present:
 **Say.**
 1. "In the final we made `[FINAL]`; our best ranking round was `[BEST ROUND]`."
 2. "The system asks two questions about every request: what will this dealer pay, and what does this car cost us. The quote is the price that earns most between the two."
-3. "Everything it knows is rebuilt from the world's event log, so the same loop runs in practice, in the final and after a restart."
+3. "Everything it knows is rebuilt from the world's event log and a journal of what we sent, so the same loop runs in practice, in the final and after a restart."
 
 **Q: Which single idea is worth the most?**
 Measured one at a time on the same 8 practice weeks: learning the dealer's price level, +€3,543 a week (€6,824 → €10,367). Pricing a car as fee plus risk, +€2,789 (€6,824 → €9,613), and it took the ranked weeks from 5 of 8 to 8 of 8. Dropping the extra reserve, +€2,431. The second look at a gig that sits, +€1,903. They were measured at different stages, so they do not add up exactly. Appendix B of the deck has the whole path.
@@ -33,7 +33,7 @@ Measured one at a time on the same 8 practice weeks: learning the dealer's price
 3. "We tested a fee that rises once in our own system: fees fell 3.6%, but the weeks that met the delivery minimum fell from 5 of 8 to 3 of 8."
 
 **Q: You do change the fee after six hours. Is that not a rising fee?**
-Yes, it is a compromise, and we measured its price. A gig's fee can be chosen again at three planned moments (six hours without a driver, the last day, the deadline warning) and when a driver is lost. It never rises on a timer. The six-hour look raises about one gig in three. From Tuesday, gigs are booked within 15 minutes up to 9 points less often than without the look. It still earns €1,903 a week more on the tune weeks, because the 26 cars a week that used to sit until their deadline warning now find a driver.
+Yes, it is a compromise, and we measured its price. A gig's fee can be chosen again at three planned moments (six hours without a driver, the last day, the deadline warning) and when a driver is lost. It never rises on a timer. The six-hour look raises about one gig in three. From Tuesday, gigs are booked within 15 minutes up to 9 points less often than without the look. It still earns €1,903 a week more on the tune weeks: of the gigs the look raises, 92 to 97% are then booked, where before 26 cars a week sat until their deadline warning.
 
 **Q: Is the starter comparison on the same weeks?**
 No. The starter's −€72,613 is the handbook's run on seed `spread-1`. Our numbers are on our own seeds `[UPDATE if the starter was run on halal-01..08]`. The same-week evidence for this slide is our own rising-fee test (`offers-q1` against `base1`).
@@ -51,7 +51,7 @@ No. The starter's −€72,613 is the handbook's run on seed `spread-1`. Our num
 It is a logistic model with 12 weights, fitted on our own practice weeks by `tools/fleet_fit.py`. It is pessimistic. On the 4,410 orders it was fitted on it predicted 7.5% late and 6.6% were late. On the weeks it then played itself it predicted 10.3% and 6.0% were late. We tried a better-calibrated fit (9.0% predicted) and earned €2,266 a week less. The calibrated model accepts more risk on Monday, the late cars show two days later, and the price of the minimum then cuts volume for the rest of the week. So we kept the pessimistic one. We know that this is a safety margin and not a principle.
 
 **Q: Why 96%, why €300, why the fourth power?**
-They are set by hand. 96%: with a target of 95% one unseen week ended at 89.7% on time and another at 90.2%; with 96% the worst unseen weeks are 91.5 to 92.5%. The price of the minimum is €300 × (expected late share ÷ allowed share)⁴: about €19 at half the allowance and €300 at it. An earlier version charged a standing €300 on every point of risk. It asked 0.48 × list price more for the faster option, and dealers pay 0.12 to 0.15 × for it, so we never sold same day.
+They are set by hand. 96%: with a target of 95% one unseen week ended at 89.7% on time and another at 90.2%; with 96% the worst unseen weeks are 91.5 to 92.5%. The price of the minimum is €300 × (expected late share ÷ allowed share)⁴: about €19 at half the allowance and €300 at it. An earlier version charged a standing €300 on every point of risk. It asked 0.48 × list price more for the faster option, and dealers pay 0.12 to 0.15 × for it, so only one win in six was on the fastest option (42 of 253).
 
 ---
 
@@ -81,7 +81,7 @@ No, on evidence. We measured it: a dealer's level falls about 4% per unit of the
 We used it to learn how dealers decide, not to store prices. What we shipped is structural: the menu at one margin, the confirmation that trust is about 1% per order, and the decision not to ship lane or dealer tables. No price from a bisected world is used anywhere. The hold seeds were never bisected: `runs/bisect/` holds seeds 01–08 and 17–32 only.
 
 **Q: An oracle earns €3,723 and you earn €2,103. Why is no money left?**
-That oracle knows each request's own factor, 8.2% (sd) around its lane's level. We tested the request's typical fee, car, note, hours and neighbours against it: nothing predicts it. The organisers' handbook also names "a small factor for the request alone". The part that can be known is the level, and there we are at the ceiling.
+That oracle knows each request's own factor, 8.2% (sd) around its lane's level. We tested the request's typical fee, car, note, opening hours and hour of the day against it: nothing predicts it. The organisers' handbook also names "a small factor for the request alone". The part that can be known is the level, and there we are at the ceiling.
 
 ---
 
@@ -123,7 +123,7 @@ The reader takes 13 microseconds a note, needs no network inside a 4.5-second de
 3. "The live loop answered every request of a week at the final's clock from a phone hotspot, with a quote at 69 ms median against 4.5 seconds allowed, and rejoined by itself after a dead resolver, cut streams and a kill."
 
 **Q: Why should we believe 8 seeds?**
-Do not; believe the others. The 8 tune weeks are the ones we fitted on, and they flatter us: €16,838 a week. On 18 weeks we did not fit on we earn €13,057, and the worst week is 91.5% on time. On the 5 secret weeks of the Saturday 12:00 ranking round we earned €16,557 a week, worst week 94.2%. Three limits: one seed moves by €3,000 between two variants, so we cannot resolve differences under about €500 a week; 6 unseen weeks were not played because the server restarted under them; and we picked the on-time target of 96% after looking at the unseen weeks, so for that one number they are not a clean test.
+Do not; believe the others. The 8 tune weeks are the ones we fitted on, and they flatter us: €16,838 a week. On 18 weeks we did not fit on we earn €13,057, and the worst week is 91.5% on time. On the 5 secret weeks of the Saturday 12:00 ranking round we earned €16,557 a week, worst week 94.2%. Three limits: one seed moves by €3,000 between two variants, so we cannot resolve differences under about €500 a week; 6 unseen weeks were not played because the harness lost the server under them (timeouts and one restart); and we picked the on-time target of 96% after looking at the unseen weeks, so for that one number they are not a clean test.
 
 **Q: What exactly happens when the process dies in the final?**
 A shell loop starts it again within a second. The new desk reads the world's whole log and its snapshot, replays them with the journal of what we sent, and then quotes every request that is still open and posts every car that has no gig. While it is down, requests go to the competitor and booked drivers keep driving. On another machine, without the journal, every order and gig is still recovered, but the dealer side starts again from its prior: that cost 2 to 4% of a week in two early measurements. One honest detail: on seed halal-09, 11 of 12 restarts rebuilt an identical desk; the week still ended at the same margin to the cent, and we have not traced the one difference `[UPDATE if traced]`.
@@ -151,7 +151,7 @@ Sell the faster option. The fleet's cost asks a median 0.33 × list price more f
 Almost all of the code, the experiments and the first draft of these slides. 76 of the 78 commits in the repository carry a `Co-Authored-By: Claude` line. The work ran from Saturday 02:25 as five research streams in separate git branches (dealer side, driver side, notes, direct offers and pairs, the live loop) with one coordinating agent that merged them. The rules the agents worked under are in `RESEARCH.md`: few parts, each with a reason in one sentence; every baked-in constant regenerated by a script from saved weeks; fit on 8 seeds and never on the hold seeds; for each idea the triple idea, why, effect on the same seeds; failed ideas logged too. `[FILL IN, truthfully: what the two of you did yourselves — the brief, the choice of ideas, the checks you made on Saturday and Sunday, what you changed.]` Do not claim more than that. What you can claim: every number on the slides is reproduced by a command in `OPEN_NUMBERS.md`, and you have run them.
 
 **Did the agents see the hold weeks?**
-No constant was fitted on them. Two decisions were made after looking at them: the on-time target went from 95% to 96% because one hold week ended at 89.7%, and the wide weeks were used the same way. The note reader's vocabulary was built from tune and wide worlds, and checked on hold only at the end.
+No constant was fitted on them. Two decisions were made after looking at them: the on-time target went from 95% to 96% because one hold week ended at 89.7%, and the wide weeks were used the same way. The note reader's vocabulary was built from tune and wide worlds, and checked on hold only at the end. The dealers of the wide worlds' Mondays were bisected; those of the hold worlds never were.
 
 **Why should a dispatcher in real life care about any of this?**
 Three things carry over without the simulator: a fee that rises teaches drivers to wait; a car's cost is mostly its risk of finding no driver in time, not its fee; and the return trip is half of a driver's cost, so a car that shares a gig with one that starts where it ends costs about a sixth less in fees (0.80 against 0.97 × the typical fee in our weeks).
