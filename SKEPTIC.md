@@ -11,11 +11,23 @@ python -m tools.ablations skeptic-base skeptic-nolook ...                   # th
 
 ## 0. Report for the orchestrator
 
-**State at 21:06 (interim).** The audit is done (sections 1–3). Every part has one sample on halal-65..96 (section 4); the deciding rows have two to four. The simplified candidate B is clean code on this branch (section 5): against `main` +€959 a week (se 166) on halal-65..96 with four samples a side and +€678 (se 267) on halal-97..128 played once, for a quarter point of on-time; restart test 8 of 8, the same week to the cent; 3.9 `ast` check and import pass. **Still running: the hold weeks (with the known hard week), a pair without strides.**
+**State at 21:40.** The audit is done (sections 1–3). Every part has a sample on halal-65..96, the deciding rows two to four (section 4). The simplified system is clean code at the head of this branch and has its proofs (section 5).
 
-**Recommendation until this line changes: play `main` as frozen at 52aaf93.** Nothing in the audit says the frozen system is unsafe on an unseen week. (If this file is never updated again: B at the head of `research/skeptic` has passed every proof named above, and the two open checks are about its floor, not its margin.)
+**Recommendation: play the simplified system, `research/skeptic` with `dispatch/` as of commit af4fd92** (later commits on the branch touch documents and tools only). It is `main` with four things deleted (the week's learned intercept of the on-time model, the `known` sign, the dealer part and the pickup-today part of the level: 1,948 → 1,900 lines, 16 → 15 weights, 7 → 5 parts, 3 hand-set numbers fewer) and two numbers changed (the on-time model's intercept, set where 64 weeks the fit never saw put it; the target, 97% → 97.5%).
 
-- The verdict in five lines: section 1. The inventory: 129 numbers and one vocabulary (section 3). The ablation table: section 4. What to delete and what it costs, the commit, the proofs: section 5.
+| Against `main`, same weeks, paired per week | margin a week (se) | on time, points (se) | worst play (main's) | unranked |
+|---|---|---|---|---|
+| **the head (target 97.5%)**: halal-65..96, two samples a side | **+€679 (206)** | **+0.52 (0.11)** | 94.8% (92.8%) | 0 of 64 |
+| **the head**: halal-97..128, played once as the confirmation | **+€395 (264)** | **+0.21 (0.16)** | 93.2% (94.5%) | 0 of 32 |
+| dce27f9 (the same system at 97%): halal-65..96, four samples a side | +€959 (166) | −0.27 (0.09) | 92.7% (92.8%) | 0 of 128 |
+| dce27f9: halal-97..128, once | +€678 (267) | −0.28 (0.20) | 92.2% (94.5%) | 0 of 32 |
+| dce27f9: the 8 hold weeks, four samples a side | +€805 (421) | −0.79 (0.27) | 93.2% (93.2%) | 0 of 32 |
+| dce27f9: the 24 tune and wide weeks, two samples | +€548 (248) | −0.53 (0.16) | 93.9% (93.4%) | 0 of 48 |
+
+- **Why the head and not dce27f9:** at 97.5% the simplified system earns more than `main` *and* is on time more often on both untouched sets; at 97% it earns about €280 more still and runs 0.3 to 0.8 point under `main`'s on-time. The first needs no judgement about risk; the second is there, fully proven, if the margin is wanted.
+- **What it costs if I am wrong:** the head has 96 plays on untouched weeks (and the hold and no-stride runs below) against more than three hundred saved plays of the frozen system; its worst week so far is 93.2%. `main` as frozen at 52aaf93 remains safe: nothing in the audit says otherwise (176 saved plays, worst 92.8%).
+- **Proofs** (section 5): restart test 8 of 8 and the same week to the cent on both trees; Python 3.9 `ast` check and import; the clean code plays halal-65..96 to the cent like the switch combination it was measured as.
+- The verdict in five lines: section 1. The inventory: 129 numbers and one vocabulary (section 3). The ablation table: section 4. What was deleted and what it costs: section 5.
 
 ## 1. Verdict
 
