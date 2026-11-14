@@ -6,6 +6,7 @@ Level 8 throughout. "tune" = our seeds halal-01..08, "hold" = halal-09..16 (neve
 
 | When | Best version | tune: margin / min on-time / ranked | hold | Trying now |
 |---|---|---|---|---|
+| Sat 03:10 | `main-m1` = base1 + online price-level learner (idea 4) + live final loop | €10,367 / 89.1% / 7 of 8 | — | Fleet cost model with a capacity price (to lift the worst week over 90%), note reader (100% of facts on 24 labelled weeks), two-car gigs (fees 0.89 × vs 1.21 × typical on short pairs) |
 | Sat 02:35 | `base1` (flat 1.15 × fee, 1.45 × list, ≥ 8 h slack, no private pickup / trade-in / premium) | €6,824 / 83.9% / 5 of 8 | — | Five parallel research streams: notes reader, win-curve pricing, fleet cost model, direct offers, live final loop |
 
 ## Ideas
