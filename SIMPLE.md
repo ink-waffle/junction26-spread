@@ -35,7 +35,7 @@ python -m tools.replicates simple-main-s14,simple-main-s13 simple-D-s14,simple-D
 
 - *"Mega overfitting."* Not in the level: the frozen system earns €14.4k, €15.2k and €15.8k a week on three sets of 32 weeks it never saw (160 plays, all ranked, worst 92.8%). Half of its numbers can be deleted without a measurable loss, which is what D does.
 - *"The week starts slowly."* True as −15 to −20% on Monday (not a half), and mostly not ours: Monday's dealers have no trust in us yet and pay 12% less (section 1). A Monday as fast as a Wednesday can be had in three ways (count the order's worth in trust; centre the model's level; the same with the learner): each buys 10–20 orders on Monday and none buys margin at equal on-time (sections 2 and 4).
-- *"Next time they move something we end up at the bottom."* Measured by making the model wrong about the world: with the learner, a model one logit too easy costs 1.0 point of on-time; the frozen main with its own level moved two logits loses 1.1 points and every week stays ranked. The 20:00 test final ended 18th of 75 (€15,752 by the night log; on the saved board at world minute 10,800 €13,666 against €13,968–15,892 for ranks 2–12): one week's spread (sd of a week €4,000), not a fall.
+- *"Next time they move something we end up at the bottom."* Measured by making the model wrong about the world: with the learner, a model one logit too easy costs 1.0 point of on-time; the frozen main with its own level moved two logits loses 1.25 points, D 1.14, and every week stays ranked. The 20:00 test final ended 18th of 75 (€15,752 by the night log; on the saved board at world minute 10,800 €13,666 against €13,968–15,892 for ranks 2–12): one week's spread (sd of a week €4,000), not a fall.
 
 ## 1. Where Monday's orders go (saved runs, no new plays)
 
@@ -48,7 +48,7 @@ python -m tools.replicates simple-main-s14,simple-main-s13 simple-D-s14,simple-D
 
 - **The slow Monday is in practice weeks too, as −15 to −20%, not as a half.** Monday is the week's lowest day in 34 of 64 unseen weeks, and its spread is wide: in 11 of 64 weeks Monday is at 0.55 × the week's median day or under. The test final's 49 is an ordinary bad Monday.
 - **Most of it is the world.** A dealer accepts 1% more for each order we delivered to it on time, up to 25 (the rules of level 8). The dealers' level fitted per weekday on the 32 fresh weeks (slope held): × 1.33 of the list price on Monday, × 1.38 on Tuesday, × 1.50 from Wednesday; net of trust it is the same on all three days. Monday's dealers pay 12% less, so fewer requests clear our cost: we win 32% of Monday's requests at 1.30 × list and 42–45% of Wednesday's at 1.45–1.49 ×.
-- **A part is ours: the price of a late order in the week's first hours.** `late_price` divides the late orders the books expect by 20 + the orders so far. On Monday at 10:00 the week has 13 orders, 6 of them without a driver yet, each counted as a fifth of a late order: the price of a late order is €2,356 in the mean and €1,500 or more in 53% of weeks (Tuesday to Friday: €465–789, 1–11% of hours), and a quarter of that hour's quotes are above 2.9 × list (Tuesday: 1.64 ×). In the test final the desk sold nothing between 12:00 and 15:00 on Monday (0 of 75 requests; median cheapest quote €200–242 against €80–100 before and after) with 13 orders in the books and 3 without a driver. Without `known` (which makes the model 1.15 logits more pessimistic on the week's first bookings) the same replay gives €1,246 and 31% at 10:00, and the rest of Monday as any other day (`tools.start_study`).
+- **A part is ours: the price of a late order in the week's first hours.** `late_price` divides the late orders the books expect by 20 + the orders so far. On Monday at 10:00 the week has 13 orders, 6 of them without a driver yet, each counted as a quarter of a late order: the price of a late order is €2,356 in the mean and €1,500 or more in 53% of weeks (Tuesday to Friday: €465–789, 1–11% of hours), and a quarter of that hour's quotes are above 2.9 × list (Tuesday: 1.64 ×). In the test final the desk sold nothing between 12:00 and 15:00 on Monday (0 of 75 requests; median cheapest quote €200–242 against €80–100 before and after) with 13 orders in the books and 3 without a driver. Without `known` (which makes the model 1.15 logits more pessimistic on the week's first bookings) the same replay gives €1,246 and 31% at 10:00, and the rest of Monday as any other day (`tools.start_study`).
 - **What it is worth:** a flat price (`skeptic-flat300`) wins 80 orders on Monday, no `known` 78, against 72.5: 6–8 orders, about €200–300 a week. The larger sum is in the trust itself (section 2).
 
 ## 2. Trust is bought on Monday and Tuesday, and the desk does not count it
@@ -108,15 +108,16 @@ What stays, and why (one sentence each):
 | System | margin against main (se) | on time (se) | worst sample | Monday / Wednesday |
 |---|---|---|---|---|
 | frozen main (€14,819, 96.35%) | | | 93.4% | 75 / 90 (0.83) |
+| D | −87 (264) | +0.12 (0.18) | 94.4% | 76 / 84 (0.90) |
 | E (two samples) | +453 (234) | −0.36 (0.15) | 93.1% | 95 / 92 (1.03) |
 | B = E with the learner kept | +335 (231) | −0.41 (0.21) | 94.0% | 93 / 94 (0.98) |
 | E with the target at 97.5% | +244 (268) | +0.23 (0.21) | 94.1% | 89 / 90 (0.99) |
 | **E, the model one logit too easy** | −40 (312) | **−2.80 (0.31)** | **90.5%** (9 of 24 weeks under 93.5%) | 124 / 108 |
 | **B, the model one logit too easy** | +379 (318) | **−0.97 (0.28)** | 93.0% (3 of 24) | 118 / 102 |
-| frozen main, its model two logits too easy | +152 (299) | −1.12 (0.25) | 92.6% (2 of 24) | 119 / 100 |
+| frozen main, its model two logits too easy (two samples) | +33 (298) | −1.25 (0.20) | 92.6% (3 of 48) | 119 / 100 |
 | G, its model two logits too easy | −837 (366) | **−1.91 (0.27)** | **91.3%** (6 of 24) | 136 / 100 |
 | G without the learner's ±1 clamp, two logits too easy | −1,046 (407) | −0.92 (0.25) | 93.3% (1 of 24) | 136 / 93 |
-| D, its model two logits too easy | −157 (311) | −1.09 (0.28) | 91.6% (2 of 24) | 120 / 100 |
+| D, its model two logits too easy (two samples) | −321 (277) | −1.14 (0.20) | 91.6% (3 of 48) | 120 / 99 |
 | H = G without the clamp, in our weeks | +200 (283) | +0.28 (0.19) | 92.9% | 87 / 89 (0.97) |
 
 "One logit too easy" stands for a world whose drivers are one logit harder than the model believes (the odds of a late car 2.7 times the model's): the weight `one` is moved, everything else plays as it is. For E, B and G the starting point is the calibrated level; for main its own fitted level, which sits 0.88 under it.
@@ -126,4 +127,22 @@ What the tables say:
 1. **D is as good as main on weeks nobody had seen, with half the numbers.** Margin −€43 (se 189), on time +0.14 point (se 0.09), worst sample 93.9% → 94.5%, 64 of 64 ranked, Monday 72 → 76 orders. This is the candidate.
 2. **A week can start at full speed, and it is a move along the target's own trade, not a gain.** With the model's level where unseen weeks put it (E), Monday wins as many orders as Wednesday (94 / 95) and the week 43 more; the margin is +€509 and on time −0.33 point, two samples under 93.5% where main has none. The team's own exchange rate (97% → 96.5%: +€473 for −0.5 point) makes that about +€200 at equal on-time. With the target raised to 97.5% to give the on-time back and the learner kept (H) the result is main's and D's: −€195 (se 184), +0.13 point, Monday 83 against 72, eighteen more orders a week that earn nothing. The fitted pessimism of the model's level was a safety margin under another name, as the night log found once before ("A better-calibrated on-time model").
 3. **The learner is not a free deletion: it is the insurance against a week unlike ours.** In weeks like ours it earns nothing measurable (B against E). When the model is one logit too easy for the world it meets, the system without the learner loses 2.8 points of on-time (one week at 90.5%, nine of 24 under 93.5%); with the learner 1.0 point (worst 93.0%). A deletion that looks free on our weeks (+€778 on halal-65..96, +€509 here) removes the only part of the driver side that answers to a changed world within the day. **Keep `Fleet.learned`.**
-4. **The fitted pessimism is a reserve, and centring the level spends it.** In a world two logits harder than the calibrated level, the frozen main loses 1.1 points of on-time and stays ranked in every week (worst 92.6%): its level starts 0.88 under the truth and its learner may move one logit more. With the level centred and the same learner (G) the same world costs 1.9 points and the worst week is 91.3%. Without the clamp the centred system holds (worst 93.3%, on time −0.9 point, but €1,046 a week poorer where main is level): if the level is ever centred, the clamp must go with it, and that is H. D in the same world: −1.1 points, worst week 91.6%, two of 24 under 93.5% as main. H is not recommended: it is a larger change than D for the same result in our weeks and no better one in the hard world.
+4. **The fitted pessimism is a reserve, and centring the level spends it.** In a world two logits harder than the calibrated level, the frozen main loses 1.25 points of on-time (two samples) and stays ranked in every week (worst 92.6%): its level starts 0.88 under the truth and its learner may move one logit more. With the level centred and the same learner (G) the same world costs 1.9 points and the worst week is 91.3%. Without the clamp the centred system holds (worst 93.3%, on time −0.9 point, but €1,046 a week poorer where main is level): if the level is ever centred, the clamp must go with it, and that is H. D in the same world, two samples: −1.14 points (main −1.25), worst week 91.6% (main 92.6%), three of 48 samples under 93.5% as main: the deletions take nothing from the reserve. H is not recommended: it is a larger change than D for the same result in our weeks and no better one in the hard world.
+
+## 5. How each run was played
+
+Saved under `runs/<tag>/`; stride 14 unless the tag says 13. `judge` = halal-97..128, `explore` = tune + wide (halal-01..08, 17..32).
+
+| Tag | Tree | Policy |
+|---|---|---|
+| `simple-main-s14`, `-s13` (judge) | `research/simple-switches` 30fb27b, defaults = `main` | `{}` |
+| `simple-D-s14`, `-s13` (judge; `-s14` also explore), `simple-D-ns` (halal-02, no stride, the restart test's baseline) | `research/simple` 892fdaf | `{}` |
+| `simple-H-s14`, `-s13` (judge) | `research/simple-centred` 20db512 | `{}` |
+| `simple-G-s14` (judge) | 20db512 with the clamp of 892fdaf | `{}` |
+| `simple-E-s14`, `-s13` (judge and explore) | switches | D's switches + `"world": false`, `"weights": {"one": -4.8738}` |
+| `simple-B-s14`, `simple-E975-s14`, `simple-Gn-s14` (explore) | switches | E with `"world": true`; E with `"on_time": 0.975`; B with `"on_time": 0.975, "clamp": 9` |
+| `simple-E-easy-s14`, `simple-B-easy-s14` | switches | E and B with `"one": -3.8738` |
+| `simple-G-easy2-s14`, `simple-Gn-easy2-s14`, `simple-D-easy2-s14`, `simple-main-easy2-s14` | switches | `"one"` two logits up: -2.8738 (clamp 1 and 9), -3.75 on D's switches, -3.75 on `main`'s |
+| `simple-T-s14`, `simple-T-half-s14`, `simple-T-floor-s14` (explore) | switches | `{"market": {"invest": 1.0}}`, `0.5`, `1.0` with `"floor": true` |
+
+D's switches on the switches tree: `{"fleet": {"warm": false}, "market": {"places": false, "spread": {"day": 0.059, "from": 0.04, "lane": 0.07, "to": 0.04, "world": 0.063}}}` (`warm: false` holds `known` at its end value, 0.25 x log 101 = 1.1538, so `one` -4.8738 there is -3.72 in clean code).
