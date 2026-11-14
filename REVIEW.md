@@ -23,7 +23,7 @@ Read end to end as a jury member would: `README.md`, then each module. The quest
    - `fee()` (the model's cheapest fee), `fee_multiple()` (the rule for when a fee is chosen again, which calls `fee`) and `schedule()` (which calls `fee_multiple`): the names do not say which is which.
    - `on_time` is a target share (`FleetPolicy.on_time`), a chance (`Fleet.on_time()`) and the weights (`ON_TIME`).
    - `learned()` line 119 (`or`/`and` without brackets) and line 121 (four outcomes in one conditional expression).
-   - `late_price()`: `min(2.0, used)` has no reason on the line; with `GRIP` it is the cap of €4,800 that the night log speaks of.
+   - `late_price()`: `min(2.0, used)` has no reason on the line; with `GRIP` it is the cap of €4,800 that `runs/progress.md` speaks of.
    - `chances()` exists twice (`fleet.chances(state)`, `notes.chances(request, option, …)`) with nearly the same body.
    - The charging test (electric, under 30%, over 200 km) is written out twice (`road`, `stops`), the comment "the world refused our windows once" twice (`timed`, `stops`).
    - `self.held = lambda state: False`, replaced from outside by the desk (`desk.py:45`): a hidden wire. The tools build a `Fleet` without it.
@@ -34,7 +34,7 @@ Read end to end as a jury member would: `README.md`, then each module. The quest
 3. **`desk.rejoin`** is the proof of "restart = replay" and the longest function of the system. Its comments are good; its two inner functions (`adopt`, `recall`) could be methods. Not touched: the no-journal path has no exact test.
 4. **`OrderState.late`** is set when a gig expires (the car can only arrive late) and also when the world refuses a post (`desk.py:175`, "the usual reason is a window that has ended"). The fleet then reads it as "late for certain" (`late_fee`, an outcome of 0 in `learned`, a whole late order in `late_price`). In halal-02 all 7 refusals of the week were ended windows, so it is right in practice; the name still carries a guess.
 5. **`MarketPolicy.explore`, `Market.research()`** stay in `quote`'s first lines. Reason: the random weeks (`explore1`) that `prior.py` is fitted on are played with them. Say it if asked; or delete both and `import random` (8 lines) if those weeks need never be played again.
-6. **Long lines everywhere** (market 7, notes 10, desk 4 over 160 characters). The house style of one-line comments at the end of a line makes them; a jury member reading on GitHub scrolls sideways.
+6. **Long lines everywhere** (market 8, notes 10, desk 4 over 160 characters). The house style of one-line comments at the end of a line makes them; a jury member reading on GitHub scrolls sideways.
 
 ## What the documents say and the code does not
 
@@ -52,7 +52,9 @@ Not fixed (not this branch's files to rewrite; for whoever owns them):
 
 ## What this pass changed
 
-Every commit leaves the decisions as they were: `tools.harness` on halal-02 and halal-05 gives €21,071.78 and €24,033.59, 517 and 594 orders, as on `944f656`; `tools.restart_test --seed halal-02 --restarts 8` rebuilds the same desk 8 times of 8 and plays the same week to the cent. For `market.py` also a replay of both weeks through the old and the new market: every quote, level and belief equal, bit for bit.
+Every commit leaves the decisions as they were: `tools.harness` on halal-02 and halal-05 gives €21,071.78 and €24,033.59, 517 and 594 orders, as on `944f656`; `tools.restart_test --seed halal-02 --restarts 8` rebuilds the same desk 8 times of 8 and plays the same week to the cent. For `market.py` also a replay of both weeks through the old and the new market: every quote, level and belief equal, bit for bit. And `tools.surprises money`, `tools.surprises find` and `tools.winmodel score` print the same text from this tree as from `944f656`.
+
+Two things can no longer be played from the head, only from `944f656` or before: the market with a reserve (idea 7's comparison) and the market that quotes one option (idea 8's). Their numbers are in the saved runs.
 
 - `books.py`: dead fields and handlers gone (33 lines: what the dropped direct offers needed); `on_time` → `trust`; what the desk calls first, then one handler per event.
 - `market.py`: two research switches gone (`reserve`, `options`) and two parts of the level that no prior had; `learn` in three named steps; one order of definitions; a docstring for every method.
