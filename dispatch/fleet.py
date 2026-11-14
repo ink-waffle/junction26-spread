@@ -19,8 +19,10 @@ RETRY = 2 * HOUR  # after a failed visit whose cause no note gave: how far to mo
 NEAR_KM = 30  # the app notifies drivers who live this close to the pickup (RULES.md)
 # What tools/fleet_fit.py measures on our own weeks. ON_TIME: logistic weights of "the car arrives on time".
 # "fee" weighs a gig's fee against the fees of our other open gigs, "level" the fee that our open gigs pay together: drivers choose among our gigs.
-ON_TIME = {"one": -1.21, "fee": 3.96, "level": 0.88, "slack": 1.13, "short": -1.85, "long": -0.44, "premium": -0.92, "trade_in": -3.35,
-           "drivers_delivery": 0.28, "backlog": -0.58, "known": 0.25, "waited": -0.75}
+# "supply" is the week's drivers near a place, "pay" the typical fee as a share of the list price: the typical fee has a noise of its own, and our fee is a multiple of it.
+# The five signs of the second row come from `fleet_fit --add` on weeks of the merged system, with the rest held and the model's mean chance kept.
+ON_TIME = {"one": -5.80, "fee": 3.96, "level": 0.88, "slack": 1.13, "short": -1.85, "long": -0.44, "trade_in": -3.35, "backlog": -0.58, "known": 0.25, "waited": -0.75,
+           "supply_pickup": 0.75, "supply_delivery": 0.71, "private_delivery": -0.75, "premium": -0.82, "pay": 1.97}
 BOOKED_LATE = 0.030  # the share of cars with a driver that still arrive late: drops and slow drives
 REFUND = 0.54  # what a late order pays back on average, as a share of its list price
 DOUBT = 4.0  # how firmly we hold, before a week's own outcomes speak, that its world is the model's: the prior's weight, in outcomes
@@ -35,7 +37,7 @@ class FleetPolicy:
     fees: tuple[float, ...] = (0.85, 1.0, 1.15, 1.3, 1.5)  # the fees a gig may open at, as multiples of the typical fee
     urgent_fee: float = 1.6  # after the deadline warning
     late_fee: float = 1.3  # once the car can only arrive late: enough for the drivers who saw it at less, or it is never delivered
-    on_time: float = 0.96  # the share of orders we want on time: the delivery minimum with room for a bad week (unseen weeks end up to 5 points under it)
+    on_time: float = 0.97  # the share of orders we want on time: the delivery minimum with room for a bad week (unseen weeks end up to 5 points under it)
     late_price: float = 300.0  # euros that a late order costs us beyond its refund while we are within that share
     crowding: float = 1.0  # research: how much of the harm to the waiting cars we charge
     early_look: float = 6.0  # hours in the app after which a gig without a taker gets its fee chosen again, one step up at least; 0: only on its last day
@@ -71,7 +73,7 @@ class Fleet:
     def __init__(self, policy: FleetPolicy, books: Books, atlas: Atlas):
         self.policy, self.books, self.atlas = policy, books, atlas
         homes = [driver.profile["homePlaceId"] for driver in books.drivers.values()]
-        self.drivers_near = {place: sum(1 for home in homes if atlas.crow_km(home, place) <= NEAR_KM) for place in atlas.places}
+        self.supply = {place: math.log1p(sum((1 + atlas.crow_km(home, place) / NEAR_KM) ** -2 for home in homes)) for place in atlas.places}  # the week's drivers, each counted by how near they live: a quarter at the app's 30 km
         self.forecast: dict[str, float] = {}  # order -> the model's logit when the world took its gig: what this week's outcomes are measured against
         self.held = lambda state: False  # the desk's pairs say which orders we keep out of the app ourselves: no driver has turned those down
 
@@ -156,9 +158,12 @@ class Fleet:
             "slack": slack,
             "short": float(km < 40),
             "long": min(max(km, 100), 800) / 100 - 1,
-            "premium": any(l["car"]["premium"] for l in request["legs"]) * max(0.0, math.log1p(3 * DAY / HOUR) - slack),  # one driver in fourteen may take it: it needs room
+            "premium": float(any(l["car"]["premium"] for l in request["legs"])),  # one driver in fourteen may take it
             "trade_in": float(len(request["legs"]) > 1),
-            "drivers_delivery": math.log1p(self.drivers_near[leg["delivery"]["placeId"]]),
+            "supply_pickup": self.supply[leg["pickup"]["placeId"]],  # the shortage differs from town to town (RULES.md), and the app tells the drivers near the pickup
+            "supply_delivery": self.supply[leg["delivery"]["placeId"]],  # a driver who lives where the car goes is home when it is delivered
+            "private_delivery": float(leg["delivery"]["privateAddress"]),  # a booked hour to meet, not a day
+            "pay": math.log(request["referenceFeeCents"] / len(request["legs"]) / request["options"][0]["listPriceCents"]),
             "waited": min(1.0, max(0, at - (at if since is None else since)) / HOUR),  # a gig that is an hour in the app did not pay the drivers who saw it
         }
 
