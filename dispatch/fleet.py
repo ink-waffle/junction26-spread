@@ -20,9 +20,8 @@ NEAR_KM = 30  # the app notifies drivers who live this close to the pickup (RULE
 # "flu" is how much likelier than one working day in five the car's last day is the day of the week's flu (48 weeks; it also moved "one" by 0.05).
 # "one" is the fit's -5.75 with two corrections from 64 weeks the fit never saw (`python -m tools.skeptic_fit`, SKEPTIC.md): +1.15, what a sign for the week's
 # first hundred bookings added after them (those weeks gave that sign the other direction), and +0.88: the fit said 10% of the cars late where 5% are.
-# "trade_in" is the weight those 64 weeks give it (the fit's -3.35 rested on the one trade-in a week it let us win).
 ON_TIME = {
-    "one": -3.72, "fee": 3.96, "level": 0.88, "slack": 1.13, "short": -1.85, "long": -0.44, "trade_in": -1.54, "backlog": -0.58, "waited": -0.75,
+    "one": -3.72, "fee": 3.96, "level": 0.88, "slack": 1.13, "short": -1.85, "long": -0.44, "trade_in": -3.35, "backlog": -0.58, "waited": -0.75,
     "supply_pickup": 0.75, "supply_delivery": 0.71, "private_delivery": -0.75, "premium": -0.82, "pay": 1.97,
     "flu": -2.6,
 }
