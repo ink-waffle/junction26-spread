@@ -1,6 +1,6 @@
 # Open numbers — every placeholder, and what fills it
 
-For Sunday morning. Work from the main checkout. `<POLICY>` is the policy that plays the final; on Saturday 12:35 that was `{"fleet": {"early_look": 6}}` on commit `07c8f21`.
+State: Saturday 17:50, commit `0b050b8` (ideas 1–14; the default policy is what the final plays). For Sunday morning. Work from the main checkout. `<FROZEN>` is the commit that plays the final.
 
 ```sh
 cd /Users/ink_waffle/OverengineeringLife/Junction2026/spread
@@ -34,93 +34,106 @@ EOF
 }
 ```
 
-## 1. Results (cannot be known before Sunday)
+## 1. Results still to come
 
 | Placeholder | Where | What fills it |
 |---|---|---|
-| `[FINAL: € … margin, … % on time, … orders, place … of …]` | PRESENTATION slide 1, README, SPEAKER_NOTES slide 1 | Margin, on-time share and orders: the last lines of the desk's log, `vm 'grep -E "^End|Ranked" /data/spread/repo/final.log \| tail -n 2'` (on the laptop: `final.log` in the checkout). Place: the leaderboard at https://spread.bahnexpress.com. |
-| `[BEST ROUND: …]` | PRESENTATION slide 1 and slide 8 table, SPEAKER_NOTES slide 1 | `rounds` prints every round we played; take the best. Today: Saturday 12:00, €82,785 for five weeks (€16,557 a week), on time 94.2–96.9%, 5 of 5 ranked, commit `07c8f21`, `{"fleet": {"early_look": 6}}`. Our place, the top, the 10th, House best and House starter of that round: the leaderboard (not saved anywhere; write them down when you look). |
-| `[TEST FINAL 14:00: …]`, `[TEST FINAL 20:00: …]` | PRESENTATION slide 8 | After each test final: `vm 'grep -E "^End|Ranked|joined" /data/spread/repo/final.log \| tail -n 3'` for margin, on-time and orders; the last hour line before `End` has `N of M requests quoted` and `slowest turn`. Note any `No desk for` line: it is a restart. |
+| `[FINAL: € … margin, … % on time, … orders, place … of …]` | PRESENTATION slide 1, README line 10, SPEAKER_NOTES slide 1 | Margin, on-time share and orders: the last lines of the desk's log, `vm 'grep -E "^End|Ranked" /data/spread/repo/final.log \| tail -n 2'` (on the laptop: `final.log` in the checkout). Place: the leaderboard at https://spread.bahnexpress.com. |
+| Best ranking round, and the rows "Saturday 18:00 and later" | PRESENTATION slide 1 and slide 9, SPEAKER_NOTES slide 1 | `rounds` prints every round we played. Today's best is Saturday 15:00: €82,278, 5 of 5 ranked, on time 95.0–97.1%. Our place and House best are on the leaderboard only: write them down when the round closes, and add a line to `NIGHT_LOG.md`, "Ranking rounds and test finals". "Best" on slide 1 is the round with the highest margin against House best on the same weeks (15:00: 1.28 ×); if a later round beats it, replace all three numbers. |
+| `[TEST FINAL 20:00: € …, … % on time, place … of …]` | PRESENTATION slides 1 and 9 | `vm 'grep -E "^End|Ranked|joined" /data/spread/repo/final.log \| tail -n 3'` for margin, on-time and orders; the last hour line before `End` has `N of M requests quoted` and `slowest turn`. Place and the first and tenth team's margins: the leaderboard. Note any `No desk for` line: it is a restart. |
 | Submission hash | Junction form (not in the deck) | https://spread.bahnexpress.com/team |
 
-## 2. Numbers that move if the final's commit or policy changes
+## 2. Numbers that need tonight's runs on the frozen commit
 
-Each needs practice worlds. The team has 8 slots; one harness call on 8 seeds takes 3–4 minutes.
-
-| Number (today's value) | Where | Command |
+| Placeholder (today's value) | Where | Command |
 |---|---|---|
-| Tune: €16,838 a week, worst week 94.7%, mean 95.4%, 8 of 8, 438 orders, fee 0.94 × typical, price 1.42 × list | slides 1, 2, 6, 8; README; Appendix A and B | Saved: `weeks main-m9-look6-ot96` (the same numbers again on `07c8f21`: `weeks fleet2-base-look6`). New: `$PY -m tools.harness --tag final-tune --seeds tune --policy '<POLICY>'`, then its last line, or `weeks final-tune`. Fee and price: columns `fee x`, `price x` of the harness lines, `grep -E "^halal" runs/final-tune.out`. |
-| Hold: €14,588 a week, worst week 92.2%, mean 93.7%, 4 of 4 (4 of 8 played) | slides 1, 6, 8; Appendix A | Saved: `weeks main-m9-look6-ot96-hold`. The 4 missing weeks: `$PY -m tools.harness --tag main-m9-look6-ot96-hold --seeds halal-09,halal-10,halal-13,halal-16 --policy '{"fleet": {"early_look": 6, "on_time": 0.96}}'`, then `weeks main-m9-look6-ot96-hold` again. For a new commit: `--tag final-hold --seeds hold`. |
-| Wide: €12,619 a week, worst week 91.5%, mean 95.1%, 14 of 14 (14 of 16 played) | slides 1, 8; Appendix A | Saved: `weeks main-m9-look6-ot96-wide`. Missing: `--seeds halal-18,halal-25` with the same tag and policy. For a new commit: `--tag final-wide --seeds wide` (about 8 minutes). |
-| "€13,057 a week on 18 weeks never fitted on", "26 of 26 ranked", "22% less than tune", "3 points lower" | slides 1, 8; README; SPEAKER_NOTES slide 8 | Arithmetic on the two lines above: (hold sum + wide sum) ÷ weeks; tune against it. `weeks final-hold final-wide` prints both means and counts. |
-| Second look on hold: €13,016 → €14,588, worst week 93.7% → 92.2% (seeds 11, 12, 14, 15) | slide 6; SPEAKER_NOTES slide 6 | `weeks offers-mh-board96 main-m9-look6-ot96-hold` and compare the seeds both have. With all 8 hold weeks played the pair is 8 against 8. |
-| 26% of cars in a two-car gig at 0.80 × typical, 99.3% on time; never paired 0.97 ×, 93.5% | slide 6; SPEAKER_NOTES slide 6 | `$PY -m tools.offers_study paired main-m9-look6-ot96` (or the new tune tag). Reads saved weeks only. |
-| 1,785 lines, 10 modules | slide 1; README; SPEAKER_NOTES | `wc -l dispatch/*.py \| tail -n 1`; `ls dispatch/*.py` less `__init__.py` and `__main__.py`. |
-| Appendix A (every week) | PRESENTATION | `weeks final-tune final-hold final-wide`; ranking round rows: `cat runs/board.jsonl`. |
-| The override `{"fleet": {"early_look": 6}}` in the run commands | README "Run it"; PRESENTATION header | `grep -n "early_look" dispatch/fleet.py`: if the default is no longer `0.0`, drop the override from the README and the header. If the final runs without the second look, slide 6 (a) describes something the final did not do: cut it or say so. |
+| **32 fresh weeks**: margin a week, worst and mean on-time, weeks ranked | PRESENTATION header, slides 1 and 9, Appendix A; README line 10; SPEAKER_NOTES slide 9 | The coordinator's overnight run prints to `runs/final-fresh.out`; its last line is the summary, and `weeks final-fresh` reprints every week (use the tag the run was given). To play them: `$PY -m tools.harness --tag final-fresh --seeds <the 32 fresh seeds, separated by commas>` with no `--stride` and no `--policy`. For the starter on the same weeks: `$PY -m tools.starter_weeks --seeds <the same seeds>`. |
+| `<FROZEN>` in the PRESENTATION header | PRESENTATION header | `git log --oneline -1` on the commit deployed to the cloud machine: `vm 'cd /data/spread/repo && git log --oneline -1'`. If any decision changed after `0b050b8`, the three practice rows of slide 9 and Appendix A must be played again (next row). |
+| Tune €17,846 / worst 95.9% / mean 96.9% / 478 orders; hold €14,806 / 93.2% / 95.8% (stride 14); wide €13,418 / 93.4% / 96.2% (stride 14) | slides 1, 9; Appendix A and B; README line 10 | Saved: `weeks fleet3-cand-ns fleet3-cand-hold orch-base-s14` (the last holds tune and wide together: read the 16 wide weeks). They are the decisions of `0b050b8`: the reader's passes after them replay to the cent. New: `$PY -m tools.harness --tag final-tune --seeds tune`, `--tag final-hold --seeds hold --stride 14`, `--tag final-wide --seeds wide --stride 14`. |
+| Restart test: 12 of 12, €20,493.78 with and without (halal-02, ideas 1–14) | slide 9; SPEAKER_NOTES slide 9 | `$PY -m tools.harness --tag final-tune --seeds halal-02` (the baseline), then `$PY -m tools.restart_test --seed halal-02 --restarts 12 --baseline final-tune`. Last three lines: `N/12 restarts rebuilt the same desk`, margin with and without. |
+| Rehearsals on the frozen commit (slide 9 quotes Saturday morning's system) | slide 9 | On the cloud machine at the real clock from Thursday with one kill: `$PY -m tools.rehearse_remote --commit <FROZEN> --seed halal-03 --speed 1 --start 4320 --kill 4980` (19 minutes). A whole week at 4 ×: `… --seed halal-01 --speed 4 --kill 2100` (9 minutes). Local with trouble: `$PY -m tools.rehearse --tag live-check --seeds halal-01 --speed 4 --until 1440 --trouble kill:2,dead:1,cut:1,fail:1`. Not between 20:00 and 20:20. The 14:00 test final already is such a run with the real server: slide 9 quotes it first. |
+| 28% of cars in a two-car gig at 0.81 × typical, 98.8% on time; never paired 0.97 ×, 96.3% | slide 7; SPEAKER_NOTES slide 7 | `$PY -m tools.offers_study paired fleet3-cand-ns` (or the new tune tag). Reads saved weeks only. |
+| Our average fee, 0.94 × typical | slide 2 figure | `grep -E "^halal" runs/fleet3-cand-ns.out`, column `fee x`; or the last line of `tools.offers_study paired`. |
+| 1,948 lines, eleven modules, 16 weights | slides 1, 3; README; SPEAKER_NOTES slides 1, 3 | `wc -l dispatch/*.py \| tail -n 1`; `ls dispatch/*.py` less `__init__.py` and `__main__.py`; `python -c "from dispatch.fleet import ON_TIME; print(len(ON_TIME))"`. |
+| 124 of 158 commits carry an agent's co-author line | SPEAKER_NOTES, "How much of this was written by agents?" | `git log --format=%H --grep=Co-Authored-By \| wc -l` and `git rev-list --count HEAD`. The 34 without one: `git log --invert-grep --grep=Co-Authored-By --format='%h %s'` (merges and the reader's pass). |
+| `[FILL IN …]`: what the two of you did yourselves | SPEAKER_NOTES, same answer | Only you know. |
 
-## 3. Numbers that were never measured, or only on an older system
+## 3. Filled since the first draft (no longer open; the source, in case a number is questioned)
 
-| Placeholder | Where | Command | Cost |
-|---|---|---|---|
-| Kit starter on our own seeds (today only `spread-1`: −€72,613, 45.5%, from `kit/HANDBOOK.md`) | slides 1, 2, 8; README; SPEAKER_NOTES slide 2 | `for i in 01 02 03 04 05 06 07 08; do .venv/bin/spread-starter --level 8 --seed halal-$i \| tail -n 2; done`. It runs outside the harness's slot lock: start it only when no harness is running. Then slide 2 can say "on the same 8 weeks". | 8 × 2 minutes, one slot |
-| The starter's median booked fee by weekday (Mon 1.0, Tue–Thu 1.5, Fri 2.5 × typical), 186 Monday bookings, €118.6k fees | slide 2 figure | From the starter's reveal of `spread-1` in `reveal-w7b05a9e2208ac23c76f8/` (CSV export of the kit: `.venv/bin/spread-reveal-csv <world>`). The numbers are in `NIGHT_LOG.md` idea 1 and `RESEARCH.md`; the script that made them is not in the repository. | none |
-| Restart test with the final's policy (today: `07c8f21`, default policy, halal-02: 12 of 12, €20,151.83 both ways, `runs/restart-main-m10.out`; `ae60d61`, halal-09: 11 of 12) | slide 8; SPEAKER_NOTES slide 8 | `$PY -m tools.harness --tag final-tune --seeds halal-02 --policy '<POLICY>'` (the baseline), then `$PY -m tools.restart_test --seed halal-02 --restarts 12 --policy '<POLICY>' --baseline final-tune`. Last three lines: `N/12 restarts rebuilt the same desk`, margin with and without. Repeat with `--seed halal-09` to see whether the one differing restart is gone; its differences are printed per restart. | 5 minutes each |
-| Rehearsals on the final commit (today's numbers are Saturday morning's system) | slide 8; SPEAKER_NOTES slide 8 | The cloud machine at the real clock from Thursday with one kill: `$PY -m tools.rehearse_remote --commit <commit> --seed halal-03 --speed 1 --start 4320 --kill 4980`. A whole week at 4 ×: `… --seed halal-01 --speed 4 --kill 2100`. Local with trouble: `$PY -m tools.rehearse --tag live-check --seeds halal-01 --speed 4 --until 1440 --trouble kill:2,dead:1,cut:1,fail:1`. Each prints `unquoted`, the milliseconds of a quote, margin and on-time. Not between 14:00–14:20 or 20:00–20:20. | 19 / 9 / 5 minutes |
-| Round trip to the server (10 ms from the cloud machine, 40–70 ms from the laptop) | slide 8 | `vm 'cd /data/spread/repo && set -a && . ./.env && set +a && PYTHONPATH=kit/python:. python3 -m tools.rtt'` | seconds |
-| `[UPDATE if traced]`: the one restart of 12 on halal-09 that was not identical | SPEAKER_NOTES slide 8 | The restart test above with `--seed halal-09 --show 20` prints the differing objects. | 5 minutes |
-| `[FILL IN …]`: what the two of you did yourselves | SPEAKER_NOTES, "How much of this was written by agents?" | Only you know. Facts you can cite: `git log --format=%b \| grep -c Co-Authored-By` gives 76 of `git rev-list --count HEAD` = 78 commits (Saturday 12:25); recount on Sunday. | — |
+| Number | Source |
+|---|---|
+| Kit starter on our own weeks: tune −€63,232, 52.1% on time, 0 of 8; hold −€68,908, 47.8%, 0 of 8 | `tail -n 9 runs/starter-tune.out`, `tail -n 9 runs/starter-hold.out`; played by `$PY -m tools.starter_weeks --seeds tune` and `--seeds hold`. |
+| Test final Saturday 14:00: €3,747.26, 167 orders, 97.6% on time, 2nd of 55 ranked teams (217 entered); first €4,023, 10th €3,292; every request quoted, no action refused, slowest turn 0.86 s | `NIGHT_LOG.md`, "Ranking rounds and test finals"; the desk's `final.log` on the cloud machine; the places from the leaderboard. |
+| Ranking rounds: 09:00 €48,860 (House best €50,660), 12:00 €82,785 (€77,560), 15:00 €82,278 (€64,249) | Margins: `rounds`. House best: `NIGHT_LOG.md`, read from the leaderboard. |
+| Places: 09:00 35th of 45, 12:00 22nd of 58, 15:00 14th of 42 | The coordinator's reading of the closed rounds (Saturday 17:36). `NIGHT_LOG.md` still has the standings while the 12:00 and 15:00 rounds were open (15th of 33; first of 7): use the closed ones. |
+| The six-hour look and the 97% aim are the defaults; `final.sh` needs no `--policy` | `grep -n "early_look\|on_time:" dispatch/fleet.py` |
 
-## 4. Numbers that are final, with the command that reprints them
+## 4. Final numbers, with the command that reprints them
 
 No practice worlds needed; all read `runs/`.
 
 | Number | Command |
 |---|---|
-| Any before/after pair on a slide (margin, worst on-time, ranked, orders of a tag) | `weeks <tag-before> <tag-after>`; or `grep '"tag": "<tag>"' runs/log.jsonl` |
-| Bisection: 10,181 options, 5,581 requests, 24 worlds, 87.7% within 3%, median bracket 0.5%; sd 8.2% inside a lane; 98.1% of 2,397 menus; €14.5 and €6.1 for speed; trust +0.9% per order; competitor −4% per unit of share; r = 0.38 lanes, 0.01 dealers | `$PY -m tools.probe_read` |
+| Any before/after pair on a slide (margin, worst on-time, ranked, orders of a tag) | `weeks <tag-before> <tag-after>`; or `$PY -m tools.compare <tag-before> <tag-after>` |
+| Monday bisection: 10,181 options, 5,581 requests, 24 worlds, 87.7% within 3%, median bracket 0.5%; sd 8.2% inside a lane; 98.1% of 2,397 menus; €14.5 and €6.1 for speed; trust +0.9% per order; competitor −4% per unit of share; r = 0.38 lanes, 0.01 dealers | `$PY -m tools.probe_read` |
+| The surprise days in the replay: €12,082 → €12,284 a week (+€202, se 66, 19 of 24 weeks up); told at 08:00 +€300; requests until within 5%: war 18 → 4, outage 67 → 7 | `$PY -m tools.surprises money` (three minutes; the last 80 lines) |
+| War day 0.23 log under calm days, outage +0.26, calm days stray by 0.04; 24,127 thresholds | `$PY -m tools.surprises exact` |
+| War day named in 24 of 24 weeks, outage day in 16 of 19 | `$PY -m tools.surprises find surprise-weighs surprise-weighs-wide` |
+| Played weeks with and without the events: tune €17,421 → €17,813, wide €13,201 → €13,536 | `weeks surprise-before surprise-weighs surprise-before-wide surprise-weighs-wide` |
+| The flu's night: 33% and 3% (`fleet.SICK`, `WELL`); 2.7% given back on other nights; 19 such nights in 19 of 24 weeks; cars of a bulk order come back like the others | `$PY -m tools.night_study surprise-weighs surprise-weighs-wide` |
+| The flu sign: 25 weeks, 49 samples a side: on time +0.38 point (se 0.20), late orders −1.6 a week (se 0.9), margin −€23 (se 232), 18 of 25 weeks up, worst sample 91.4% → 92.6%; halal-09 92.3% → 94.6% | `$PY -m tools.replicates surprise-weighs,surprise-weighs-wide,fleet3-main-s12,fleet3-main-s13,fleet3-main-s15,fleet3-before-hold fleet3-flu4-s12,fleet3-flu4-s13,fleet3-flu4-s14,fleet3-flu4-s15` |
+| The flu sign on hold, three samples a side: +0.30 point (se 0.26), margin −€252 (se 209) | `$PY -m tools.replicates fleet3-before-hold,fleet3-before-hold-s12,fleet3-before-hold-s13 fleet3-cand-hold,fleet3-cand-hold-s12,fleet3-cand-hold-s13` |
+| Every knob, 24 weeks, two samples a side: fee floor 0.75 × −€771 (se 222), 0.90 × −€47 (se 246); aim 96.5% +€112 (se 176) for −0.51 point; look at 12 h −€342 (se 160); pairs 60 min and 6 h +€284 (se 304) for −0.57 point; finer fee grid −€624 (se 284) | `$PY -m tools.replicates orch-base-s14,orch-base-s13 orch-<knob>-s14,orch-<knob>-s13` with `<knob>` = `low75`, `low70`, `hi90`, `hi95`, `hi100`, `t965`, `t96`, `look12`, `pair`, `fine` |
+| The pickup side: hold €13,472 → €13,753, late 23.1 → 15.7 a week; wide €13,240 → €13,201, late 17.8 → 14.6 | `$PY -m tools.compare main-look6-s14-hold fleet2-s-v2b-hold`; `$PY -m tools.compare main-look6-s14-wide fleet2-s-v2b-wide` |
+| The aim as a knob (96.5% / 97% / 97.5% on 24 weeks) | `runs/reports/progress.md`, line of 13:30; the tags are `fleet2-s-*` in `runs/log.jsonl` |
+| Drivers and the look: booked at the first fee within 15 minutes, Monday to Friday (73 / 71 / 65 / 67 / 48% and 71 / 67 / 59 / 58 / 33%) | `$PY -m tools.waiting_study main-m10 fleet2-base-look6` |
+| A gig still open on its last day ends late one time in four (47 a week, 24%) | `$PY -m tools.late_study main-m9-look6-ot96 main-m9-look6-ot96-wide` |
+| A booking as a promise: given back 18% when made the day before, 5% when made that morning | `$PY -m tools.promise_study fleet2-s-v2b fleet2-s-v2b-wide` |
+| Meeting the drivers on the day: late 11.1% against 7.0% | `$PY -m tools.meet_study fleet3-meet6-par` |
+| The census: a silent day in 7 of 20 weeks | `runs/census/<seed>.json`; `tools/census.py` prints the table when it plays a seed |
 | Notes: 22,099 of 22,099; 6,152 facts | `$PY -m tools.notes_eval --tag notes-label,notes-val1,notes-val2` |
 | Notes on hold: 3,539 of 3,539 | `$PY -m tools.notes_eval --tag notes-label-hold` |
 | Notes with one more typo: 99.69% | `$PY -m tools.notes_eval --tag notes-label,notes-val1,notes-val2 --typos` |
-| The real note of slide 7 | World `halal-03`, request arrived Friday 09:46: `$PY -c "from dispatch import notes; print(notes.read({'text': 'Liike auki arkisin klo 7-20. Huolto kesken, valmis klo 15, ei kun klo 14. Lisäksi 4 kesärengasta tavaratilassa'}, 4*1440+586))"` gives ready at minute 6600 (Friday 14:00), pickup open 420–1200 (07:00–20:00), no tyre flag. |
-| Direct offers: 75,390 offers, 85 yes; by fee and driver class | `$PY -m tools.offers_study offers offers-x2` and `… offers offers-x1` |
+| The real note of slide 8 | World `halal-03`, request arrived Friday 09:46: `$PY -c "from dispatch import notes; print(notes.read({'text': 'Liike auki arkisin klo 7-20. Huolto kesken, valmis klo 15, ei kun klo 14. Lisäksi 4 kesärengasta tavaratilassa'}, 4*1440+586))"` gives ready at minute 6600 (Friday 14:00), pickup open 420–1200 (07:00–20:00), no tyre flag. |
+| Direct offers: 75,390 offers, 85 yes | `$PY -m tools.offers_study offers offers-x2` |
 | Two-car gigs against the same cars as two gigs (0.89 × against 1.21 ×; 85% booked; 29% over 6 hours) | `$PY -m tools.offers_study shared offers-x3` |
 | A new car with a car that sits (0.70 × → 46%, 0.85 × → 76% delivered as a pair) | `$PY -m tools.offers_study board offers-mx3` |
-| Loss audit tables (26 orders a week reach the warning after a median 70 hours; 52% late) | `$PY -m tools.audit main-m4-r0.0` |
-| On-time model against outcomes (6.6% late against 7.5% predicted) | `$PY -m tools.fleet_fit --calibrate main-m7-r-0.15 main-m6` |
-| Dealer model out of world (log-likelihood −0.3672 with the place prior) | `$PY -m tools.winmodel cv explore1 market-r30 market-r15 main-m4-r0.15 market-z0` |
+| 26 orders a week reached the warning after a median 70 hours; 52% late | `$PY -m tools.audit main-m4-r0.0` |
+| The five pickup-side signs as fitted | `$PY -m tools.fleet_fit --add supply_pickup,supply_delivery,private_delivery,premium,pay main-m8 main-m9-look6 main-m9-look6-ot96 fleet2-s-base fleet2-s-k5-signs` |
+| The flu sign as fitted (−2.6, intercept −5.75) | `$PY -m tools.fleet_fit --add flu <tags>`. It was fitted on 48 saved weeks, 11,008 orders (progress line 15:52); the log does not name the tags, so the exact figures may not reprint. |
+
+Two comparisons can be read from saved runs but not played again from the head: the market with a reserve (slide 3, row 2) and the market that quotes one option (slide 4, rows 2 and 3). Their switches left the code in the reader's pass; they play from commit `944f656` or earlier.
 
 ## 5. Numbers on the slides that no command in the repository reprints
 
-Say them as measured once, or cut them. They come from the agents' progress lines (`runs/reports/progress.md`) and reports; the scripts were scratch files.
+Say them as measured once, or cut them. They come from the agents' progress lines (`runs/progress.md`) and reports (`runs/reports/`); the scripts were scratch files.
 
 | Number | Slide | Source |
 |---|---|---|
-| "96% on time when booked before the deadline warning, 25% when not"; the six-point supply curve (39 / 61 / 81 / 91 / 88 / 91%) | 3 | `RESEARCH.md`, from `explore1`. Can be recomputed from `tools.study.table("explore1")`, but no tool prints it. |
-| Monday replay in euros: €2,103 (our learner), €2,065 (oracle of lane levels), €3,723 (oracle of thresholds) | 5 | progress line 11:02 and `reports/market.md`. The replay script is not in `tools/`. |
-| The day's part is within 5% of its end-of-day value by 10:00 | 4 | `reports/market.md` |
-| Drivers and the second look: bookings within 15 minutes, Monday to Friday, with and without | 9 | progress line 11:45 (fleet) |
-| The second look raises 31% of gigs | SPEAKER_NOTES slide 2 | progress line 11:45 (fleet) |
-| Calibration on its own weeks: 10.3% predicted, 6.0% late; 9.0% after the refit | 9; SPEAKER_NOTES slide 3 | progress lines 11:15 and 11:25 (fleet) |
-| The faster option costs a median 0.33 × list more (0.48 × before the barrier price) | 9; SPEAKER_NOTES | `reports/market.md`, progress line 10:55 |
-| Restart without a journal costs 2–4% | 9; SPEAKER_NOTES slide 8 | `reports/live.md`; two measurements on older systems. Rerun: `$PY -m tools.restart_test --seed halal-01 --restarts 12 --no-journal --policy '<POLICY>' --baseline final-tune`. |
-| The Thursday join sold at 1.56 × list against 1.90 × | 9 | `RUNBOOK.md`, `reports/live.md` |
-| Saturday 09:00 round: place 35 of 45, top €79,003, 10th €69,979, House best €50,660 | 8 | `NIGHT_LOG.md`, read from the leaderboard at 10:45 |
+| "96% on time when booked before the deadline warning, 25% when not"; the six-point supply curve | 3 | `RESEARCH.md`, from `explore1`. Can be recomputed from `tools.study.table("explore1")`, but no tool prints it. |
+| Late 12.6 / 10.0 / 6.5 / 3.3% by drivers within 30 km of the pickup | 3 | `NIGHT_LOG.md` idea 12; progress line 13:14 (fleet2) |
+| The faster option costs a median €11 more (was €16); fastest sold in 57% of two-option wins (was 49%) | 4 | `NIGHT_LOG.md` idea 12; `runs/reports/fleet2.md` |
+| Monday replay in euros: €2,103 / €2,065 / €3,723, on 7 tune worlds | 5 | progress line 11:02 and `runs/reports/market.md` |
+| The starter's median booked fee by weekday (1.0, then 1.5, then 2.5 × typical), 186 Monday bookings, €118.6k of fees | 2 | `NIGHT_LOG.md` idea 1, from the starter's reveal of `spread-1` (`reveal-w7b05a9e2208ac23c76f8/`) |
+| The model says 12.9% late where 6.4% are; the week's intercept corrects it within about forty orders | 10; SPEAKER_NOTES slide 3 | `runs/reports/fleet2.md`, "What is fragile" |
+| Without a war the replay still gains €66; without both events it loses €118 | 10; SPEAKER_NOTES slide 6 | `NIGHT_LOG.md` idea 13; `runs/reports/surprises.md` |
+| About 30% of the bookings held for the second Monday come back at its midnight | SPEAKER_NOTES slide 10 | `runs/reports/fleet3.md`, "What is fragile" |
+| Restart without a journal costs 2–4% | SPEAKER_NOTES slide 9 | `runs/reports/live.md`; two measurements on Saturday morning's system. Rerun: `$PY -m tools.restart_test --seed halal-01 --restarts 12 --no-journal --baseline final-tune`. |
+| The restart bug: 1 of 12, €16,942 against €19,251 | 9 | `runs/reports/offers.md`; `runs/offers-restart-halal-09.out` |
 
-## 6. Where the log and the code disagree (the deck follows the code and the saved runs)
+## 6. Where the log and the code disagree
 
-Checked on Saturday 12:45 against commit `07c8f21`.
+Checked on Saturday 17:50 against commit `0b050b8`. The deck follows the code and the saved runs. Rows of the first draft that the code has since resolved are gone (the six-hour look is the default; the model has the pickup side; the aim is 97%).
 
-| The log says | The code or the saved run says | What the deck does |
+| The log says | The code or the saved run says | What was done |
 |---|---|---|
-| `NIGHT_LOG.md` idea 11: a gig with no driver after six hours has its fee chosen again. | `FleetPolicy.early_look` defaults to `0.0`: off. It runs only with `--policy '{"fleet": {"early_look": 6}}'`. Default policy on tune: €14,937 (`main-m10`); with the override: €16,838 (`fleet2-base-look6`). `RUNBOOK.md` starts `final.sh` without a policy. | Describes the override as the configuration, and says so in the header. **Start the final with the policy, or change the default.** |
-| `NIGHT_LOG.md` idea 1: "The fee changes at most once, at the deadline warning." | `Fleet.looked`: the fee is chosen again after six hours (with the override), on the last day before the last possible pickup, at the deadline warning, and when a driver is lost. | Slide 2 names the four moments. |
-| `NIGHT_LOG.md` idea 3, `AUDIT.md`: a decline is a quote of 4 × list. | `market.DECLINE = 10.0`. | Slide 4 says 10 × list. |
-| `NIGHT_LOG.md` idea 4: the level's parts are world, day, dealer, pickup place, delivery place. | `prior.SPREAD` also has the lane and the pickup place today. | Slide 4 lists seven parts. |
-| `NIGHT_LOG.md` idea 5: the model knows who lives near pickup and delivery and private stops; the price rises once expected late orders pass 5%; average fee 1.16 → 0.95 × typical. | `fleet.ON_TIME` has drivers near the delivery only and no sign for a private stop; the target is 96%, so 4%; the saved runs give fee 1.17 × (`base1`) → 1.08 × (`fleet-v3`). 0.95 × is the merged system (`main-m4-r0.3`). | Slide 3 uses 4% and 1.17 → 1.08. |
-| `RESEARCH.md`, `NIGHT_LOG.md`: 5,516 options known to 0.5%; sd 0.176 / 0.128 / 0.084; 2,291 menus. | `python -m tools.probe_read` today: 10,181 options, 87.7% within 3%, median bracket 0.5%; sd 0.155 / 0.126 / 0.082; 2,397 menus. The older figures are snapshots at 7 and 15 seeds. | Slide 5 uses the tool's output. |
-| `NIGHT_LOG.md`: the Monday replay (€2,103 / €2,065 / €3,723) is "on 24 seeds". | The progress line of 11:02 and `reports/market.md`: the replay ran on 7 tune worlds. `RESEARCH.md` mixes it with the 8-world run (€2,032). | Slide 5 says 7 tune worlds. |
-| Reserve 0 on tune: €12,711 (`NIGHT_LOG.md`, `AUDIT.md`) and €12,707 (`reports/market.md`). | Two runs: `main-m4-r0.0` €12,711, `market-z0` €12,707. | Uses `main-m4-r0.0`. |
-| `OVERVIEW.md`: the starter makes −€72,612 at 44% on time. | `kit/HANDBOOK.md`: −€72,612.51, 45.5%. | −€72,613, 45.5%. |
-| `NIGHT_LOG.md` status 12:25: 11 of 16 wide weeks, €12,680, worst 92.5%; "restart test fails since the refit". | Saved: 14 of 16 wide weeks, €12,619, worst 91.5% (halal-30). Restart: 11 of 12 on halal-09 (`ae60d61`), 12 of 12 on halal-02 (`runs/restart-main-m10.out`), the week identical both times. | Slide 8 uses the saved runs. |
-| `RESEARCH.md` (Saturday 00:00 round): House best €72k, 10th €58.5k. `NIGHT_LOG.md` (09:00 round): House best €50,660, 10th €69,979. | Different secret weeks; neither is saved anywhere but in these two files. | Slide 8 quotes the 09:00 round only. Read House best again from the leaderboard before you say it. |
+| `NIGHT_LOG.md` idea 1: "The fee changes at most once, at the deadline warning." | `Fleet.looked`: four moments. | A dated "Now:" line under idea 1. Slide 2 names the four moments. |
+| `NIGHT_LOG.md` idea 3: a decline is a quote of 4 × list; a request with under 8 hours of slack is declined. | `market.DECLINE = 10.0`; no slack rule since idea 5. | A dated "Now:" line under idea 3. |
+| `NIGHT_LOG.md` idea 4: five parts of the level, one option quoted. | `prior.SPREAD` has seven parts; the day part has two beliefs; every option is quoted. | A dated "Now:" line under idea 4. |
+| `NIGHT_LOG.md` idea 5: signs "who lives near pickup and delivery, private stops"; the price rises past 5%; fee 1.16 → 0.95 × typical. | `fleet.ON_TIME`: 16 weights; the aim is 97%, so 3%; the saved runs give 1.17 × (`base1`) → 1.08 × (`fleet-v3`). | A dated "Now:" line under idea 5. Slide 3 uses 3%. |
+| `RESEARCH.md`, `NIGHT_LOG.md` idea 8: 5,516 (2,515) options known to 0.5%; sd 0.176 / 0.128 / 0.084; 2,291 menus; two options of a request are "nearly independent". | `python -m tools.probe_read` today: 10,181 options, sd 0.155 / 0.126 / 0.082, 2,397 menus. The independence was withdrawn the same morning (progress line 11:13): a slower option's threshold is the faster one's minus a number of euros per dealer. | Slide 5 uses the tool's output. Not edited in the log. |
+| `NIGHT_LOG.md`, "Price precision": the Monday replay is "on 24 seeds". | Progress line 11:02 and `runs/reports/market.md`: 7 tune worlds. | Slide 5 says 7 tune worlds. Not edited in the log. |
+| `NIGHT_LOG.md`, rounds: 12:00 "15th of 33", 15:00 "first of the 7 ranked teams that had finished". | Closed rounds: 22nd of 58, 14th of 42 (the 12:00 figure is also in the 15:00 entry). | Slides 1 and 9 use the closed rounds. |
+| `NIGHT_LOG.md` status 15:10: "the big midnight give-back nights … not the flu, it seems: they follow the bulk order". | Idea 14 and `tools/night_study.py`: they are the flu's night; cars of a bulk order come back like the others. | The status row is history; slide 6 follows idea 14. |
+| `README.md`: 1,947 lines; `runs/` is 945 MB; the starter on its own seed. | `wc -l dispatch/*.py`: 1,948; `du -sh runs`: 1.2 GB at 17:40; the starter on our weeks is in `runs/starter-*.out`. | Fixed in `README.md`. |
+| `REVIEW.md`: the fleet's `known` and `waited` weights have no support in a refit. | They are in `fleet.ON_TIME` and decide. | Slide 10 says so under "What we do not know"; the deck does not claim them as findings. |
