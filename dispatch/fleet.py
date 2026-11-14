@@ -22,8 +22,8 @@ NEAR_KM = 30  # the app notifies drivers who live this close to the pickup (RULE
 # "supply" is the week's drivers near a place, "pay" the typical fee as a share of the list price: the typical fee has a noise of its own, and our fee is a multiple of it.
 # The signs of the second row come from `fleet_fit --add` on weeks of the merged system, with the rest held and the model's mean chance kept.
 # "flu" is how much likelier than one working day in five the car's last day is the day of the week's flu (-1.40 on the tune weeks, -1.64 on the wide ones).
-ON_TIME = {"one": -5.80, "fee": 3.96, "level": 0.88, "slack": 1.13, "short": -1.85, "long": -0.44, "trade_in": -3.35, "backlog": -0.58, "known": 0.25, "waited": -0.75,
-           "supply_pickup": 0.75, "supply_delivery": 0.71, "private_delivery": -0.75, "premium": -0.82, "pay": 1.97, "flu": -1.5}
+ON_TIME = {"one": -5.75, "fee": 3.96, "level": 0.88, "slack": 1.13, "short": -1.85, "long": -0.44, "trade_in": -3.35, "backlog": -0.58, "known": 0.25, "waited": -0.75,
+           "supply_pickup": 0.75, "supply_delivery": 0.71, "private_delivery": -0.75, "premium": -0.82, "pay": 1.97, "flu": -2.6}
 BOOKED_LATE = 0.030  # the share of cars with a driver that still arrive late: drops and slow drives
 REFUND = 0.54  # what a late order pays back on average, as a share of its list price
 DOUBT = 4.0  # how firmly we hold, before a week's own outcomes speak, that its world is the model's: the prior's weight, in outcomes
@@ -151,7 +151,7 @@ class Fleet:
         def weight(d: int) -> float:
             held, back = self.books.nights.get(d, (0, 0))
             return math.exp(back * math.log(SICK / WELL) + (held - back) * math.log((1 - SICK) / (1 - WELL)))
-        return weight(day) / sum(weight(d) for d in range(5)) - 0.2 if 0 <= day < 5 else 0.0
+        return max(0.0, weight(day) / sum(weight(d) for d in range(5)) - 0.2) if 0 <= day < 5 else 0.0
 
     def chances(self, state: OrderState) -> list[Span]:
         """When an order's first car can still be collected, from now on, and arrive on time."""
