@@ -121,11 +121,11 @@ def table(tags: list[str]) -> pd.DataFrame:
     return pd.DataFrame([row for tag in tags for run in runs(tag) if run.get("gigs") for row in rows(run, tag)])
 
 
-def fit(x: np.ndarray, y: np.ndarray, ridge: float = 1e-2) -> np.ndarray:
-    """Logistic regression by Newton's method."""
+def fit(x: np.ndarray, y: np.ndarray, ridge: float = 1e-2, offset: float | np.ndarray = 0.0) -> np.ndarray:
+    """Logistic regression by Newton's method; `offset` is a part of the logit that is held."""
     w = np.zeros(x.shape[1])
     for _ in range(50):
-        p = 1 / (1 + np.exp(-x @ w))
+        p = 1 / (1 + np.exp(-offset - x @ w))
         w -= np.linalg.solve((x * (p * (1 - p))[:, None]).T @ x + ridge * np.eye(x.shape[1]), x.T @ (p - y) + ridge * w)
     return w
 
@@ -155,9 +155,38 @@ def calibrate(tags: list[str]) -> None:
         print(f"\nby {name}\n" + t.groupby(by, observed=True).agg(orders=("id", "size"), late=("late", "mean"), predicted=("predicted", "mean"), fee=("multiple", "mean")).round(3).to_string())
 
 
+def add(names: list[str], tags: list[str]) -> None:
+    """Weights for these signs with the rest of the model held as it stands, on these weeks, and the intercept that leaves the model's mean chance where it was:
+    new signs then only move risk between cars, and the caution the control was tuned with stays."""
+    t = table(tags)
+    t = t[t.look == 0]
+    whole = [name for name in ON_TIME if name != "waited"]
+    held = [name for name in whole if name not in names + ["one"]]
+    logit, y = t[whole].values @ np.array([ON_TIME[name] for name in whole]), t.on_time.values
+    base, before = t[held].values @ np.array([ON_TIME[name] for name in held]), float((1 / (1 + np.exp(-logit))).mean())
+    x = np.column_stack([np.ones(len(t))] + [t[name].values for name in names])
+    w = np.zeros(x.shape[1])
+    w[0] = np.log(y.mean() / (1 - y.mean())) - base.mean()
+    for _ in range(50):  # Newton's method, with the held part of the model as an offset
+        p = 1 / (1 + np.exp(-base - x @ w))
+        w -= np.linalg.solve((x * (p * (1 - p))[:, None]).T @ x + 1e-2 * np.eye(len(w)), x.T @ (p - y) + 1e-2 * w)
+    extra, low, high = x[:, 1:] @ w[1:], -30.0, 30.0
+    for _ in range(60):  # bisection: the intercept at which the mean chance is the old one
+        shift = (low + high) / 2
+        low, high = (shift, high) if (1 / (1 + np.exp(-base - extra - shift))).mean() < before else (low, shift)
+    chance = lambda logit: np.clip(1 / (1 + np.exp(-logit)), 1e-6, 1 - 1e-6)
+    score = lambda logit: float(np.mean(y * np.log(chance(logit)) + (1 - y) * np.log(1 - chance(logit))))
+    print(f"{len(t)} orders of {', '.join(tags)}: {1 - y.mean():.1%} late, the model as it stands says {1 - before:.1%}")
+    level = fit(np.ones((len(t), 1)), y, offset=logit)[0]  # the model as it stands with nothing but its intercept fitted: what the signs are measured against
+    print(f"log-likelihood as it stands {score(logit):.4f}; with the intercept free: as it stands {score(logit + level):.4f}, with these signs fitted {score(base + x @ w):.4f}")
+    print("ON_TIME: " + ", ".join(f'"{name}": {weight:.2f}' for name, weight in zip(names, w[1:])) + f', "one": {shift:.2f}  (fitted freely the intercept would be {w[0]:.2f})')
+
+
 def main() -> None:
     if sys.argv[1:2] == ["--calibrate"]:
         return calibrate(sys.argv[2:])
+    if sys.argv[1:2] == ["--add"]:
+        return add(sys.argv[2].split(","), sys.argv[3:])
     t = table(sys.argv[1:] or DEFAULT)
     t.to_pickle(os.path.join(ROOT, "runs", "fleet_fit.pkl"))
     names = [name for name in ON_TIME if name != "waited"]
