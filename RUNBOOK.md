@@ -64,7 +64,7 @@ vm 'tmux kill-session -t spread; pgrep -af "[d]ispatch --final" || echo no desk 
 A desk that runs is the only one allowed to act. Before you start a desk anywhere, prove that no other one acts:
 
 1. `vm 'pgrep -af "[d]ispatch --final"'` prints nothing, and `pgrep -af "[d]ispatch --final"` on the laptop prints nothing.
-2. If the cloud machine does not answer SSH, you cannot know from SSH whether its desk is dead or only your connection is. Ask the world: `.venv/bin/python -m tools.watch` on the laptop (after `set -a; . ./.env; set +a`) prints one line every 5 s and ends it with `a desk is answering`, `NO DESK IS ANSWERING` (an hour with 20 or more requests, no order won and no gig posted), or `no way to tell` (night, weekend).
+2. If the cloud machine does not answer SSH, you cannot know from SSH whether its desk is dead or only your connection is. Ask the world: `.venv/bin/python -m tools.watch` on the laptop (after `set -a; . ./.env; set +a`) prints one line every 5 s and ends it with `a desk is answering` (an order won or a gig posted in the last two world hours), `NO DESK IS ANSWERING` (15 or more requests closed in those two hours, and neither), or `no way to tell` (night, weekend). Two world hours are 36 real seconds by day.
    - `a desk is answering`: the cloud desk is alive. Do not start another. Fix your SSH.
    - `NO DESK IS ANSWERING`: start the desk on the laptop: `./final.sh` in the main checkout. It joins without the cloud machine's journal, which costs little (see "If it dies").
 3. When the cloud machine answers again while the laptop desk runs: first `vm 'tmux kill-session -t spread'`, then check with `pgrep`. Its desk would rejoin the moment its network returned.
