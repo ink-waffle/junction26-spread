@@ -1,32 +1,32 @@
 """Fits what the fleet bakes in, on saved weeks, and prints it for dispatch/fleet.py: ON_TIME (logistic weights of "the car arrives on time"),
-WAIT (hours a car waits for a driver, by its chance of being late) and, from two runs of the same seeds, the crowding of a waiting car.
+BOOKED_LATE (late share of the cars that had a driver before their deadline warning) and REFUND (what a late order paid back, as a share of its list price).
 
-    python -m tools.fleet_fit fleet-explore2 base1-all:1.15 base1:1.15      # tag, or tag:the flat fee multiple of that run
-    python -m tools.fleet_fit --crowding base1-all:1.15 base1:1.15          # the same requests under a heavier and a lighter book
+    python -m tools.fleet_fit fleet-explore3 fleet-cap-L085-r0.0 main-m4-r0.15      # tags of saved runs
 
-Each week is replayed through the books, so every sign is computed by the code that computes it in play, at the minute the request arrived."""
+Each week is replayed through the books, so every sign is computed by the code that computes it in play, at the minute the request arrived.
+A gig's own fee and the fee level of the queue are told apart by weeks of two kinds: random fees inside a week, and one fee for a whole week."""
 from __future__ import annotations
 
 import os
 import random
 import sys
-from typing import Optional
 
 import numpy as np
 import pandas as pd
 
+from dispatch import notes
 from dispatch.atlas import DAY, HOUR
 from dispatch.books import Books
 from dispatch.fleet import ON_TIME, Fleet, FleetPolicy
 from tools.study import ROOT, atlas, runs
 
-DEFAULT = ["fleet-explore2", "base1-all:1.15", "base1:1.15", "fleet-v1", "fleet-v2", "fleet-v2-nocrowd"]
+DEFAULT = ["fleet-explore3", "fleet-cap-L085-r0.0", "fleet-cap-L100-r0.0", "fleet-cap-L115-r0.0", "main-m4-r0.3", "main-m4-r0.15", "main-m4-r0.0"]
 
 
-def first_fees(run: dict, flat: Optional[float]) -> dict[str, float]:
+def first_fees(run: dict) -> dict[str, float]:
     """The fee multiple each order was first posted at. The saved schedule of a repriced gig is its last one: then the first view shows it, or the run's policy."""
     typical = {e["request"]["id"]: e["request"]["referenceFeeCents"] / len(e["request"]["legs"]) for e in run["events"] if e["kind"] == "price_request"}
-    explore = run["policy"].get("fleet", {}).get("explore")
+    policy = run["policy"].get("fleet", {})
     viewed, out = {}, {}
     for view in sorted(run["reveal"]["views"], key=lambda v: -v["at"]):
         viewed[view["gigId"]] = view
@@ -35,14 +35,14 @@ def first_fees(run: dict, flat: Optional[float]) -> dict[str, float]:
         if order_id in out:
             continue
         cars = sum(1 for stop in gig["stops"] if stop["kind"] == "pickup")
-        if step["at"] <= gig["postedAt"]:
+        if policy.get("explore"):
+            out[order_id] = random.Random(f"{run['seed']}:{order_id}").choice(policy["explore"])
+        elif len(policy.get("fees", [])) == 1:
+            out[order_id] = policy["fees"][0]
+        elif step["at"] <= gig["postedAt"]:
             out[order_id] = step["feeCents"] / cars / typical[order_id]
         elif view and view["at"] < step["at"]:
             out[order_id] = view["feeCents"] / cars / typical[order_id]
-        elif explore:
-            out[order_id] = random.Random(f"{run['seed']}:{order_id}").choice(explore)
-        elif flat:
-            out[order_id] = flat
     return out
 
 
@@ -51,37 +51,51 @@ def request_hours(start: int, end: int) -> float:
     return sum(max(0, min(end, day * DAY + 18 * HOUR) - max(start, day * DAY + 8 * HOUR)) for day in range(start // DAY, max(start, end) // DAY + 1) if day % 7 < 5) / HOUR
 
 
-def rows(run: dict, tag: str = "", flat: Optional[float] = None) -> list[dict]:
-    """One row per order won: its signs when its request arrived, the fee it was first posted at, how long it waited for a driver and whether it arrived on time."""
-    books = Books(run["roster"])
-    fleet = Fleet(FleetPolicy(), books, atlas())
+def rows(run: dict, tag: str = "") -> list[dict]:
+    """One row per order won: its signs and the queue when its request arrived, the fee it was first posted at, how long it waited for a driver and whether it arrived on time."""
+    books, policy = Books(run["roster"]), FleetPolicy()
+    fleet = Fleet(policy, books, atlas())
     waiting = sorted(run["gigs"], key=lambda g: g["postedAt"])
     order_of = {g["id"]: g["stops"][0]["orderId"] for g in waiting}
-    first_fee, signs, out = first_fees(run, flat), {}, {}
-    late = {e["line"]["orderId"] for e in run["events"] if e["kind"] == "ledger" and e["line"]["kind"] in ("late_refund", "undelivered_penalty")}
+    first_fee, signs, out, refund, posted = first_fees(run), {}, {}, {}, set()
     paid = {e["line"]["orderId"] for e in run["events"] if e["kind"] == "ledger" and e["line"]["kind"] == "revenue"}
+    for event in run["events"]:
+        if event["kind"] == "ledger" and event["line"]["kind"] in ("late_refund", "undelivered_penalty"):
+            refund[event["line"]["orderId"]] = refund.get(event["line"]["orderId"], 0) - event["line"]["cents"]
     for event in run["events"]:
         while waiting and (waiting[0]["postedAt"] < event["at"] or waiting[0]["id"] == event.get("gigId")):
             gig = waiting.pop(0)
-            books.gig_posted({"type": "post", "stops": gig["stops"], "audience": gig["audience"], "schedule": gig["schedule"]}, gig["id"], posted_at=gig["postedAt"])
+            order_id, schedule = order_of[gig["id"]], gig["schedule"]
+            if order_id not in posted and order_id in first_fee and order_id in books.requests:  # the fee the gig opened at, not the one it ended with
+                cars, request = sum(1 for stop in gig["stops"] if stop["kind"] == "pickup"), books.requests[order_id]
+                schedule = [{"at": gig["postedAt"], "feeCents": int(first_fee[order_id] * request["referenceFeeCents"] / len(request["legs"]) * cars)}]
+            posted.add(order_id)
+            books.gig_posted({"type": "post", "stops": gig["stops"], "audience": gig["audience"], "schedule": schedule}, gig["id"], posted_at=gig["postedAt"])
         kind = event["kind"]
         if kind == "price_request":
-            request, backlog = event["request"], len(fleet.waiting())
+            request, queue = event["request"], fleet.queue()
+            facts = notes.read(request["note"], request["arrivedAt"])
             for option in request["options"]:
-                last = fleet.last_pickup(request, option)
-                if last is not None:
-                    signs[(request["id"], option["kind"])] = fleet.signs(request, last, request["respondBy"], backlog)
+                spans = notes.chances(request, option, facts, fleet.road(request["legs"][0]))
+                if spans:
+                    signs[(request["id"], option["kind"])] = dict(fleet.signs(request, spans, request["respondBy"], queue.backlog), queue=queue.backlog, going=queue.going, list=option["listPriceCents"])
         elif kind == "order_won":
             order = event["order"]
             if (order["id"], order["option"]) in signs and order["id"] in first_fee:
-                out[order["id"]] = dict(signs[(order["id"], order["option"])], seed=run["seed"], tag=tag, id=order["id"], multiple=first_fee[order["id"]], booked=0, warned=0,
-                                        on_time=int(order["id"] in paid and order["id"] not in late), won_at=event["at"], wait=request_hours(event["at"], max(event["at"], order["lastPickupAt"])))
+                out[order["id"]] = dict(signs[(order["id"], order["option"])], seed=run["seed"], tag=tag, id=order["id"], option=order["option"], multiple=first_fee[order["id"]], booked=0, warned=0,
+                                        on_time=int(order["id"] in paid and order["id"] not in refund), refund=refund.get(order["id"], 0), price=order["priceCents"],
+                                        won_at=event["at"], wait=request_hours(event["at"], max(event["at"], order["lastPickupAt"])))
         elif kind == "gig_booked" and order_of.get(event["gigId"]) in out:
             row = out[order_of[event["gigId"]]]
             if not row["booked"] and not row["warned"]:
                 row["booked"], row["wait"] = 1, min(row["wait"], request_hours(row["won_at"], event["at"]))
-        elif kind == "deadline_close" and event["orderId"] in out:
-            out[event["orderId"]]["warned"] = 1
+        elif kind == "deadline_close" and event["orderId"] in books.orders:
+            if event["orderId"] in out:
+                out[event["orderId"]]["warned"] = 1
+            state = books.orders[event["orderId"]]
+            for gig in {books.gigs[g].id: books.gigs[g] for g in state.gig_of.values() if g in books.gigs and books.gigs[g].status == "open"}.values():  # the desk raises the fee at the warning
+                typical = state.request["referenceFeeCents"] * len(gig.legs) / len(state.order["legs"])
+                gig.schedule = [{"at": event["at"], "feeCents": max(gig.schedule[-1]["feeCents"], int(policy.urgent_fee * typical))}]
         elif kind == "order_cancelled":
             out.pop(event["orderId"], None)
         books.observe(event)
@@ -89,14 +103,9 @@ def rows(run: dict, tag: str = "", flat: Optional[float] = None) -> list[dict]:
 
 
 def table(tags: list[str]) -> pd.DataFrame:
-    """The rows of every saved week of these tags; `tag:1.15` says that the run posted every order at that flat multiple."""
-    parts = [(tag.split(":")[0], float(tag.split(":")[1]) if ":" in tag else None) for tag in tags]
-    return pd.DataFrame([row for tag, flat in parts for run in runs(tag) if run.get("gigs") for row in rows(run, tag, flat)])
-
-
-def design(t: pd.DataFrame) -> pd.DataFrame:
-    """The columns of the model, in the order of ON_TIME: the signs and the fee."""
-    return t.assign(fee=t.multiple - 1)[list(ON_TIME)]
+    t = pd.DataFrame([row for tag in tags for run in runs(tag) if run.get("gigs") for row in rows(run, tag)])
+    level = (t.queue * t.going + t.multiple) / (t.queue + 1)  # the going fee once the gig is in the app: Queue.level
+    return t.assign(fee=np.log(t.multiple / level), level=np.log(level))
 
 
 def fit(x: np.ndarray, y: np.ndarray, ridge: float = 1e-2) -> np.ndarray:
@@ -113,30 +122,25 @@ def log_likelihood(x: np.ndarray, y: np.ndarray, w: np.ndarray) -> float:
     return float(np.mean(y * np.log(p) + (1 - y) * np.log(1 - p)))
 
 
-def crowding(heavy: str, light: str) -> None:
-    """Two runs of the same seeds that won the same requests at the same fee, one with more orders: the late orders that each extra hour of waiting caused among the shared ones."""
-    a, b = table([heavy]), table([light])
-    both = a.merge(b, on=["seed", "id"], suffixes=("_heavy", "_light"))
-    caused, hours = (both.on_time_light - both.on_time_heavy).sum(), a.wait.sum() - b.wait.sum()
-    print(f"{len(both)} shared orders: {both.on_time_heavy.mean():.1%} on time under the heavier book, {both.on_time_light.mean():.1%} under the lighter; "
-          f"{caused:.0f} more late for {hours:.0f} more car-hours of waiting\nCROWDING = {caused / hours:.3f}")
+def held_out(t: pd.DataFrame, names: list[str]) -> float:
+    """Mean log-likelihood on each seed of a model fitted on the other seeds."""
+    x, y = t[names].values, t.on_time.values
+    return float(np.mean([log_likelihood(x[t.seed == seed], y[t.seed == seed], fit(x[t.seed != seed], y[t.seed != seed])) for seed in sorted(t.seed.unique())]))
 
 
 def main() -> None:
-    if sys.argv[1:2] == ["--crowding"]:
-        return crowding(*sys.argv[2:4])
     t = table(sys.argv[1:] or DEFAULT)
     t.to_pickle(os.path.join(ROOT, "runs", "fleet_fit.pkl"))
-    x, y, seeds = design(t), t.on_time.values, sorted(t.seed.unique())
-    held_out = [log_likelihood(x[t.seed == seed].values, y[t.seed == seed], fit(x[t.seed != seed].values, y[t.seed != seed])) for seed in seeds]
-    w = fit(x.values, y)
-    t["p"] = 1 / (1 + np.exp(-x.values @ w))
-    print(f"{len(t)} orders, {y.mean():.1%} on time; log-likelihood {log_likelihood(x.values, y, w):.4f}, on held-out seeds {np.mean(held_out):.4f}")
+    names = list(ON_TIME)
+    x, y = t[names].values, t.on_time.values
+    w = fit(x, y)
+    t["p"] = 1 / (1 + np.exp(-x @ w))
+    print(f"{len(t)} orders, {y.mean():.1%} on time; log-likelihood {log_likelihood(x, y, w):.4f}, on held-out seeds {held_out(t, names):.4f}")
     print(t.groupby(pd.cut(t.p, [0, .5, .7, .8, .85, .9, .93, .95, .97, 1]), observed=True).agg(orders=("id", "size"), predicted=("p", "mean"), on_time=("on_time", "mean"), booked=("booked", "mean"), wait=("wait", "mean")).round(3))
-    print(t.groupby("tag").agg(orders=("id", "size"), predicted=("p", "mean"), on_time=("on_time", "mean"), wait=("wait", "mean")).round(3))
-    print("ON_TIME = {\n    " + ", ".join(f'"{name}": {value:.2f}' for name, value in zip(x.columns, w)) + ",\n}")
-    slope, base = np.polyfit(1 - t.p, t.wait, 1)
-    print(f"WAIT = ({base:.2f}, {slope:.2f})")
+    print(t.groupby("tag").agg(orders=("id", "size"), fee=("multiple", "mean"), going=("going", "mean"), queue=("queue", "mean"), predicted=("p", "mean"), on_time=("on_time", "mean"), wait=("wait", "mean")).round(3))
+    print("ON_TIME = {" + ", ".join(f'"{name}": {value:.2f}' for name, value in zip(names, w)) + "}")
+    late = t[t.on_time == 0]
+    print(f"BOOKED_LATE = {1 - t[t.booked == 1].on_time.mean():.3f}\nREFUND = {(late.refund / late.list).mean():.2f}")
 
 
 if __name__ == "__main__":
