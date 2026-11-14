@@ -57,6 +57,7 @@ class Fleet:
         homes = [driver.profile["homePlaceId"] for driver in books.drivers.values()]
         self.drivers_near = {place: sum(1 for home in homes if atlas.crow_km(home, place) <= NEAR_KM) for place in atlas.places}
         self.held = lambda state: False  # the desk's pairs say which orders we keep out of the app ourselves: no driver has turned those down
+        self.saving = lambda request, option, multiple: 0  # and what a car saves when a partner waits for it
 
     def cost(self, request: PriceRequest, option: DeliveryOption) -> Optional[int]:
         """What we expect to pay, in cents, to move this request by this option's deadline: the fee, the late car's refund, its use of the room under the delivery minimum, and the orders it makes late while it waits."""
@@ -69,7 +70,7 @@ class Fleet:
         hour = self.waiting_hour(refund)
         multiple, late = self.fee(self.signs(request, last, request["respondBy"], len(waiting)), typical, refund + late_price + WAIT[1] * hour)
         risk = late * refund + (late - (1 - policy.on_time)) * late_price + (WAIT[0] + WAIT[1] * late) * hour
-        return int(typical * multiple + max(0.0, risk))
+        return int(typical * multiple + max(0.0, risk)) - self.saving(request, option, multiple)
 
     def waiting_hour(self, refund: float) -> float:
         """What an hour of a car's waiting costs, in cents: the orders it makes late, at the price of a late order."""

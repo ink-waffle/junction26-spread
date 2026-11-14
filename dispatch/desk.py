@@ -41,7 +41,7 @@ class Desk:
         self.outbox: list[Action] = []
         self.pending: set[tuple[str, int]] = set()  # legs whose post is in the outbox or on its way
         self.pairs = Pairs(policy.pairs, self.books, self.fleet, atlas, self.pending)
-        self.fleet.held = self.pairs.holds
+        self.fleet.held, self.fleet.saving = self.pairs.holds, self.pairs.saving
         self.journal, self.verbose = journal, verbose
         self.careful = False  # the final sets it: an event that the desk cannot read is logged and passed over, not fatal
 
@@ -137,7 +137,7 @@ class Desk:
                 for order_id, _ in legs:
                     state = books.orders.get(order_id)
                     if state and len({owner for owner, _ in legs}) > 1:  # a refused two-car gig sends its cars alone, and says nothing of their windows
-                        state.tried = True
+                        state.tried = state.paired = True
                         books.dirty.add(order_id)
                     elif state and "already in a live gig" not in result["reason"]:  # that one a driver booked before we could replace it: its booking puts it back in the books
                         state.refusals += 1
