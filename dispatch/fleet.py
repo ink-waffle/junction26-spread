@@ -41,6 +41,7 @@ class FleetPolicy:
     late_fee: float = 1.3  # once the car can only arrive late: enough for the drivers who saw it at less, or it is never delivered
     on_time: float = 0.975  # the on-time share we aim at: the 90% minimum with room for a bad week (32 weeks nobody had played end 0.7 points under the aim, the worst 2.7)
     late_price: float = 300.0  # euros that a late order costs us beyond its refund while we are within that share
+    ahead_supply: float = 0.5  # how much of a pickup town's own shortage a car collected on a later day keeps: its gig is in the app the day before, for drivers from anywhere
     early_look: float = 6.0  # hours in the app after which a gig nobody took has its fee chosen again, a step up at least; 0: only on its last day
 
 
@@ -83,6 +84,7 @@ class Fleet:
         homes = [driver["homePlaceId"] for driver in books.drivers.values()]
         near = lambda place: sum((1 + atlas.crow_km(home, place) / NEAR_KM) ** -2 for home in homes)  # each driver by how near they live: a quarter at 30 km
         self.supply = {place: math.log1p(near(place)) for place in atlas.places}  # the week's drivers near each place
+        self.mean_supply = sum(self.supply.values()) / max(1, len(self.supply))  # what a town counts as when its own drivers matter less
 
     def cost(self, request: PriceRequest, option: DeliveryOption) -> Optional[int]:
         """What we expect to pay, in cents, to move this request by this option's deadline; None when the car cannot be collected in time.
@@ -191,6 +193,8 @@ class Fleet:
         km = self.atlas.km[(leg["pickup"]["placeId"], leg["delivery"]["placeId"])]
         last = max((b for _, b in spans), default=at)
         slack = math.log1p(max(0, last - at) / HOUR)
+        own = self.supply[leg["pickup"]["placeId"]]
+        ahead = bool(spans) and spans[0][0] // DAY > at // DAY  # collected on a later day
         return {
             "one": 1.0,
             "flu": self.flu(last // DAY),  # on the car's last day: a booking for it comes back that night, and the day has fewer drivers
@@ -199,7 +203,8 @@ class Fleet:
             "long": min(max(km, 100), 800) / 100 - 1,
             "premium": float(any(l["car"]["premium"] for l in request["legs"])),  # one driver in fourteen may take it
             "trade_in": float(len(request["legs"]) > 1),
-            "supply_pickup": self.supply[leg["pickup"]["placeId"]],  # the shortage differs from town to town; the app tells the drivers near the pickup
+            # the shortage differs from town to town: the app tells the drivers near the pickup; a later day's car is mostly taken by one who travels to it
+            "supply_pickup": self.mean_supply + self.policy.ahead_supply * (own - self.mean_supply) if ahead else own,
             "supply_delivery": self.supply[leg["delivery"]["placeId"]],  # a driver who lives where the car goes is home when it is delivered
             "private_delivery": float(leg["delivery"]["privateAddress"]),  # a booked hour to meet, not a day
             "pay": math.log(request["referenceFeeCents"] / len(request["legs"]) / request["options"][0]["listPriceCents"]),
