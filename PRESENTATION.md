@@ -38,7 +38,7 @@ Conventions:
 | **2. It found where it was wrong, and earned more.** The same driver side before the audit, on 64 weeks its fit never saw | 10.0% | 4.8% late | deleting what did not hold: **+€766 a week (se 221)** on the 32 fresh weeks, on time unchanged (`orch-old-record` → `orch-head-record`) |
 | **3. It holds where it has never been.** Plays of the frozen system on the 96 unseen weeks | | **160 of 160 ranked** | worst 92.3% on time, mean €15,327 a week (`skeptic-C975-B-s0`, `skeptic-C975-B-s14`, `orch-head-record`, `orch-main161-s14`, `orch-main161-s13`) |
 
-**The final.** `[FINAL: € … margin, … % on time, … orders, place … of …]`
+**The final.** €18,532.31 margin, 94.5% on time, 510 orders (the most of any team in the top 14), 0.2% not delivered; place 14 of 58 ranked teams, €552 under 10th (€19,083.95); first €22,931
 
 **For scale.** The kit starter on our own weeks: −€63,232 a week (tune) and −€68,908 (hold), no week ranked. Secret weeks, the same for every team: Saturday 18:00 round 10th of 67 ranked teams at 1.29 × House best; Sunday 00:00, the frozen system, €81,046 for five weeks at 1.33 × House best (€60,812), 2nd of the 18 teams ranked at 00:06, closed 11th of 58 (10th €81,840); Sunday 03:00 €71,665 at 1.28 × House best (closed 28th of 48); Sunday 06:00 €69,092 at 1.18 ×. We quote €14–15k a week, never the €17,846 of the 8 tune weeks.
 
@@ -284,7 +284,7 @@ With the practice and decision weeks: 273 plays of 160 weeks in `runs/log.jsonl`
 
 ## Slide 10 — It knows what it does not know, to the end: what the final showed, and the risks it carries, named in advance
 
-**The final.** `[FINAL: € … margin, … % on time, … orders, place … of …]`. `[FINAL, if the week's events are saved as a run: the on-time model said … % late, … % were]`.
+**The final.** €18,532.31 margin, 94.5% on time, 510 orders (the most of any team in the top 14), 0.2% not delivered; place 14 of 58 ranked teams, €552 under 10th (€19,083.95); first €22,931.
 
 **The thesis, once more.** Its odds come true (4.2% said, 4.5% late; 44.4% said, 45.2% yes). It found where it was wrong and earned more (+€766 a week). It holds where it has never been (160 of 160).
 
@@ -299,7 +299,7 @@ With the practice and decision weeks: 273 plays of 160 weeks in `runs/log.jsonl`
 
 Every number in this deck has the command or file that prints it again (`OPEN_NUMBERS.md`).
 
-**Figure.** The calibration plot of slide 1 again, with the final's point added when it can be computed `[FINAL]`. Under it the three numbers, and the five risks as plain text.
+**Figure.** The calibration plot of slide 1 again, with the final's point added when it can be computed. Under it the three numbers, and the five risks as plain text.
 
 ---
 

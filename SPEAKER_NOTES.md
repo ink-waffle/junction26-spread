@@ -4,7 +4,7 @@ For a speaker who did not write the code. Part 1 is what to say, slide by slide,
 
 Before you present:
 - The jury's own rule: "If an agent wrote your slides, read every line and cut each one that you cannot explain yourself." Do that. Every claim names its source, and `OPEN_NUMBERS.md` has the command that prints it.
-- Fill the placeholders first. Do not say a number that still carries `[FINAL]` or `[SUNDAY]`.
+- Fill the placeholders first. Do not say a number that still carries `€18,532 in the final, 94.5% on time, 14th of 58` or `[SUNDAY]`.
 - One sentence carries the talk: **"Our dispatcher knows what it does not know, and proves it on weeks it has never seen."** Say it on slide 1 and again on slide 10, word for word. If time runs short, cut slide 6 to its first sentence; never cut slide 7, it is the story.
 - Use their words: dealer, request, option, gig, fee, typical fee, list price, deadline, deadline warning, delivery minimum, direct offer.
 - State of these notes: Sunday 06:30. The numbers are of commit `8ae61c5`, ideas 1–15 of `NIGHT_LOG.md`, the frozen system. The final plays `3f85408`: the same code with the on-time aim at 96.5% instead of 97.5% (Part 3, slide 9: "Why did you lower your safety margin for the final?").
@@ -13,7 +13,7 @@ Before you present:
 
 # Part 1 — the talk (about 3 minutes, about 480 words)
 
-**Slide 1 (25 s).** "We are Halal Team. Our dispatcher knows what it does not know, and proves it on weeks it has never seen. Three numbers. It says a car is 4.2% likely to be late; 4.5% are. It was once wrong by a factor of two, found out, and fixing that earned €766 a week. And on 96 weeks it had never seen, 160 plays out of 160 met the delivery minimum. In the final it made `[FINAL]`."
+**Slide 1 (25 s).** "We are Halal Team. Our dispatcher knows what it does not know, and proves it on weeks it has never seen. Three numbers. It says a car is 4.2% likely to be late; 4.5% are. It was once wrong by a factor of two, found out, and fixing that earned €766 a week. And on 96 weeks it had never seen, 160 plays out of 160 met the delivery minimum. In the final it made `€18,532 in the final, 94.5% on time, 14th of 58`."
 
 **Slide 2 (18 s).** "First, we measured the world. A practice day replays to the cent, so each replay halved a bracket around every dealer's price, down to half a percent. That gave us the dealer's exact rule, and the part nobody can know: each request has its own 8% that nothing predicts."
 
