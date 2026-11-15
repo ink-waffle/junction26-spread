@@ -28,6 +28,7 @@ ON_TIME = {
 BOOKED_LATE = 0.030  # the share of cars with a driver that still arrive late: drops and slow drives (tools/fleet_fit.py prints it)
 REFUND = 0.54  # what a late order pays back on average, as a share of its list price (tools/fleet_fit.py prints it)
 SICK, WELL = 0.33, 0.03  # of the bookings held for a day, the share given back in its first hour: on the week's flu night, on any other (tools/night_study.py)
+LAST_MONDAY = 7 * DAY  # the business day after the weekend: drivers book it once they know they work it (a Friday car for it waits 10.8 hours, others about one)
 LAST_DAY = DAY  # before its last pickup: of the gigs still open then, one in four reaches the deadline warning and ends late (tools/late_study.py)
 # Set by hand and tried on the tune weeks, not fitted:
 GRIP = 4  # how steeply the price of a late order rises once we expect more of them than we allow ourselves
@@ -42,6 +43,9 @@ class FleetPolicy:
     on_time: float = 0.975  # the on-time share we aim at: the 90% minimum with room for a bad week (32 weeks nobody had played end 0.7 points under the aim, the worst 2.7)
     late_price: float = 300.0  # euros that a late order costs us beyond its refund while we are within that share
     early_look: float = 6.0  # hours in the app after which a gig nobody took has its fee chosen again, a step up at least; 0: only on its last day
+    monday_from: int = 4  # only the orders won from this weekday on are kept apart (4: Friday; 0, every order due that Monday, cost 1.5 points of on-time)
+    monday_late: bool = False  # the cars kept apart still count, at their own chance, in the price of a late order
+    monday_apart: bool = True  # a car whose last pickup is on the last Monday joins the queue that Monday at 06:00: until then it waits for the day, not for a fee
 
 
 @dataclass
@@ -231,9 +235,14 @@ class Fleet:
         return queue
 
     def waits(self, state: OrderState) -> bool:
-        """True for an order that the drivers can see and have not taken: not held back by us for a partner, not in a two-car gig, not late."""
+        """True for an order that the drivers can see and have not taken: not held back by us for a partner, not kept for the last Monday, not in a two-car gig, not late."""
         gigs = [self.books.gigs[gig_id] for gig_id in state.gig_of.values()]
-        return not state.late and not self.held(state) and self.needs_driver(state) and not any(gig.shared and gig.status == "open" for gig in gigs)
+        return (not state.late and not self.held(state) and not self.for_monday(state) and self.needs_driver(state)
+                and not any(gig.shared and gig.status == "open" for gig in gigs))
+
+    def for_monday(self, state: OrderState) -> bool:
+        """True, until the last Monday at 06:00, for an order whose last pickup is on that day: no driver has turned it down yet."""
+        return self.policy.monday_apart and self.books.now < LAST_MONDAY + 6 * HOUR and state.order["lastPickupAt"] >= LAST_MONDAY and state.won_at >= self.policy.monday_from * DAY
 
     def needs_driver(self, state: OrderState) -> bool:
         """True while a car of the order has no gig, or a gig that no driver has taken."""
@@ -244,6 +253,10 @@ class Fleet:
         steep as they come near that share and past it."""
         books, allowed, late = self.books, 1 - self.policy.on_time, queue.late - BOOKED_LATE * queue.backlog
         for state in books.orders.values():
+            if self.policy.monday_late and not state.late and self.for_monday(state) and self.needs_driver(state):  # kept apart, still expected late
+                car = self.car(state.request, self.timetable.chances_left(state), books.now, state.won_at)
+                late += 1 - self.chance(car, self.posted(state) or 1.0, queue)
+                continue
             late += (1.0 if state.late else BOOKED_LATE) if state.undelivered() else state.id in books.refunded
         used = late / (CALM + len(books.orders)) / allowed
         # capped at twice the allowed share (EUR 4,800 a late order): past it even the safest car would be refused, and a week does not mend by winning nothing
