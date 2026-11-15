@@ -8,7 +8,7 @@ from spread.types import Action
 
 from .atlas import HOUR, Atlas, open_spans
 from .books import Books, GigState, OrderState
-from .fleet import NEAR_KM, Fleet
+from .fleet import LAST_DAY, NEAR_KM, Fleet
 from .timetable import CHARGING
 
 PLATES = 30  # minutes to fetch transfer plates on the way to a pickup (RULES.md)
@@ -22,6 +22,7 @@ class PairsPolicy:
     board: float = 0.85  # the same when one of the two already sits in the app without a driver: a car nobody took needs more; 0: only new cars pair
     drive: int = 5 * HOUR  # the most road minutes a two-car gig may plan (the rules allow 12 h; long ones find no driver)
     patience: int = 60  # minutes from its posting that a two-car gig may be without a driver before its cars go alone
+    stay: int = LAST_DAY  # it stays past that until this many minutes before a car's last pickup: a car that comes back alone at a higher fee teaches drivers to wait; 0: patience only
     lead: int = 3 * HOUR  # a pair must still fit a driver who reaches the first pickup this much later
     idle: int = HOUR  # the most minutes that driver may stand waiting at the stops
 
@@ -59,7 +60,7 @@ class Pairs:
 
     def alarm(self) -> int:
         """The next minute to act at when no event comes first: a hold, or a two-car gig's patience, runs out."""
-        times = [state.won_at + self.policy.hold for state in self.waiting()] + [gig.posted_at + self.policy.patience for gig in self.shared()]
+        times = [state.won_at + self.policy.hold for state in self.waiting()] + [self.gives_up(gig) for gig in self.shared()]
         return min(times, default=10 ** 9)
 
     def waiting(self) -> list[OrderState]:
@@ -86,10 +87,16 @@ class Pairs:
         books, now, actions = self.books, self.books.now, []
         for gig in self.shared():
             owners = [books.orders.get(order_id) for order_id, _ in gig.legs]
-            if now >= gig.posted_at + self.policy.patience or any(state is None or state.urgent or state.late for state in owners):
+            if now >= self.gives_up(gig) or any(state is None or state.urgent or state.late for state in owners):
                 actions.append({"type": "withdraw", "gigId": gig.id})
                 books.gig_gone(gig.id)  # its cars are dirty now: the desk posts each alone
         return actions
+
+    def gives_up(self, gig: GigState) -> int:
+        """The minute a two-car gig without a driver leaves the app and its cars go alone."""
+        owners = [self.books.orders.get(order_id) for order_id, _ in gig.legs]
+        last_pickup = min((state.order["lastPickupAt"] for state in owners if state), default=0)
+        return max(gig.posted_at + self.policy.patience, last_pickup - self.policy.stay if self.policy.stay else 0)
 
     def gig(self, p: OrderState, q: OrderState, multiple: float) -> Action:
         """One gig that takes q's car right after p's, for drivers who may take both, at this multiple of the two typical fees together."""
