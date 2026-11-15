@@ -143,3 +143,34 @@ Checked on Saturday 17:50 against commit `0b050b8`. The deck follows the code an
 | `NIGHT_LOG.md` status 15:10: "the big midnight give-back nights … not the flu, it seems: they follow the bulk order". | Idea 14 and `tools/night_study.py`: they are the flu's night; cars of a bulk order come back like the others. | The status row is history; slide 6 follows idea 14. |
 | `README.md`: 1,947 lines; `runs/` is 945 MB; the starter on its own seed. | `wc -l dispatch/*.py`: 1,948; `du -sh runs`: 1.2 GB at 17:40; the starter on our weeks is in `runs/starter-*.out`. | Fixed in `README.md`. |
 | `REVIEW.md`: the fleet's `known` and `waited` weights have no support in a refit. | Idea 15 deleted `known` (wrong sign on unseen weeks); `waited` is in `fleet.ON_TIME` and decides. | Slide 11 names `waited`, `short`, `trade_in` as open under "What we do not know". |
+
+## 7. Added by the story pass (Sunday 02:50, branch `research/story`)
+
+The deck now has ten slides; old slide numbers in sections 1–6 map as 1→1, 2→4, 3→4, 4→3, 5→2, 6→5, 7→6, 8→6, 9→7, 10→9, 11→8 and 10. `[FINAL …]` is on slides 1 and 10 and in SPEAKER_NOTES part 1; `[SUNDAY …]` on slides 1 and 9 and in SPEAKER_NOTES question 1.
+
+| Number | Slide | Source |
+|---|---|---|
+| On-time model on the 32 fresh weeks: 4.2% said, 4.5% late; lanes over 400 km 7.8% said, 10.9% late (53 orders a week) | 1, 3, 4, 10 | `$PY -m tools.fleet_fit --calibrate orch-head-record`; `GAP.md` on `research/gap`, §1 item 4 |
+| Dealer side: 44.4% said yes, 45.2% yes, 30,517 quotes, within 3 points in every bin | 1, 3, 10 | `GAP.md` §1 item 5, from the gap agent's scratch `mcal.py`: no tool in the repository reprints it, and GAP.md does not name the weeks (the items around it read `orch-head-record`) |
+| 160 of 160 plays on the 96 unseen weeks `halal-97..192`, mean €15,327 a week, mean on time 96.4%, worst 92.3% (halal-189); `halal-161..192` €14,964, 96.4%; 273 distinct plays of 160 weeks of the frozen system, all ranked | 1, 9 | the snippet below, over `runs/log.jsonl` |
+| 98.1% of 2,397 menus (RESEARCH.md's 2,291 is an earlier snapshot of 7–15 seeds) | 2 | `$PY -m tools.probe_read` |
+| The graveyard's rows | 8 | `NIGHT_LOG.md`, "Did not work" (hunt, trade-ins, chains, offers2, gap, the knob brackets, the finer grid, meeting the drivers, the crisis price, the early look); `runs/progress.md` 23:59–01:51 |
+| The leader: +11% orders, +€3.2 an order, 97.2% against 97.3% on time, about 470 orders at 641 or 933 drivers; 164 variants on −0.13 × orders% − 0.9; the audit's step +4.6% orders, +€0.25 an order, +0.45 point | 7, 8 | `runs/reports/detective.md` §0, §3; `runs/detective/variants.py`, `levers.py` |
+| Sunday 00:00 round: €81,046, 1.33 × House best (€60,812), 2nd of 18 ranked at 00:06 | 1, 9 | `NIGHT_LOG.md`, "Ranking rounds and test finals"; `rounds` |
+
+From the main checkout, paste this into `$PY -I -`:
+
+```python
+import json
+tags = {"unseen": ["skeptic-C975-B-s0", "skeptic-C975-B-s14", "orch-head-record", "orch-main161-s14", "orch-main161-s13"],
+        "all": ["skeptic-C975-s14", "skeptic-C975-B-s14", "skeptic-C975ns-x-s0", "skeptic-C975-B-s0", "skeptic-twC975-x-s14",
+                "gap-main-s13", "orch-head-record", "orch-main161-s14", "orch-main161-s13"]
+                + [f"skeptic-holdC975-x-s{s}" for s in (12, 13, 14, 15)]}
+rows = {d["tag"]: d["results"] for d in map(json.loads, open("runs/log.jsonl")) if d["results"]}
+for name, ts in tags.items():
+    plays = list({(x["seed"], round(x["margin"], 2)): x for t in ts for x in rows[t]}.values())
+    worst = min(plays, key=lambda x: x["onTime"])
+    print(name, len(plays), "plays", len({x["seed"] for x in plays}), "weeks", sum(x["ranked"] for x in plays), "ranked",
+          "mean %.0f" % (sum(x["margin"] for x in plays) / len(plays)),
+          "on time %.4f" % (sum(x["onTime"] for x in plays) / len(plays)), "worst %.4f" % worst["onTime"], worst["seed"])
+```
