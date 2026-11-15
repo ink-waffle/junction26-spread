@@ -40,7 +40,7 @@ Conventions:
 
 **The final.** `[FINAL: € … margin, … % on time, … orders, place … of …]`
 
-**For scale.** The kit starter on our own weeks: −€63,232 a week (tune) and −€68,908 (hold), no week ranked. Secret weeks, the same for every team: Saturday 18:00 round 10th of 67 ranked teams at 1.29 × House best; Sunday 00:00, the frozen system, €81,046 for five weeks at 1.33 × House best (€60,812), 2nd of the 18 teams ranked at 00:06, closed 11th of 58 (10th €81,840); Sunday 03:00 €71,665 at 1.28 × House best `[SUNDAY: closing place of the 03:00 round; the 06:00 round]`. We quote €14–15k a week, never the €17,846 of the 8 tune weeks.
+**For scale.** The kit starter on our own weeks: −€63,232 a week (tune) and −€68,908 (hold), no week ranked. Secret weeks, the same for every team: Saturday 18:00 round 10th of 67 ranked teams at 1.29 × House best; Sunday 00:00, the frozen system, €81,046 for five weeks at 1.33 × House best (€60,812), 2nd of the 18 teams ranked at 00:06, closed 11th of 58 (10th €81,840); Sunday 03:00 €71,665 at 1.28 × House best (closed 28th of 48); Sunday 06:00 €69,092 at 1.18 ×. We quote €14–15k a week, never the €17,846 of the 8 tune weeks.
 
 **Figure: the thesis as one picture.** A calibration plot, x = "the system said", y = "it was", both 0–50%, with the diagonal drawn. Two dots on the diagonal: "late car: said 4.2%, were 4.5%" and "dealer's yes: said 44.4%, were 45.2%". One hollow dot far off it, "Saturday 19:00: said 10.0%, were 4.8%", with an arrow to the late-car dot labelled "the audit: +€766 a week". Under the plot, one line: "160 of 160 unseen plays ranked".
 
@@ -266,8 +266,8 @@ With the practice and decision weeks: 273 plays of 160 weeks in `runs/log.jsonl`
 | Ranking round Saturday 18:00 (ideas 1–14) | €75,405 | 1.29 × | 10th of 67 |
 | Ranking round Saturday 21:00 (ideas 1–14) | €79,391 | 1.20 × | 28th of 56 |
 | Ranking round Sunday 00:00, the frozen system | €81,046, 5 of 5 ranked | 1.33 × | 2nd of 18 ranked at 00:06, closed 11th of 58 (10th €81,840) |
-| Ranking round Sunday 03:00, the frozen system | €71,665, 5 of 5 ranked (€13,045 / €13,758 / €8,761 / €19,367 / €16,735; on time 95.9–98.0%) | 1.28 × | 15th of 18 ranked at 03:07 `[SUNDAY: closing place]` |
-| Ranking round Sunday 06:00 | `[SUNDAY: runs/board.jsonl]` | `[SUNDAY]` | `[SUNDAY]` |
+| Ranking round Sunday 03:00, the frozen system | €71,665, 5 of 5 ranked (€13,045 / €13,758 / €8,761 / €19,367 / €16,735; on time 95.9–98.0%) | 1.28 × | 15th of 18 ranked at 03:07, closed 28th of 48 |
+| Ranking round Sunday 06:00, the frozen system | €69,092, 5 of 5 ranked (on time 94.0–96.9%) | 1.18 × | 19th of 20 ranked at 06:06 |
 | Test final Saturday 14:00, live clock, joined on Thursday | €3,747, 97.6% on time | | 2nd of 55 |
 | Test final Saturday 20:00, live clock, a full week (the final's shape) | €15,752.50, 97.2% on time | | 18th of 75 |
 
