@@ -194,7 +194,7 @@ class Fleet:
         last = max((b for _, b in spans), default=at)
         slack = math.log1p(max(0, last - at) / HOUR)
         own = self.supply[leg["pickup"]["placeId"]]
-        ahead = bool(spans) and spans[0][0] // DAY > at // DAY  # collected on a later day
+        ahead = since is None and bool(spans) and spans[0][0] // DAY > at // DAY  # a request whose car is collected on a later day
         return {
             "one": 1.0,
             "flu": self.flu(last // DAY),  # on the car's last day: a booking for it comes back that night, and the day has fewer drivers
@@ -204,7 +204,7 @@ class Fleet:
             "premium": float(any(l["car"]["premium"] for l in request["legs"])),  # one driver in fourteen may take it
             "trade_in": float(len(request["legs"]) > 1),
             # the shortage differs from town to town: the app tells the drivers near the pickup; a later day's car is mostly taken by one who travels to it
-            "supply_pickup": self.mean_supply + self.policy.ahead_supply * (own - self.mean_supply) if ahead else own,
+            "supply_pickup": max(own, self.mean_supply + self.policy.ahead_supply * (own - self.mean_supply)) if ahead else own,
             "supply_delivery": self.supply[leg["delivery"]["placeId"]],  # a driver who lives where the car goes is home when it is delivered
             "private_delivery": float(leg["delivery"]["privateAddress"]),  # a booked hour to meet, not a day
             "pay": math.log(request["referenceFeeCents"] / len(request["legs"]) / request["options"][0]["listPriceCents"]),
