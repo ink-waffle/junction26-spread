@@ -12,6 +12,7 @@ from .atlas import DAY, HOUR, Atlas
 from .books import Books, GigState, OrderState
 from .timetable import Span, Timetable, chances
 
+LONG_KM = 150  # past this a car is taken for where it ends: a driver from the delivery town travels to it and drives home
 NEAR_KM = 30  # the app notifies drivers who live this close to the pickup (RULES.md)
 # ON_TIME: the logistic weights of "the car arrives on time", fitted on our own weeks. `python -m tools.fleet_fit <tags>` prints the first row,
 # `fleet_fit --add` the second (on weeks of the merged system, the rest held and the model's mean chance kept), `fleet_fit --add flu` the third.
@@ -41,6 +42,7 @@ class FleetPolicy:
     late_fee: float = 1.3  # once the car can only arrive late: enough for the drivers who saw it at less, or it is never delivered
     on_time: float = 0.975  # the on-time share we aim at: the 90% minimum with room for a bad week (32 weeks nobody had played end 0.7 points under the aim, the worst 2.7)
     late_price: float = 300.0  # euros that a late order costs us beyond its refund while we are within that share
+    toward: float = 1.0  # for a car over 150 km, how much of the delivery town's surplus of drivers counts at its pickup: its driver comes home with it; 0: none
     early_look: float = 6.0  # hours in the app after which a gig nobody took has its fee chosen again, a step up at least; 0: only on its last day
 
 
@@ -191,6 +193,7 @@ class Fleet:
         km = self.atlas.km[(leg["pickup"]["placeId"], leg["delivery"]["placeId"])]
         last = max((b for _, b in spans), default=at)
         slack = math.log1p(max(0, last - at) / HOUR)
+        own, there = self.supply[leg["pickup"]["placeId"]], self.supply[leg["delivery"]["placeId"]]
         return {
             "one": 1.0,
             "flu": self.flu(last // DAY),  # on the car's last day: a booking for it comes back that night, and the day has fewer drivers
@@ -199,8 +202,9 @@ class Fleet:
             "long": min(max(km, 100), 800) / 100 - 1,
             "premium": float(any(l["car"]["premium"] for l in request["legs"])),  # one driver in fourteen may take it
             "trade_in": float(len(request["legs"]) > 1),
-            "supply_pickup": self.supply[leg["pickup"]["placeId"]],  # the shortage differs from town to town; the app tells the drivers near the pickup
-            "supply_delivery": self.supply[leg["delivery"]["placeId"]],  # a driver who lives where the car goes is home when it is delivered
+            # the shortage differs from town to town; the app tells the drivers near the pickup; a long car is also worth the trip to one who lives where it goes
+            "supply_pickup": own + self.policy.toward * max(0.0, there - own) if km > LONG_KM else own,
+            "supply_delivery": there,  # a driver who lives where the car goes is home when it is delivered
             "private_delivery": float(leg["delivery"]["privateAddress"]),  # a booked hour to meet, not a day
             "pay": math.log(request["referenceFeeCents"] / len(request["legs"]) / request["options"][0]["listPriceCents"]),
             "waited": min(1.0, max(0, at - (at if since is None else since)) / HOUR),  # a gig that is an hour in the app did not pay the drivers who saw it
