@@ -12,14 +12,14 @@ Ten slides, one argument (the jury's limit is 5 to 10 slides; it judges "how ele
 
 Conventions:
 - Everything is level 8. A week counts ("ranked") only when at least 90% of its orders are on time: the delivery minimum.
-- The system is the default policy of commit `8ae61c5` (Saturday 23:00; ideas 1–15 of `NIGHT_LOG.md`). It plays the final. Idea 15 is the audit of slide 7 (`SKEPTIC.md`).
+- The system is the default policy of commit `8ae61c5` (Saturday 23:00; ideas 1–15 of `NIGHT_LOG.md`), the frozen system. Idea 15 is the audit of slide 7 (`SKEPTIC.md`). The final plays `3f85408`: the frozen system with one number changed, the on-time aim 97.5% → 96.5% (Sunday 06:30; slide 9 says why and what it costs).
 - Practice weeks, and what each was used for:
   - **tune** = `halal-01..08`: fitted on from the start.
   - **wide** = `halal-17..32`: their notes and Mondays helped build the note reader and the bisection; no price or fee number came from them until Saturday afternoon, when the surprise days of slide 5 were designed and fitted on tune and wide weeks together.
   - **hold** = `halal-09..16`: nothing was fitted on them. They were played to confirm, and one of them, `halal-09`, was opened to study the flu.
   - **untouched** = `halal-65..128`: first played by the audit. Its deletions and its target were decided on `65..96` and confirmed once on `97..128`.
   - **fresh** = `halal-33..64` and `halal-129..160`: each played once, after a freeze, as the record of a frozen system. `129..160` is the record of this one.
-  - **after the freeze** = `halal-161..192`: played by the frozen system at strides 14 and 13 as the baseline that every idea tried after the freeze had to beat (slide 8; `orch-main161-s14`, `orch-main161-s13`).
+  - **after the freeze** = `halal-161..192`: played by the frozen system at strides 14 and 13 as the baseline that every idea tried after the freeze had to beat (slide 8; `orch-main161-s14`, `orch-main161-s13`). The final's aim of 96.5% was chosen on them, so for `3f85408` they are decision weeks, not unseen.
   - **unseen** = `halal-97..192`: no number of the frozen system was fitted or chosen on them (`97..128` confirmed it once). The audit set the on-time model's level from tune, fresh `33..64` and untouched `65..96` weeks, so those are not counted as unseen.
 - "Stride 14" marks weeks played with the practice clock moving 14 minutes a turn while requests arrive: three times faster to play, and our answers come up to 14 minutes later than in the final. "No stride" is the final's pace. Another stride is another sample of the same policy.
 - One week moves by about ±1.3 points of on-time and €1,000–3,000 between two plays of nearly the same policy. So late comparisons use 24 to 32 weeks, paired per week, often with several samples a side (`tools/replicates.py`, `tools/ablations.py`), and give a standard error (se).
@@ -125,8 +125,9 @@ quote:           margin m of the best option; every option at  cost of that opti
 
 ```
 fee   =  the step f of {0.85, 1.0, 1.15, 1.3, 1.5} × typical fee with the lowest  f + P(late | f) × (refund + λ) + harm to the cars that already wait
-cost  =  fee + P(late) × refund + (P(late) − 2.5%) × λ + harm
-λ     =  €300 × (late orders we expect this week ÷ 2.5% of orders)⁴      €19 at half the allowance, €300 at it
+cost  =  fee + P(late) × refund + (P(late) − 3.5%) × λ + harm
+λ     =  €300 × (late orders we expect this week ÷ 3.5% of orders)⁴      €19 at half the allowance, €300 at it
+allowance  =  100% − the on-time aim  =  3.5% in the final (aim 96.5%); 2.5% in the frozen system (aim 97.5%)
 ```
 
 **The effect.**
@@ -199,7 +200,7 @@ clause 3   kesärengasta + tavaratilassa → summer tyres as cargo: no fact
 - **One sign had the wrong sign.** `known`: baked +0.25, the unseen weeks say −0.17 ± 0.06.
 - **Two parts of the dealer's level predicted nothing**: −0.3 and +1.2 per mille of log-likelihood on 64 weeks, where the lane part gives 15.
 
-**What we did.** Deleted all four: 1,948 → 1,900 lines, 129 → 123 numbers. Set the model's level once, +0.88, the same on three disjoint sets of weeks (+0.86 / +0.90 / +0.87). A level that is right makes caution cheap, so the aim went from 97% to 97.5%. Decided on `65..96`, confirmed once on `97..128`, recorded once on `129..160`.
+**What we did.** Deleted all four: 1,948 → 1,900 lines, 129 → 123 numbers. Set the model's level once, +0.88, the same on three disjoint sets of weeks (+0.86 / +0.90 / +0.87). A level that is right makes caution cheap, so the aim went from 97% to 97.5%. Decided on `65..96`, confirmed once on `97..128`, recorded once on `129..160`. (For the final the aim is 96.5%: slide 9.)
 
 **The effect.** Against the system before the audit, same weeks, paired per week:
 
@@ -224,7 +225,7 @@ After the freeze (Saturday 23:00 to Sunday 02:35) five research streams played a
 
 | tried | when, weeks | margin a week (se) | on time | why it lost |
 |---|---|---|---|---|
-| On-time aim 96% instead of 97.5% | after the freeze, 24 × 2 | +€290 (about 150) | −1.9; 8 of 24 weeks under 93.5% | the aim sits on the knee: 95% gives a week at 89.8% (unranked), 98% −€1,044 |
+| On-time aim 96.5% instead of 97.5% | after, `halal-161..192` × 2 | +€330 (156) | −1.33 (mean 95.0%); worst week 90.5%, 10 of 64 under 93.5%, 64 of 64 ranked | not lost: it buys margin with on-time, and **the final plays it** (slide 9). Past it the knee: 96% +€401 (173), −2.01, one week of 64 at 89.6% (unranked); 95% +€224, two of 32 unranked; 98% −€1,044 (24 × 2) |
 | Fee floor one step lower, 0.75 × typical | Saturday, 24 × 2 | −€771 (222) | unchanged | cheap gigs sit, the queue grows, every new car looks riskier |
 | A finer fee grid, steps of 0.05 × | Saturday, 24 × 2 | −€624 (284) | −0.23 | the coarse steps are a safety margin on the model's choice |
 | Gigs of 3 / 4 cars (chains) | after, 24 | −€55 (203) / −€126 | | drivers earn about €13 an hour whatever the gig holds |
@@ -239,7 +240,7 @@ After the freeze (Saturday 23:00 to Sunday 02:35) five research streams played a
 
 **The leader, read from the leaderboards** (`runs/reports/detective.md`: event logs of our 30 ranking worlds and both test finals, read only). Over 15 ranking runs the leading team wins 11% more orders than the top-10 median and €3.2 more on each, at the same on-time (97.2% against 97.3%), and its volume does not depend on how many drivers a world has (about 470 orders at 641 or 933 drivers). That is the fingerprint of more cars moved per driver. The chains, offers and trade-in rows above are our attempts at it. Across 164 variants of ours, each lever that adds orders loses margin on each order (−0.13 × the % of orders added − €0.9): the leader is on another frontier, not on ours with another knob. We know where our design ends.
 
-**Figure.** A forest plot: one row per idea, a dot at its margin a week against the frozen system and a whisker of ± 2 se; a vertical line at zero. Every whisker crosses zero or lies left of it. Inset: the frontier, x = % orders added, y = € margin per order added, 164 grey dots of ours along the line −0.13 x − 0.9, one star for the leader at (+11.4%, +3.2) far above it.
+**Figure.** A forest plot: one row per idea, a dot at its margin a week against the frozen system and a whisker of ± 2 se; a vertical line at zero. Every whisker crosses zero or lies left of it, except the lower on-time aim, drawn in a second colour: it buys margin with on-time. Inset: the frontier, x = % orders added, y = € margin per order added, 164 grey dots of ours along the line −0.13 x − 0.9, one star for the leader at (+11.4%, +3.2) far above it.
 
 ---
 
@@ -255,6 +256,8 @@ After the freeze (Saturday 23:00 to Sunday 02:35) five research streams played a
 | **all 96 unseen weeks** | **160** | **€15,327** | **96.4% (92.3%)** | **160 of 160** |
 
 With the practice and decision weeks: 273 plays of 160 weeks in `runs/log.jsonl`, every one ranked. The kit starter: 0 of 16.
+
+**The final plays a measured risk.** The final asks only for a place in the top 10 ("Reaching the top 10 is enough. After that, your margin no longer counts", `challenge.md`) and the field moved past the frozen system overnight (the Sunday rounds: 00:00 closed 11th of 58, €794 under 10th; 03:00 closed 28th of 48; 06:00 19th of 20 at 06:06), so the final plays the aim at 96.5% (`3f85408`), whose cost we measured on the 64 plays of `halal-161..192`, weeks first played tonight: +€330 a week (se 156), on time 95.0% in the mean (−1.33 points), worst week 90.5%, 10 of 64 under 93.5%, 64 of 64 ranked (`orch-t965-s14`, `-s13` against `orch-main161-s14`, `-s13`); 96% earned more, +€401 (se 173), but one week of 64 ended at 89.6%, unranked, so we did not take it (`orch-t96-s14`, `-s13`).
 
 **Secret weeks, the same for every team** (places at the round's close unless marked):
 
@@ -286,7 +289,7 @@ With the practice and decision weeks: 273 plays of 160 weeks in `runs/log.jsonl`
 **The thesis, once more.** Its odds come true (4.2% said, 4.5% late; 44.4% said, 45.2% yes). It found where it was wrong and earned more (+€766 a week). It holds where it has never been (160 of 160).
 
 **What would break it, said before the final.**
-- **A week whose drivers are much scarcer than in any of ours: the one risk we chose.** Since the audit a week moves one thing in the on-time model, which day the flu is; such a week is braked only by the price of the delivery minimum, which sees late cars two days after we accept them. With a model one logit too easy, on time falls 2.8 points and one week ends at 90.5%; with the learner we deleted, 1.0 point (`runs/reports/simple.md`). We kept the measured constant because it earns more on every unseen set; the aim of 97.5% is the margin for this.
+- **A week whose drivers are much scarcer than in any of ours: the one risk we chose.** Since the audit a week moves one thing in the on-time model, which day the flu is; such a week is braked only by the price of the delivery minimum, which sees late cars two days after we accept them. With a model one logit too easy, on time falls 2.8 points and one week ends at 90.5%; with the learner we deleted, 1.0 point (`runs/reports/simple.md`). We kept the measured constant because it earns more on every unseen set; the aim is the margin for this, and in the final it is a point thinner by choice: 96.5% instead of the frozen system's 97.5% (slide 9).
 - **A week that is not the rules' week.** Slide 5 assumes one war day, one outage, one flu night. In the replay a week without a war still gains €66; without both events it loses €118. A flu on Monday has no night before it to show.
 - **A Friday flu in the capital region** is still our hardest week: 94.5% on time on the mean of four samples.
 - **A note in words we have not seen** is missed silently: 0.2 failed visits a week on the untouched weeks (the kit's reader: 10.6).
