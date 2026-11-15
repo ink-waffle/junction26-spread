@@ -10,13 +10,14 @@ from spread.types import Audience, DeliveryOption, FeeStep, PriceRequest, StopRe
 from . import notes
 from .atlas import DAY, HOUR, Atlas
 from .books import Books, GigState, OrderState
+from .lanes import LANES
 from .timetable import Span, Timetable, chances
 
 NEAR_KM = 30  # the app notifies drivers who live this close to the pickup (RULES.md)
 # ON_TIME: the logistic weights of "the car arrives on time", fitted on our own weeks. `python -m tools.fleet_fit <tags>` prints the first row,
 # `fleet_fit --add` the second (on weeks of the merged system, the rest held and the model's mean chance kept), `fleet_fit --add flu` the third.
 # "fee" weighs a gig's fee against the fees of our other open gigs, "level" the fee that our open gigs pay together: drivers choose among our gigs.
-# "supply" is the week's drivers near a place; "pay" the typical fee as a share of the list price: it has a noise of its own, and our fee is a multiple of it.
+# "supply" is the week's drivers near a place; "pay" the fee base as a share of the list price: the typical fee has a noise of its own, and our fee is a multiple of the base.
 # "flu" is how much likelier than one working day in five the car's last day is the day of the week's flu (48 weeks; it also moved "one" by 0.05).
 # "one" is the fit's -5.75 with two corrections from 64 weeks the fit never saw (`python -m tools.skeptic_fit`, SKEPTIC.md): +1.15, what a sign for the week's
 # first hundred bookings added after them (those weeks gave that sign the other direction), and +0.88: the fit said 10% of the cars late where 5% are.
@@ -41,6 +42,7 @@ class FleetPolicy:
     late_fee: float = 1.3  # once the car can only arrive late: enough for the drivers who saw it at less, or it is never delivered
     on_time: float = 0.975  # the on-time share we aim at: the 90% minimum with room for a bad week (32 weeks nobody had played end 0.7 points under the aim, the worst 2.7)
     late_price: float = 300.0  # euros that a late order costs us beyond its refund while we are within that share
+    lane: float = 0.5  # how far a request's fee base moves from its own typical fee to its lane's: the typical fee has a noise of 13% that drivers do not feel; 0: its own
     early_look: float = 6.0  # hours in the app after which a gig nobody took has its fee chosen again, a step up at least; 0: only on its last day
 
 
@@ -91,10 +93,17 @@ class Fleet:
         if not spans:
             return None
         queue = self.queue()
-        typical, refund, late_price = request["referenceFeeCents"], REFUND * option["listPriceCents"], self.late_price(queue)
+        typical, refund, late_price = self.base(request), REFUND * option["listPriceCents"], self.late_price(queue)
         multiple, late = self.cheapest_fee(self.car(request, spans, request["respondBy"]), typical, refund, late_price, queue)
         risk = late * refund + (late - (1 - self.policy.on_time)) * late_price + self.harm(multiple, queue, late_price)
         return int(typical * multiple + max(0.0, risk))
+
+    def base(self, request: PriceRequest) -> float:
+        """The fee that a request's fees and costs are multiples of, in cents: between its own typical fee and the median one of its lane (dispatch/lanes.py).
+        A driver's cost follows the lane, not the request's noise; a trade-in and a lane the table does not have keep their own number."""
+        typical, leg = request["referenceFeeCents"], request["legs"][0]
+        lane = LANES.get(f"{leg['pickup']['placeId']}>{leg['delivery']['placeId']}") if len(request["legs"]) == 1 else None
+        return typical * (lane / typical) ** self.policy.lane if lane else typical
 
     def plan(self, state: OrderState, legs: list[int]) -> list[GigPlan]:
         """The gigs that should carry these legs of the order now: the timetable's stops, who may take them, one fee."""
@@ -102,7 +111,7 @@ class Fleet:
 
     def schedule(self, state: OrderState, legs: list[int]) -> list[FeeStep]:
         """A gig's fee schedule: one step, at the fee that the rule gives now."""
-        typical = state.request["referenceFeeCents"] * len(legs) / len(state.order["legs"])
+        typical = self.base(state.request) * len(legs) / len(state.order["legs"])
         return [{"at": self.books.now, "feeCents": max(1, int(typical * self.fee_now(state, legs, typical) + 0.5))}]
 
     def due(self) -> set[str]:
@@ -155,7 +164,7 @@ class Fleet:
     def posted(self, state: OrderState) -> float:
         """The multiple of its typical fee that the order's open gig shows in the app; 0 when it has none."""
         gig = self.open_gig(state, state.undelivered()[0])
-        return gig.schedule[-1]["feeCents"] / state.request["referenceFeeCents"] * len(state.order["legs"]) / len(gig.legs) if gig else 0.0
+        return gig.schedule[-1]["feeCents"] / self.base(state.request) * len(state.order["legs"]) / len(gig.legs) if gig else 0.0
 
     def list_price(self, state: OrderState) -> int:
         """The list price of the option that the dealer bought."""
@@ -202,7 +211,7 @@ class Fleet:
             "supply_pickup": self.supply[leg["pickup"]["placeId"]],  # the shortage differs from town to town; the app tells the drivers near the pickup
             "supply_delivery": self.supply[leg["delivery"]["placeId"]],  # a driver who lives where the car goes is home when it is delivered
             "private_delivery": float(leg["delivery"]["privateAddress"]),  # a booked hour to meet, not a day
-            "pay": math.log(request["referenceFeeCents"] / len(request["legs"]) / request["options"][0]["listPriceCents"]),
+            "pay": math.log(self.base(request) / len(request["legs"]) / request["options"][0]["listPriceCents"]),
             "waited": min(1.0, max(0, at - (at if since is None else since)) / HOUR),  # a gig that is an hour in the app did not pay the drivers who saw it
         }
 
