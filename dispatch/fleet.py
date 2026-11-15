@@ -31,6 +31,7 @@ SICK, WELL = 0.33, 0.03  # of the bookings held for a day, the share given back 
 LAST_DAY = DAY  # before its last pickup: of the gigs still open then, one in four reaches the deadline warning and ends late (tools/late_study.py)
 # Set by hand and tried on the tune weeks, not fitted:
 GRIP = 4  # how steeply the price of a late order rises once we expect more of them than we allow ourselves
+WEEKEND, MONDAY = 4 * DAY + 22 * HOUR, 7 * DAY + 7 * HOUR  # Friday 22:00 to the last Monday 07:00: Sunday sees 1.5 bookings against 80-90 on a weekday
 CALM = 20  # orders: a week's first orders say little about its share of late ones
 
 
@@ -42,6 +43,7 @@ class FleetPolicy:
     on_time: float = 0.975  # the on-time share we aim at: the 90% minimum with room for a bad week (32 weeks nobody had played end 0.7 points under the aim, the worst 2.7)
     late_price: float = 300.0  # euros that a late order costs us beyond its refund while we are within that share
     early_look: float = 6.0  # hours in the app after which a gig nobody took has its fee chosen again, a step up at least; 0: only on its last day
+    weekend_look: bool = False  # False: the hours of the early look do not run from Friday 22:00 to the last Monday 07:00, when hardly a driver books at any fee
 
 
 @dataclass
@@ -142,8 +144,10 @@ class Fleet:
 
     def looked(self, state: OrderState, gig: GigState) -> bool:
         """True when the gig's fee was chosen after every moment that asks for a new choice:
-        a lost driver, the deadline warning, its hours in the app if we look early, the last day before its last pickup."""
+        a lost driver, the deadline warning, its hours in the app if we look early (the weekend does not count), the last day before its last pickup."""
         early = gig.posted_at + int(self.policy.early_look * HOUR) if self.policy.early_look else 0
+        if not self.policy.weekend_look and WEEKEND <= early < MONDAY:
+            early += MONDAY - max(gig.posted_at, WEEKEND)  # what was left of its hours on Friday night runs from Monday morning
         marks = (state.alarm_at, early, state.order["lastPickupAt"] - LAST_DAY)
         return gig.schedule[-1]["at"] >= max(mark for mark in marks if mark <= max(self.books.now, state.alarm_at))
 
