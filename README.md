@@ -6,6 +6,7 @@ The dealer side learns from every yes and no what dealers pay, by place, lane an
 Nobody announces the week's events, so each side weighs them as they show: the dealer side the day of the price war and the day and region of the outage, the driver side the day of the flu.
 All state is a fold over the world's events and the actions the world acknowledged, so a restart replays the log and continues as the same desk.
 One loop plays a practice week and the final; only the transport differs.
+In one sentence (the thesis of `PRESENTATION.md`): the dispatcher knows what it does not know, and proves it on weeks it has never seen. Its odds come true (on the 32 fresh weeks 4.2% of cars said late, 4.5% were; over 30,517 quotes 44.4% said yes, 45.2% were), the audit that found it wrong by a factor of two earned €766 a week more, and all 160 of its plays on the 96 weeks no number of it was chosen on are ranked.
 
 Result, level 8: `[FINAL: € … margin, … % on time, place … of …]`. The code of the final (commit `8ae61c5`, ideas 1–15) on 32 weeks that no system of ours had played (`halal-129..160`, once each, at the final's pace): €14,313 a week, 32 of 32 ranked, on time 96.3% in the mean and 92.8% in the worst week; the system before idea 15 on the same weeks €13,547 (+€766, se 221). The kit starter on our own weeks makes −€63,232 (tune) and −€68,908 (hold) and ranks in none. The €17,846 of the 8 weeks we fitted on is 8 rich worlds: on unseen weeks expect €14–15k.
 
